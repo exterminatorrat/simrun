@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {Editor} from '../dist/src/editor.js';
+import {defaults} from '../dist/src/model.js';
+const a={lat:0,lon:0},b={lat:0,lon:.045},c={lat:.01,lon:.045};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const provider={route:async p=>p,elevation:async p=>p};
+test('imported reverse/out-and-back and undo retain settings and geometry',()=>{const e=new Editor(provider),x=defaults();x.path=[a,b,c];x.source='imported';e.load(x);e.reverse();assert.deepEqual(e.activity.path,[c,b,a]);e.undo();assert.deepEqual(e.activity.path,[a,b,c]);e.redo();assert.deepEqual(e.activity.path,[c,b,a]);e.outAndBack();assert.equal(e.activity.path.length,5);e.clear();assert.equal(e.activity.path.length,0);e.undo();assert.equal(e.activity.path.length,5);assert.equal(e.activity.settings.pace,300);e.dispose();});
+test('route editing pushes one undo state per settled edit',()=>{const e=new Editor(provider);e.add(a);e.add(b);e.move(1,c);assert.deepEqual(e.activity.waypoints,[a,c]);e.undo();assert.deepEqual(e.activity.waypoints,[a,b]);e.redo();assert.deepEqual(e.activity.waypoints,[a,c]);e.remove(0);assert.equal(e.activity.waypoints.length,1);e.dispose();});
+test('stale routing response cannot overwrite a newer edit',async()=>{const pending=[];const e=new Editor({route:(p,s,signal)=>new Promise(resolve=>pending.push({resolve,p,signal})),elevation:async p=>p});e.edit([a,b]);await sleep(480);assert.equal(pending.length,1);e.move(1,c);assert.equal(pending[0].signal.aborted,true);await sleep(480);assert.equal(pending.length,2);pending[1].resolve([a,c]);await sleep(10);pending[0].resolve([a,b]);await sleep(10);assert.deepEqual(e.activity.path,[a,c]);assert.equal(e.pending,false);assert.equal(e.activity.source,'routed');e.dispose();});
+test('route failure leaves editable waypoints and never blesses straight lines as roads',async()=>{const e=new Editor({route:async()=>{throw Error('Unavailable');},elevation:async p=>p});let message='';e.onMessage=m=>message=m;e.edit([a,b]);await sleep(480);assert.equal(e.pending,false);assert.equal(e.activity.source,'draft');assert.equal(e.activity.path.length,0);assert.equal(e.activity.waypoints.length,2);assert.match(message,/Unavailable/);e.dispose();});

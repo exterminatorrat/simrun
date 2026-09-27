@@ -1,0 +1,12 @@
+node_modules/
+dist/
+prebuilt/
+*.zip
+.env
+.env.*
+!.env.example
+.DS_Store
+verification/
+playwright-report/
+test-results/
+*.log
