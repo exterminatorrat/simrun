@@ -30,12 +30,12 @@ export class RouteMap {
    this.showCoordinateCanvas();
    this.map.addControl(new gl.AttributionControl({customAttribution:'<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>'}));
    this.missingSince=Date.now();this.healthTimer=setInterval(()=>this.checkBasemap(),1200);
-   this.map.on('load',()=>this.checkBasemap());
-   this.map.on('style.load',()=>{this.installLayers();this.checkBasemap();});
+   this.map.on('load',()=>this.markBasemapReady());
+   this.map.on('style.load',()=>{this.markBasemapReady();this.installLayers();this.render();});
    this.map.on('click',(e:any)=>{if(this.drawing&&e.originalEvent.target.tagName==='CANVAS')this.actions.add({lat:e.lngLat.lat,lon:wrapLon(e.lngLat.lng)});});
    // A single missing tile or glyph does not take the map down. The health check
    // falls back only when the whole basemap has no rendered vector features.
-   this.map.on('error',(event:any)=>{this.lastMapError=String(event?.error?.message||'Map resources unavailable.');this.checkBasemap();});
+   this.map.on('error',(event:any)=>{this.lastMapError=String(event?.error?.message||'Map resources unavailable.');if(this.ready){const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent='Some map data is unavailable. Route editing still works.';}});
    this.map.on('webglcontextlost',()=>this.useCoordinateCanvas('Map graphics unavailable. Coordinate view remains usable.'));
   }catch(error){const message=error instanceof Error?error.message:'';this.useCoordinateCanvas(/webgl|graphics/i.test(message)?'Map graphics unavailable. Coordinate view remains usable.':/style|library|local map/i.test(message)?'Map renderer unavailable. Coordinate view remains usable.':'Basemap unavailable. Coordinate view remains usable.');}
  }
@@ -44,20 +44,17 @@ export class RouteMap {
   this.host.append(this.svg);this.host.classList.add('map-pending');this.drawFallback();
   const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent='Loading basemap · coordinate canvas available';
  }
+ private markBasemapReady():void {
+  if(!this.map||this.disposed||this.ready)return;
+  this.ready=true;this.everReady=true;this.missingSince=0;
+  if(this.healthTimer){clearInterval(this.healthTimer);this.healthTimer=null;}
+  this.svg.remove();this.host.classList.remove('map-pending');document.getElementById('map-warning')!.hidden=true;
+  this.installLayers();this.render();if(this.a?.path.length)this.fit();
+ }
  private checkBasemap():void {
-  if(!this.map||this.disposed)return;
-  let features=false;
-  try{features=this.map.queryRenderedFeatures().some((feature:any)=>!['route','draft'].includes(feature.source));}catch{}
-  if(features){
-   const first=!this.everReady;this.everReady=true;this.ready=true;this.missingSince=0;
-   this.svg.remove();this.host.classList.remove('map-pending');document.getElementById('map-warning')!.hidden=true;
-   this.render();if(first&&this.a?.path.length)this.fit();
-   return;
-  }
-  if(!this.missingSince)this.missingSince=Date.now();
-  if(this.ready){this.ready=false;this.showCoordinateCanvas();}
+  if(!this.map||this.disposed||this.ready)return;
   if(Date.now()-this.missingSince>(this.everReady?12000:18000)){
-   const detail=/worker|Content Security Policy|SecurityError/i.test(this.lastMapError)?'Map worker unavailable.':'Map tiles or style unavailable.';
+   const detail=/worker|Content Security Policy|SecurityError/i.test(this.lastMapError)?'Map worker unavailable.':'Map style or tiles did not finish loading.';
    this.useCoordinateCanvas(`${detail} Coordinate view remains usable.`);
   }
  }
