@@ -1,10 +1,11 @@
 import type {Activity,Point,Settings,Simulation,Sport,Sample,Preferences} from './types.js';
 import {atDistance,clamp,cumulative,lowerBound,validPoint} from './geometry.js';
+import {newId} from './id.js';
 export const PRODUCT='SimRun';
 export const defaultPreferences:Preferences={units:'metric',theme:'light',mapStyle:'https://tiles.openfreemap.org/styles/liberty',routingUrl:'https://valhalla1.openstreetmap.de/route',elevationUrl:'https://valhalla1.openstreetmap.de/height',geocodingUrl:'https://nominatim.openstreetmap.org/search',geocodingEnabled:false};
 export function localInput(date=new Date()):string{return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 export function defaults():Activity {
- const now=Date.now();return {id:crypto.randomUUID(),version:1,name:`${new Date().getHours()<12?'Morning':new Date().getHours()<18?'Afternoon':'Evening'} run`,createdAt:now,updatedAt:now,waypoints:[],path:[],source:'draft',settings:{sport:'run',start:localInput(),utcOffset:-new Date().getTimezoneOffset(),pace:300,speed:24,mode:'constant',variation:.06,sample:2,hrEnabled:false,hrAverage:150,hrVariation:5,seed:Math.floor(Math.random()*1000000)}};
+ const now=Date.now();return {id:newId(),version:1,name:`${new Date().getHours()<12?'Morning':new Date().getHours()<18?'Afternoon':'Evening'} run`,createdAt:now,updatedAt:now,waypoints:[],path:[],source:'draft',settings:{sport:'run',start:localInput(),utcOffset:-new Date().getTimezoneOffset(),pace:300,speed:24,mode:'constant',variation:.06,sample:2,hrEnabled:false,hrAverage:150,hrVariation:5,seed:Math.floor(Math.random()*1000000)}};
 }
 export function durationFor(meters:number,sport:Sport,pace:number,speed:number):number{return sport==='run'?meters/1000*pace:meters/1000/speed*3600;}
 export function clock(value:number):string {const n=Math.max(0,Math.round(value)),h=Math.floor(n/3600),m=Math.floor(n%3600/60),s=n%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;}

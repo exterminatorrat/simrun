@@ -2,7 +2,7 @@
 
 SimRun is an independent implementation. It contains no SimuRun source, branding, illustrations or copied UI text.
 
-- **MapLibre GL JS**, pinned runtime version 5.6.1, BSD-3-Clause. The default runtime fetches JS/CSS from unpkg. Optional `npm run vendor` also downloads the upstream LICENSE.txt into the archive. Source and license: https://github.com/maplibre/maplibre-gl-js/tree/v5.6.1 . Never strip upstream notices.
+- **MapLibre GL JS**, pinned runtime version 5.6.1, BSD-3-Clause. The CSP JS bundle, same-origin worker, CSS and upstream LICENSE.txt are bundled in `public/vendor/`; `npm run vendor` refreshes the pinned files from unpkg at build time. Source and license: https://github.com/maplibre/maplibre-gl-js/tree/v5.6.1 . Never strip upstream notices.
 - **OpenFreeMap** map service: https://openfreemap.org/quick_start/ . Keep OpenFreeMap, OpenStreetMap and OpenMapTiles attribution in the map. Map tiles/data are fetched remotely, not bundled in this archive.
 - **OpenStreetMap contributors**: https://www.openstreetmap.org/copyright . OSM data is available under ODbL. Rendering or routing against OSM does not remove attribution requirements.
 - **OpenMapTiles** schema: https://openmaptiles.org/ . Attribution is retained.

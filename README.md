@@ -44,14 +44,14 @@ All application-specific assets are in `public/`. System fonts are used; there a
 
 OpenFreeMap supplies the Liberty basemap. The default routing/elevation endpoint is FOSSGIS's public Valhalla service, with `pedestrian` or `bicycle` costing, never automobile costing. These endpoints are replaceable in Settings. Map views, waypoint coordinates and requested elevation samples go to the providers. GPX file contents are not uploaded; converting an imported route to routed waypoints sends those chosen coordinates after confirmation.
 
-**MapLibre 5.6.1 is loaded from a pinned unpkg URL in this snapshot**, not bundled in the ZIP. Map rendering therefore needs that CDN as well as OpenFreeMap. To eliminate the CDN dependency in a network-enabled build environment:
+**MapLibre GL JS 5.6.1 is served locally.** The checked-in `public/vendor/` includes its CSP build, dedicated same-origin worker, CSS and upstream license. Runtime rendering no longer requests unpkg. To refresh the pinned bundle from upstream:
 
 ```sh
 npm run vendor
 npm run build
 ```
 
-That command downloads the pinned MapLibre JS, CSS and license into `public/vendor/` and updates `public/vendor-status.json`. The downloaded files then travel with subsequent source archives. No fonts are downloaded by this command. It was not run successfully in the restricted creation environment.
+The OpenFreeMap Liberty style, vector tiles, sprites and glyphs remain external. If WebGL or all basemap resources fail, the app shows a labeled coordinate canvas and keeps route editing usable. A single failed tile or glyph does not immediately disable the map.
 
 Nominatim place search is **off by default**. Enable it deliberately only after reading the policy linked in Settings: https://operations.osmfoundation.org/policies/nominatim/. No autocomplete; searches are user-submitted, cached and limited to a small result set. Service requests are queued at least 1.2 seconds apart, with cross-tab coordination where browser APIs permit. Public providers offer no availability guarantee. Before a public release, review current provider terms, notify the Valhalla demo operators as requested in their guidance, and configure a suitable identifying client header if required. Do not deploy this personal-use configuration as a high-volume public service.
 

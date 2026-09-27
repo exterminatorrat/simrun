@@ -8,6 +8,7 @@ import {Editor} from './editor.js';
 import {RouteMap} from './map.js';
 import {Charts,type ChartMode} from './charts.js';
 import {$,el,button,installIcons,setText,setInput,toast} from './ui.js';
+import {newId} from './id.js';
 let preferences=readPreferences();document.documentElement.dataset.theme=preferences.theme;installIcons();
 const store=new LocalStore(),editor=new Editor(new ValhallaProvider(()=>preferences));
 let initialized=false,saveTimer:ReturnType<typeof setTimeout>|undefined,sim:Simulation|null=null,lastPath:Point[]|null=null,lastSettings='',simulationError='';
@@ -70,7 +71,7 @@ for(const id of ['history-dialog','settings-dialog'])$(id).addEventListener('cli
 async function showHistory():Promise<void>{
  const list=$('history-list');list.replaceChildren();const rows=await store.list();if(!rows.length)list.append(el('p','history-empty','No saved routes yet. Draw or import a route, then save it here.'));
  for(const a of rows){const row=el('article','history-row'),open=button('Open activity',guarded(async()=>{if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(a);$('inspector').querySelector('.inspector-scroll')!.scrollTop=0;map.fit();$<HTMLDialogElement>('history-dialog').close();}),undefined,'history-main');const c=cumulative(a.path),m=c.at(-1)||0;let duration='—';try{duration=clock(simulate(a).duration);}catch{}const h=elevationStats(a.path);open.replaceChildren(el('strong','',a.name),el('span','',`${a.source==='draft'?'Draft · ':''}${a.settings.sport==='run'?'Run':'Ride'} · ${a.settings.start.replace('T',' ')} · ${distanceValue(m)} ${distanceUnit()} · ${duration} · ↑ ${heightValue(h.gain)} ${preferences.units==='imperial'?'ft':'m'}`));
-  const actions=el('div','history-actions');actions.append(button('Duplicate activity',guarded(async()=>{const copy=structuredClone(a);copy.id=crypto.randomUUID();copy.name=`${a.name.slice(0,150)} copy`;copy.createdAt=copy.updatedAt=Date.now();await store.save(copy);await showHistory();}),'duplicate','icon-button'),button('Export saved GPX',guarded(()=>downloadActivity(a)),'download','icon-button'),button('Delete activity',guarded(async()=>{if(confirm(`Delete “${a.name}” from this browser?`)){await store.remove(a.id);await showHistory();}}),'trash','icon-button'));row.append(open,actions);list.append(row);
+  const actions=el('div','history-actions');actions.append(button('Duplicate activity',guarded(async()=>{const copy=structuredClone(a);copy.id=newId();copy.name=`${a.name.slice(0,150)} copy`;copy.createdAt=copy.updatedAt=Date.now();await store.save(copy);await showHistory();}),'duplicate','icon-button'),button('Export saved GPX',guarded(()=>downloadActivity(a)),'download','icon-button'),button('Delete activity',guarded(async()=>{if(confirm(`Delete “${a.name}” from this browser?`)){await store.remove(a.id);await showHistory();}}),'trash','icon-button'));row.append(open,actions);list.append(row);
  }
  if(!$<HTMLDialogElement>('history-dialog').open)$<HTMLDialogElement>('history-dialog').showModal();
 }
