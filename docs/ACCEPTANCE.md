@@ -1,0 +1,21 @@
+# Private-preview acceptance checklist
+
+Use the actual Sites preview after deployment. A mocked response is not evidence of real road routing. Do not publish publicly while these live checks remain unresolved.
+
+1. Load the app over HTTPS. Check modules/CSS/favicon, no blank view, no uncaught exceptions, actual MapLibre rendering, correct map attribution, zoom/pan, resize and fit. Confirm CDN/CSP or WebGL failures show a coordinate-only warning rather than fake map data.
+2. At a public location, make a roughly 5 km run using 3+ map clicks. Inspect the Valhalla request for `pedestrian`, real roads/paths, displayed distance, and an elevation attempt. Set 5:00/km; 5 km should take approximately 25 minutes. Export and inspect the downloaded XML.
+3. Drag a waypoint, insert using a shaping handle, delete, reorder, and change one quickly while a route request is pending. No old response may overwrite the newest edit. Do not route on every mousemove.
+4. Undo/redo a move with buttons and Cmd/Ctrl shortcuts. Confirm geometry returns, not merely the visible handles. Try after clear, reverse and out-and-back.
+5. Reverse route direction. Out-and-back must return to the start and approximately double length without an unnecessary duplicate turnaround coordinate.
+6. Switch to Ride; inspect `bicycle`, not automobile costing. Check speed/duration consistency. Verify 20 km at 20 km/h = 1 hour. Check 10 km at 5:00/km = 50 minutes and 5 km at 4:00/km = 20 minutes.
+7. Use Natural simulation and HR. Profiles should be smooth, repeatable with the saved seed, and normalized to the target duration. HR off must omit HR extensions. Check sample interval 1/2/5 seconds and the explicit cap for long activities.
+8. Set start 23:59 and UTC+09:00. First GPX UTC time should be 14:59 that date; corresponding local time must roll into the next date. All timestamps must increase, including the last short sample.
+9. Export then import the GPX. Confirm approximate geometry/distance/elevation, editable timing and successful re-export. Malformed XML, document types, invalid coordinates and oversized files must fail usefully. Test a disjoint multi-segment file: the largest segment is retained and the limitation is announced.
+10. Save, refresh, reopen from History, edit and re-export. Duplicate must have a different ID. Delete must ask for confirmation. Confirm native IndexedDB history and draft restoration on the SAME preview origin. Repeat with browser storage blocked: the interface must say Session only.
+11. Create an unfinished draft, wait at least 350 ms, refresh and confirm recovery. New activity must not resurrect stale draft content. Export/restore a JSON backup, including preferences. Validate malformed versions/coordinates without partially importing bad data.
+12. Force routing HTTP 400, HTTP 429 and network failure. No infinite spinner, no crash, no silent straight-line replacement, no export of stale geometry as a newly routed path. Retry after restoring connectivity. Elevation failure must not prevent a valid routed geometry export.
+13. Confirm no route/empty export validation. Search coordinates with Nominatim disabled. Enable Nominatim only after reviewing its policy, submit a single deliberate place search, inspect identification/referrer and caching. Typing alone must not send queries.
+14. Check 1440x900, 1280x800 and 390x844: labels/fields readable, no toolbar overlap, no horizontal overflow, useful map area, mobile settings open/close, charts rescale, all controls reachable by keyboard. Verify focus indicators and reduced-motion setting.
+15. Verify GPX XML independently against GPX 1.1 and its HR extension schema if available, and import it into the intended GPX reader. Do not claim schema certification from DOMParser alone. Review network calls: no auth, analytics, cloud history, secrets or paid service requirement.
+
+For public-service testing, keep requests sparse; never load-test the community endpoints. Review provider terms again before public publication. Keep the Site private until the user approves it.

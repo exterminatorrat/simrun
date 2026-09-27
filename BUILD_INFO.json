@@ -1,0 +1,9 @@
+{
+  "productName": "SimRun",
+  "archiveCreatedAt": null,
+  "gitCommitSha": null,
+  "gitBranch": "main",
+  "packageVersion": "0.1.0",
+  "handoffFormatVersion": 1,
+  "metadataNote": "Template in source. The packager fills creation time and the synchronized source commit in the archive."
+}

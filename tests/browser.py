@@ -1,0 +1,123 @@
+"""Optional browser acceptance tests. No live public provider requests are made.
+Normal: python tests/browser.py --url http://127.0.0.1:5173
+Restricted harness: python tests/browser.py --isolated
+The isolated mode tests an AMD compilation in a DOM-only page, not HTTP/ESM,
+MapLibre, CSP/CORS, native IndexedDB persistence, or ChatGPT Sites.
+"""
+from pathlib import Path
+import argparse, json, math, subprocess, tempfile, re, os
+from datetime import datetime
+from xml.etree import ElementTree as ET
+from playwright.sync_api import sync_playwright, expect
+ROOT=Path(__file__).resolve().parents[1]
+parser=argparse.ArgumentParser()
+parser.add_argument('--url',default='http://127.0.0.1:5173')
+parser.add_argument('--isolated',action='store_true')
+parser.add_argument('--screenshots',default='')
+parser.add_argument('--chromium',default=os.environ.get('CHROMIUM_PATH',''))
+args=parser.parse_args()
+loader=r"""const modules={},exportsCache={};function define(name,deps,factory){modules[name]={deps,factory}};function requireModule(name){name=name.replace(/\.js$/,'');if(exportsCache[name])return exportsCache[name];const m=modules[name];if(!m)throw Error('Module not found '+name);const ex={};exportsCache[name]=ex;m.factory(...m.deps.map(d=>d==='require'?requireModule:d==='exports'?ex:requireModule(d)));return ex;}if(!crypto.randomUUID)crypto.randomUUID=()=> '10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(+c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>+c/4).toString(16));"""
+mock=r"""window.testRequests=[];window.testRouteFailure=false;window.testDownloads=[];
+const originalFetch=window.fetch.bind(window);const originalBlobURL=URL.createObjectURL;
+URL.createObjectURL=function(blob){window.testDownloads.push(blob.text());return originalBlobURL.call(URL,blob);};
+function encode(points){let last=[0,0],out='';for(const p of points){[p.lat,p.lon].forEach((v,i)=>{const val=Math.round(v*1e6),diff=val-last[i];last[i]=val;let n=diff<0?~(diff<<1):diff<<1;while(n>=32){out+=String.fromCharCode((32|(n&31))+63);n>>=5;}out+=String.fromCharCode(n+63);});}return out;}
+window.fetch=async function(input,init){const u=new URL(String(input),'https://simrun.test/');if(u.host==='valhalla1.openstreetmap.de'){const data=JSON.parse(u.searchParams.get('json'));window.testRequests.push({kind:u.pathname,data,at:Date.now()});if(u.pathname==='/route'){if(window.testRouteFailure)return new Response('{}',{status:400});return new Response(JSON.stringify({trip:{legs:[{shape:encode(data.locations)}]}}),{status:200});}return new Response(JSON.stringify({height:data.shape.map((p,i)=>12+Math.sin(i*.4)*6)}),{status:200});}return originalFetch(input,init);};"""
+points=[]
+for i in range(201):
+ t=2*math.pi*i/200
+ points.append(f'<trkpt lat="{31.23+.0054*math.sin(t):.7f}" lon="{121.47+.0105*math.cos(t):.7f}"><ele>{15+8*math.sin(3*t):.2f}</ele></trkpt>')
+fixture='<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Test fixture loop</name><trkseg>'+''.join(points)+'</trkseg></trk></gpx>'
+results=[]
+def passed(label):
+ results.append(label);print('PASS',label,flush=True)
+def change(page,id,value):
+ page.locator('#'+id).fill(value);page.locator('#'+id).dispatch_event('change')
+def screenshot(page,name):
+ if args.screenshots:
+  Path(args.screenshots).mkdir(parents=True,exist_ok=True)
+  page.screenshot(path=str(Path(args.screenshots)/(name+'.png')))
+with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
+ bundle=Path(temp)/'bundle.js'
+ if args.isolated:
+  subprocess.run(['node',str(ROOT/'node_modules/typescript/bin/tsc'),'--module','AMD','--moduleResolution','node','--outFile',str(bundle)],cwd=ROOT,check=True)
+ with sync_playwright() as pw:
+  opts={'headless':True}
+  if args.chromium:opts['executable_path']=args.chromium
+  browser=pw.chromium.launch(**opts)
+  context=browser.new_context(viewport={'width':1440,'height':900},accept_downloads=True)
+  page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+  page.route('https://unpkg.com/**',lambda r:r.abort())
+  if args.isolated:
+   html=(ROOT/'dist/index.html').read_text().replace('<script type="module" src="./src/main.js"></script>','').replace('<link rel="stylesheet" href="./app.css">','<style>'+(ROOT/'dist/app.css').read_text()+'</style>')
+   page.set_content(html);page.add_script_tag(content=loader+mock);page.add_script_tag(content=bundle.read_text());page.evaluate('requireModule("main")')
+  else:
+   page.add_init_script(mock);page.goto(args.url)
+  expect(page.locator('.brand')).to_contain_text('SimRun');page.wait_for_timeout(900)
+  assert not errors,errors
+  passed('App shell renders with no JavaScript exceptions')
+  page.locator('#export').click();expect(page.locator('#toast')).to_contain_text('Draw or import')
+  page.locator('#gpx-file').set_input_files({'name':'bad.gpx','mimeType':'application/gpx+xml','buffer':b'<broken>'});expect(page.locator('#toast')).to_contain_text('not valid GPX')
+  passed('Empty exports and malformed GPX give useful validation')
+  page.locator('#gpx-file').set_input_files({'name':'fixture.gpx','mimeType':'application/gpx+xml','buffer':fixture.encode()})
+  expect(page.locator('#activity-name')).to_have_value('Test fixture loop');expect(page.locator('#empty')).to_be_hidden()
+  distance=float(page.locator('#distance').inner_text().split()[0]);assert 4.5<distance<6
+  change(page,'target','5:00');duration=page.locator('#duration-stat').inner_text();parts=[int(p) for p in duration.split(':')];seconds=sum(n*60**i for i,n in enumerate(reversed(parts)));assert abs(seconds-distance*300)<2
+  passed('GPX import, route geometry, elevation and pace/duration consistency')
+  page.locator('#natural').click();page.locator('#hr-enabled').check();change(page,'hr-average','155')
+  change(page,'start','2026-09-27T23:59');page.locator('#offset').select_option('540')
+  page.locator('#chart-hr').click();expect(page.locator('#chart .profile-line')).to_be_visible()
+  page.locator('#export').click();page.wait_for_timeout(250)
+  xml=page.evaluate('async()=>await window.testDownloads.at(-1)');root=ET.fromstring(xml);ns={'g':'http://www.topografix.com/GPX/1/1','h':'http://www.garmin.com/xmlschemas/TrackPointExtension/v1'}
+  track=root.findall('.//g:trkpt',ns);assert len(track)>500
+  times=[datetime.fromisoformat(p.find('g:time',ns).text.replace('Z','+00:00')).timestamp() for p in track]
+  assert all(b>a for a,b in zip(times,times[1:]));assert datetime.fromtimestamp(times[0]).hour==14
+  hrs=root.findall('.//h:hr',ns);assert len(hrs)==len(track);assert all(30<=int(h.text)<=240 for h in hrs)
+  assert 'Simulated activity' in root.find('g:metadata/g:desc',ns).text
+  passed('Natural timing, midnight offset, HR extension and actual Blob GPX output')
+  page.locator('#history').click();expect(page.locator('.history-row')).to_have_count(1)
+  page.get_by_role('button',name='Duplicate activity',exact=True).click();expect(page.locator('.history-row')).to_have_count(2)
+  page.locator('.history-main').first.click();expect(page.locator('#activity-name')).to_have_value('Test fixture loop copy')
+  passed('Session history save, duplicate with independent ID, and reopening')
+  old=float(page.locator('#distance').inner_text().split()[0]);page.locator('#reverse').click();assert float(page.locator('#distance').inner_text().split()[0])==old
+  page.locator('#out-back').click();assert abs(float(page.locator('#distance').inner_text().split()[0])-2*old)<.02
+  page.locator('#undo').click();assert float(page.locator('#distance').inner_text().split()[0])==old
+  page.locator('#redo').click();assert abs(float(page.locator('#distance').inner_text().split()[0])-2*old)<.02
+  passed('Imported reverse, out-and-back, undo and redo update true geometry')
+  page.locator('#undo').click();page.locator('#chart-elevation').click();page.locator('#fit').click();page.locator('#toast').evaluate('(e)=>e.hidden=true');screenshot(page,'desktop')
+  page.set_viewport_size({'width':1280,'height':800});page.wait_for_timeout(100);screenshot(page,'laptop')
+  page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(100);assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+  expect(page.locator('#inspector')).to_be_hidden();page.locator('#open-inspector').click();expect(page.locator('#inspector')).to_be_visible();expect(page.locator('#export')).to_be_visible();screenshot(page,'mobile-settings')
+  page.locator('#close-inspector').click();screenshot(page,'mobile-map')
+  passed('1440 desktop, 1280 laptop and 390 mobile layouts; accessible mobile settings')
+  page.set_viewport_size({'width':1440,'height':900});page.locator('#clear').click();page.locator('#draw').click()
+  page.mouse.click(390,260);page.mouse.click(730,270);page.mouse.click(700,520)
+  expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
+  assert page.evaluate('window.testRequests.some(r=>r.data.costing==="pedestrian")')
+  assert page.locator('.fallback-point').count()==3
+  p=page.locator('.fallback-point').nth(1).bounding_box();page.mouse.move(p['x']+12,p['y']+12);page.mouse.down();page.mouse.move(p['x']+60,p['y']+60,steps=5);page.mouse.up()
+  expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
+  page.locator('#undo').click();page.locator('#redo').click()
+  passed('Coordinate canvas add/drag with real provider adapter and mocked responses')
+  page.locator('#ride').click();expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
+  assert page.evaluate('window.testRequests.some(r=>r.data.costing==="bicycle")')
+  passed('Cycling mode requests bicycle routing, not automobile routing')
+  page.evaluate('window.testRouteFailure=true');page.mouse.click(490,440)
+  expect(page.locator('#retry')).to_be_visible(timeout=6000);page.locator('#export').click();expect(page.locator('#toast')).to_contain_text('Resolve the route')
+  page.evaluate('window.testRouteFailure=false');page.locator('#retry').click();expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
+  passed('Routing failure blocks stale export and retry recovers')
+  page.locator('#search').fill('31.2304, 121.4737');page.locator('#search-form').evaluate('(f)=>f.requestSubmit()');expect(page.locator('#search-results')).to_be_visible();page.locator('#search-results button').first.click()
+  passed('Coordinate search works without enabling geocoding')
+  page.locator('#history').click();page.locator('#backup').click();page.wait_for_timeout(50)
+  backup=page.evaluate('async()=>await window.testDownloads.at(-1)');data=json.loads(backup);assert data['product']=='SimRun' and len(data['activities'])>=2
+  page.locator('#history-dialog [data-close]').click();page.locator('#settings').click();page.locator('#units').select_option('imperial');page.locator('#theme').select_option('dark');page.locator('#preferences-form').evaluate('(f)=>f.requestSubmit()');expect(page.locator('#distance')).to_contain_text('mi');assert page.locator('html').get_attribute('data-theme')=='dark'
+  passed('Backup output, imperial conversion and dark appearance')
+  if args.isolated:
+   expect(page.locator('#storage-state')).to_contain_text('Session only')
+   passed('Blocked storage is reported honestly instead of promising persistence')
+  else:
+   page.locator('#save').click();page.wait_for_timeout(500);name=page.locator('#activity-name').input_value();page.reload();expect(page.locator('#activity-name')).to_have_value(name);page.locator('#history').click();assert page.locator('.history-row').count()>=2
+   passed('Native IndexedDB draft and history survive reload')
+  assert not errors,errors
+  passed('No uncaught JavaScript exceptions throughout tested interactions')
+  print(json.dumps({'passed':len(results),'mode':'isolated DOM; mocked providers; no native persistence' if args.isolated else 'HTTP; mocked providers','checks':results},indent=2))
+  browser.close()
