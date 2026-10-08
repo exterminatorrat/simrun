@@ -10,3 +10,4 @@ verification/
 playwright-report/
 test-results/
 *.log
+.vercel
