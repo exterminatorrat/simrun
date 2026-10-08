@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {distance, cumulative, atDistance, elevationStats, outAndBack, closeLoop} from '../dist/src/geometry.js';
-import {defaults, simulate, durationFor, parseClock, clock, validateActivity} from '../dist/src/model.js';
+import {distance, cumulative, atDistance, elevationStats, outAndBack, closeLoop, isClosedLoop, loopPath, rotatedLoop} from '../dist/src/geometry.js';
+import {defaults, simulate, durationFor, parseClock, clock, validateActivity, loopPlan, plannedPath} from '../dist/src/model.js';
 import {exportGPX, safeFilename} from '../dist/src/gpx.js';
 const path=[{lon:0,lat:0,ele:10},{lon:0.045,lat:0,ele:20}];
 test('geodesic distance and interpolation',()=>{assert.ok(Math.abs(distance(path[0],path[1])-5003.78)<1);let c=cumulative(path);assert.ok(Math.abs(atDistance(path,c,c.at(-1)/2).lon-.0225)<1e-6);});
@@ -9,6 +9,32 @@ test('known pace and speed arithmetic',()=>{assert.equal(durationFor(10000,'run'
 test('clock rounds safely',()=>{assert.equal(clock(299.8),'5:00');assert.equal(parseClock('1:02:03'),3723);assert.throws(()=>parseClock('5:99'));});
 test('turnaround has no duplicated pivot',()=>{let a=outAndBack([1,2,3]);assert.deepEqual(a,[1,2,3,2,1]);});
 test('closing a loop returns to the start and tolerates an empty route',()=>{assert.deepEqual(closeLoop([1,2,3]),[1,2,3,1]);assert.deepEqual(closeLoop([]),[]);});
+const square=[{lat:0,lon:0},{lat:0,lon:.01},{lat:.01,lon:.01},{lat:.01,lon:0},{lat:0,lon:0}];
+test('closed loops rotate from a start fraction and walk whole or partial laps',()=>{
+ const total=cumulative(square).at(-1);
+ assert.equal(isClosedLoop(square),true);assert.equal(isClosedLoop(path),false);assert.equal(isClosedLoop(square.slice(0,4)),false);
+ const rotated=rotatedLoop(square,.5);assert.ok(Math.abs(cumulative(rotated).at(-1)-total)<1);assert.ok(distance(rotated[0],atDistance(square,cumulative(square),total/2))<1);
+ const one=loopPath(square,0,1);assert.ok(Math.abs(cumulative(one).at(-1)-total)<1);assert.ok(distance(one[0],one.at(-1))<1e-6);
+ assert.ok(Math.abs(cumulative(loopPath(square,0,2.5)).at(-1)-2.5*total)<1);
+ assert.ok(Math.abs(cumulative(loopPath(square,0,.25)).at(-1)-.25*total)<1);
+ assert.deepEqual(loopPath(square,0,0),[]);
+});
+test('a lap plan drives simulated distance, duration and export path',()=>{
+ const total=cumulative(square).at(-1),a=defaults();a.path=square;a.source='routed';
+ assert.equal(plannedPath(a),a.path);
+ a.loop={start:0,mode:'laps',value:3};
+ const plan=loopPlan(a);assert.ok(Math.abs(plan.distance-3*total)<.01);assert.equal(plan.capped,false);assert.equal(plan.laps,3);
+ const s=simulate(a);assert.ok(Math.abs(s.distance-3*total)<.01);assert.ok(Math.abs(s.duration-3*total/1000*300)<1);
+ a.loop={start:0,mode:'distance',value:total/2};assert.ok(Math.abs(loopPlan(a).distance-total/2)<.01);
+ a.loop={start:0,mode:'laps',value:99999};assert.equal(loopPlan(a).capped,true);assert.ok(loopPlan(a).distance<=5000000);
+ a.path=path;assert.equal(loopPlan(a),null);assert.deepEqual(plannedPath(a),a.path);
+});
+test('loop plans round-trip through validation and reject bad values',()=>{
+ const a=defaults();a.path=square;a.loop={start:.25,mode:'laps',value:2};
+ assert.deepEqual(validateActivity(a).loop,{start:.25,mode:'laps',value:2});
+ assert.equal(validateActivity({...a,loop:undefined}).loop,undefined);
+ for(const loop of [{start:0,mode:'laps',value:0},{start:1,mode:'laps',value:1},{start:0,mode:'loop',value:1},{start:0,mode:'laps',value:99999},{start:0,mode:'distance',value:6000000}])assert.throws(()=>validateActivity({...a,loop}));
+});
 test('elevation missing stays missing',()=>{assert.equal(elevationStats([{lon:0,lat:0},{lon:1,lat:0}]).gain,null);});
 test('smooth natural simulation normalizes exact duration across midnight',()=>{let a=defaults();a.path=path;a.settings.start='2026-09-27T23:59';a.settings.utcOffset=540;a.settings.mode='natural';a.settings.hrEnabled=true;let s=simulate(a);assert.equal(s.points.at(-1).time-s.points[0].time,Math.round(s.duration*1000));assert.ok(s.points.every((p,i)=>i===0||p.time>s.points[i-1].time));assert.ok(s.points[0].time===Date.UTC(2026,8,27,14,59));assert.deepEqual(s,simulate(a));assert.ok(s.points.at(-1).lon===path.at(-1).lon);assert.ok(s.points.every(p=>p.hr>=30 && p.hr<=240));});
 test('constant pace yields stable speeds',()=>{let a=defaults();a.path=path;let s=simulate(a);assert.ok(Math.max(...s.points.map(p=>p.speed))-Math.min(...s.points.map(p=>p.speed))<.00001);});

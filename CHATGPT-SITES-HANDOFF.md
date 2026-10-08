@@ -12,7 +12,7 @@ Branch: `main`. This ZIP is a snapshot, not a replacement source of truth. Check
 
 ## Product
 
-SimRun is a personal running/cycling route editor and simulated GPX activity studio. No auth, payments, analytics or cloud database. Map-first UI; waypoint editing, undo/redo, reverse, out-and-back, close-loop, import, timing/simulation, optional synthetic HR, profiles, history and backups. All exports identify themselves as simulated, not recorded device activities.
+SimRun is a personal running/cycling route editor and simulated GPX activity studio. No auth, payments, analytics or cloud database. Map-first UI; waypoint editing, undo/redo, reverse, out-and-back, close-loop, loop planning (laps or target distance with a chosen start and derived finish), import, timing/simulation, optional synthetic HR, profiles, history and backups. All exports identify themselves as simulated, not recorded device activities.
 
 ## Architecture
 

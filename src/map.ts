@@ -5,11 +5,12 @@ import {el} from './ui.js';
 // Application geometry and all provider contracts remain strictly typed.
 declare global {interface Window {maplibregl?:any}}
 type Actions={add:(p:Point)=>void;move:(i:number,p:Point)=>void;insert:(i:number,p:Point)=>void;select:(i:number)=>void;message:(s:string)=>void};
+type PlanMarks={start:Point;end:Point};
 const NS='http://www.w3.org/2000/svg';
 const world=(p:Point):[number,number]=>{const lat=Math.max(-85.0511,Math.min(85.0511,p.lat))*Math.PI/180;return [(p.lon+180)/360,(1-Math.log(Math.tan(Math.PI/4+lat/2))/Math.PI)/2];};
 const unworld=(x:number,y:number):Point=>({lon:wrapLon(x*360-180),lat:Math.atan(Math.sinh(Math.PI*(1-2*Math.max(0,Math.min(1,y)))))*180/Math.PI});
 export class RouteMap {
- private map:any=null;private markers:any[]=[];private hoverMarker:any=null;private a:Activity|null=null;private selected=-1;private drawing=true;private svg:SVGSVGElement;private view={x:0,y:0,zoom:13};private ready=false;private everReady=false;private missingSince=Date.now();private healthTimer:ReturnType<typeof setInterval>|null=null;private lastMapError='';private disposed=false;private resized:ResizeObserver;private moveCleanup:(()=>void)|null=null;private hoverPoint:Point|null=null;
+ private map:any=null;private markers:any[]=[];private hoverMarker:any=null;private a:Activity|null=null;private plan:PlanMarks|null=null;private selected=-1;private drawing=true;private svg:SVGSVGElement;private view={x:0,y:0,zoom:13};private ready=false;private everReady=false;private missingSince=Date.now();private healthTimer:ReturnType<typeof setInterval>|null=null;private lastMapError='';private disposed=false;private resized:ResizeObserver;private moveCleanup:(()=>void)|null=null;private hoverPoint:Point|null=null;
  constructor(private host:HTMLElement,private actions:Actions){
   const [x,y]=world({lat:31.2304,lon:121.4737});this.view={x,y,zoom:13};
   this.svg=document.createElementNS(NS,'svg');this.svg.classList.add('coordinate-map');this.svg.setAttribute('aria-label','Coordinate canvas: basemap unavailable');this.host.append(this.svg);
@@ -69,7 +70,7 @@ export class RouteMap {
   this.actions.message(message);
  }
  setStyle(style:string):void{if(!this.map)return;this.ready=false;this.missingSince=Date.now();this.lastMapError='';this.showCoordinateCanvas();try{this.map.setStyle(style);}catch{this.useCoordinateCanvas('Basemap unavailable. Coordinate view remains usable.');}}
- update(a:Activity,selected:number,drawing:boolean):void {this.a=a;this.selected=selected;this.drawing=drawing;this.render();}
+ update(a:Activity,selected:number,drawing:boolean,plan?:PlanMarks):void {this.a=a;this.selected=selected;this.drawing=drawing;this.plan=plan??null;this.render();}
  private installLayers():void {
   if(!this.map||this.map.getSource('route'))return;
   this.map.addSource('route',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
@@ -88,6 +89,11 @@ export class RouteMap {
   const add=(p:Point,i:number,mid=false)=>{const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));b.type='button';b.title=mid?'Drag to insert waypoint':`Waypoint ${i+1}: drag to move`;b.setAttribute('aria-label',b.title);b.onclick=e=>{e.stopPropagation();if(mid)this.actions.insert(i,p);else this.actions.select(i);};const m=new gl.Marker({element:b,draggable:true}).setLngLat([p.lon,p.lat]).addTo(this.map);m.on('dragend',()=>{const ll=m.getLngLat(),q={lat:ll.lat,lon:wrapLon(ll.lng)};if(mid)this.actions.insert(i,q);else this.actions.move(i,q);});this.markers.push(m);};
   pts.forEach((p,i)=>{add(p,i);if(i<pts.length-1)add(this.middle(i),i,true);});
   if(!pts.length&&this.a.path.length){[this.a.path[0],this.a.path.at(-1)!].forEach((p,i)=>{const b=el('span',`waypoint ${i?'finish':'start'}`,i?'B':'A');this.markers.push(new gl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map));});}
+  if(this.plan)this.planMarks().forEach(m=>{const b=el('span',`waypoint ${m.cls}`,m.text);b.title=m.title;b.setAttribute('aria-label',m.title);this.markers.push(new gl.Marker({element:b}).setLngLat([m.p.lon,m.p.lat]).addTo(this.map));});
+ }
+ private planMarks():{p:Point;cls:string;text:string;title:string}[] {
+  const plan=this.plan;if(!plan)return [];
+  return [{p:plan.start,cls:'plan-start',text:'S',title:'Loop start'},{p:plan.end,cls:'plan-finish',text:'E',title:'Loop end'}];
  }
  private middle(i:number):Point {
   const a=this.a!;if(a.source==='draft'||a.path.length<2)return interpolate(a.waypoints[i],a.waypoints[i+1],.5);
@@ -112,12 +118,13 @@ export class RouteMap {
   const make=(tag:string,attrs:Record<string,string>)=>{const n=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));this.svg.append(n);return n;};
   const path=(p:Point[],cls:string)=>{if(p.length<2)return;const step=Math.max(1,Math.ceil(p.length/5000));const v=p.filter((_,i)=>i%step===0||i===p.length-1);make('path',{d:v.map((p,i)=>`${i?'L':'M'}${this.xy(p).map(n=>n.toFixed(1)).join(',')}`).join(' '),class:cls});};
   if(this.a){path(this.a.path,'fallback-route');if(this.a.source==='draft')path(this.a.waypoints,'fallback-draft');this.a.waypoints.forEach((p,i)=>{const [x,y]=this.xy(p);make('circle',{cx:String(x),cy:String(y),r:'12',class:`fallback-point ${i===this.selected?'selected':''}`,'data-index':String(i)});const t=make('text',{x:String(x),y:String(y+4),class:'fallback-number','data-index':String(i)});t.textContent=String(i+1);if(i<this.a!.waypoints.length-1){const [mx,my]=this.xy(this.middle(i));make('circle',{cx:String(mx),cy:String(my),r:'6',class:'fallback-mid','data-mid':String(i)});}});}
+  if(this.plan)this.planMarks().forEach(m=>{const [x,y]=this.xy(m.p);make('circle',{cx:String(x),cy:String(y),r:'10',class:`fallback-${m.cls}`,'data-loop':'1'});const t=make('text',{x:String(x),y:String(y+3.5),class:'fallback-plan-label','data-loop':'1'});t.textContent=m.text;});
   if(this.hoverPoint){const [x,y]=this.xy(this.hoverPoint);make('circle',{cx:String(x),cy:String(y),r:'6',class:'chart-map-marker'});}
   this.svg.style.cursor=this.drawing?'crosshair':'grab';
  }
  private bindFallback():void {
   this.svg.addEventListener('wheel',e=>{e.preventDefault();this.zoom(e.deltaY<0?.5:-.5);},{passive:false});
-  this.svg.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=e.target as Element,idx=target.getAttribute('data-index'),mid=target.getAttribute('data-mid'),x=e.clientX,y=e.clientY,start={...this.view};let moved=false;this.svg.setPointerCapture(e.pointerId);
+  this.svg.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=e.target as Element;if(target.getAttribute('data-loop'))return;const idx=target.getAttribute('data-index'),mid=target.getAttribute('data-mid'),x=e.clientX,y=e.clientY,start={...this.view};let moved=false;this.svg.setPointerCapture(e.pointerId);
    const move=(v:PointerEvent)=>{moved ||=Math.hypot(v.clientX-x,v.clientY-y)>4;if(idx===null&&mid===null&&moved){const scale=this.dimensions().scale;this.view.x=start.x-(v.clientX-x)/scale;this.view.y=start.y-(v.clientY-y)/scale;this.drawFallback();}};
    const up=(v:PointerEvent)=>{this.svg.removeEventListener('pointermove',move);this.svg.removeEventListener('pointerup',up);this.svg.removeEventListener('pointercancel',cancel);this.moveCleanup=null;if(idx!==null){if(moved)this.actions.move(+idx,this.point(v));else this.actions.select(+idx);}else if(mid!==null)this.actions.insert(+mid,this.point(v));else if(!moved&&this.drawing)this.actions.add(this.point(v));else if(moved&&this.map){const p=unworld(this.view.x,this.view.y);this.map.jumpTo({center:[p.lon,p.lat],zoom:this.view.zoom});}};
    const cancel=()=>{this.svg.removeEventListener('pointermove',move);this.svg.removeEventListener('pointerup',up);this.svg.removeEventListener('pointercancel',cancel);};this.moveCleanup=cancel;this.svg.addEventListener('pointermove',move);this.svg.addEventListener('pointerup',up);this.svg.addEventListener('pointercancel',cancel);

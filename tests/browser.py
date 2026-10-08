@@ -104,6 +104,18 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   page.locator('#loop').click();expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
   expect(page.locator('#waypoint-count')).to_have_text('4');page.locator('#loop').click();expect(page.locator('#toast')).to_contain_text('already returns')
   passed('Close loop appends the start as the final waypoint, reroutes and refuses to double-close')
+  one=float(page.locator('#distance').inner_text().split()[0]);page.locator('#loop-details summary').click()
+  page.locator('#export').click();page.wait_for_timeout(80)
+  lap_pts=page.evaluate('async()=>await window.testDownloads.at(-1)').count('<trkpt')
+  page.locator('#loop-mode-laps').click();change(page,'loop-value','2.5')
+  expect(page.locator('#loop-count')).to_have_text('2.5 laps');expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
+  assert abs(float(page.locator('#distance').inner_text().split()[0])-2.5*one)<.05
+  assert page.evaluate("(()=>{const a=document.querySelector('.fallback-plan-start'),b=document.querySelector('.fallback-plan-finish');return !!a&&!!b&&(a.getAttribute('cx')!==b.getAttribute('cx')||a.getAttribute('cy')!==b.getAttribute('cy'))})()")
+  box=page.locator('.fallback-plan-finish').bounding_box();page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
+  page.locator('#export').click();page.wait_for_timeout(80)
+  assert abs(page.evaluate('async()=>await window.testDownloads.at(-1)').count('<trkpt')/lap_pts-2.5)<.2
+  page.locator('#loop-clear').click();assert abs(float(page.locator('#distance').inner_text().split()[0])-one)<.02
+  passed('Loop plan walks 2.5 laps to a distinct finish, exports the laps, ignores marker clicks and clears')
   page.locator('#undo').click();expect(page.locator('#waypoint-count')).to_have_text('3')
   page.locator('#ride').click();expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
   assert page.evaluate('window.testRequests.some(r=>r.data.costing==="bicycle")')

@@ -1,18 +1,18 @@
 import type {Activity,Point,Preferences,Simulation} from './types.js';
 import {cumulative} from './geometry.js';
-import {clock} from './model.js';
+import {clock,plannedPath} from './model.js';
 export type ChartMode='elevation'|'pace'|'hr';
 const NS='http://www.w3.org/2000/svg';
 export class Charts {
  mode:ChartMode='elevation';private rows:{p:Point;d:number;v:number}[]=[];private total=0;private pref!:Preferences;private sport='run';private width=1000;
  constructor(private host:HTMLElement,private hover:(p:Point|null)=>void){host.addEventListener('pointermove',e=>this.cursor(e));host.addEventListener('pointerleave',()=>{this.hover(null);this.host.querySelector('.chart-tooltip')?.remove();this.host.querySelector('.cursor')?.remove();});}
  render(a:Activity,s:Simulation|null,pref:Preferences):void {
-  this.pref=pref;this.sport=a.settings.sport;const imperial=pref.units==='imperial',c=cumulative(a.path);this.total=c.at(-1)||0;this.rows=[];this.host.replaceChildren();
-  if(this.mode==='elevation')this.rows=a.path.map((p,i)=>({p,d:c[i],v:p.ele===undefined?NaN:p.ele*(imperial?3.28084:1)}));
-  else if(this.mode==='hr'&&!a.settings.hrEnabled)this.rows=a.path.map((p,i)=>({p,d:c[i],v:p.hr??NaN}));
+  this.pref=pref;this.sport=a.settings.sport;const imperial=pref.units==='imperial',path=plannedPath(a),c=cumulative(path);this.total=c.at(-1)||0;this.rows=[];this.host.replaceChildren();
+  if(this.mode==='elevation')this.rows=path.map((p,i)=>({p,d:c[i],v:p.ele===undefined?NaN:p.ele*(imperial?3.28084:1)}));
+  else if(this.mode==='hr'&&!a.settings.hrEnabled)this.rows=path.map((p,i)=>({p,d:c[i],v:p.hr??NaN}));
   else if(s)this.rows=s.points.map(p=>({p,d:p.distance,v:this.mode==='hr'?p.hr??NaN:a.settings.sport==='run'?(imperial?1609.344:1000)/p.speed:p.speed*3.6/(imperial?1.609344:1)}));
   const valid=this.rows.filter(r=>Number.isFinite(r.v));
-  if(valid.length<2){const empty=document.createElement('div');empty.className='chart-empty';empty.textContent=!a.path.length?'Your route profile will appear here.':this.mode==='elevation'?'Elevation unavailable. Route and GPX export still work.':this.mode==='hr'?'Enable simulated heart rate in Activity settings.':'A completed route is needed for this profile.';this.host.append(empty);return;}
+  if(valid.length<2){const empty=document.createElement('div');empty.className='chart-empty';empty.textContent=!path.length?'Your route profile will appear here.':this.mode==='elevation'?'Elevation unavailable. Route and GPX export still work.':this.mode==='hr'?'Enable simulated heart rate in Activity settings.':'A completed route is needed for this profile.';this.host.append(empty);return;}
   const svg=document.createElementNS(NS,'svg');this.width=Math.max(250,this.host.clientWidth);svg.setAttribute('viewBox',`0 0 ${this.width} 125`);svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('role','img');svg.setAttribute('aria-label',`${this.mode} profile along route`);this.host.append(svg);
   const make=(tag:string,attrs:Record<string,string>,text='')=>{const n=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));n.textContent=text;svg.append(n);return n;};
   let lo=Math.min(...valid.map(r=>r.v)),hi=Math.max(...valid.map(r=>r.v));const pad=Math.max((hi-lo)*.2,this.mode==='elevation'?2:this.mode==='pace'?this.sport==='run'?5:1:2);lo-=pad;hi+=pad;

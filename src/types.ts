@@ -1,6 +1,7 @@
 export interface Point { lat:number; lon:number; ele?:number; time?:number; hr?:number }
 export type Sport = 'run' | 'ride';
 export type RouteSource = 'draft' | 'routed' | 'imported';
+export interface LoopPlan { start:number; mode:'laps'|'distance'; value:number }
 export interface Settings {
   sport:Sport; start:string; utcOffset:number; pace:number; speed:number;
   mode:'constant'|'natural'; variation:number; sample:1|2|5;
@@ -8,7 +9,7 @@ export interface Settings {
 }
 export interface Activity {
   id:string; version:1; name:string; createdAt:number; updatedAt:number;
-  waypoints:Point[]; path:Point[]; source:RouteSource; settings:Settings;
+  waypoints:Point[]; path:Point[]; source:RouteSource; settings:Settings; loop?:LoopPlan;
 }
 export interface Sample extends Point { time:number; distance:number; speed:number }
 export interface Simulation { points:Sample[]; duration:number; distance:number; interval:number }
