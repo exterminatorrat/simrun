@@ -1,10 +1,10 @@
 import type {Activity,Point} from './types.js';
-import {atDistance,cumulative,interpolate,wrapLon} from './geometry.js';
+import {atDistance,cumulative,interpolate,nearestOnPath,wrapLon} from './geometry.js';
 import {el} from './ui.js';
 // The only untyped boundary is MapLibre's optional browser UMD bundle.
 // Application geometry and all provider contracts remain strictly typed.
 declare global {interface Window {maplibregl?:any}}
-type Actions={add:(p:Point)=>void;move:(i:number,p:Point)=>void;insert:(i:number,p:Point)=>void;select:(i:number)=>void;message:(s:string)=>void};
+type Actions={add:(p:Point)=>void;move:(i:number,p:Point)=>void;insert:(i:number,p:Point)=>void;select:(i:number)=>void;message:(s:string)=>void;loopStart:(fraction:number)=>void};
 type PlanMarks={start:Point;end:Point};
 const NS='http://www.w3.org/2000/svg';
 const world=(p:Point):[number,number]=>{const lat=Math.max(-85.0511,Math.min(85.0511,p.lat))*Math.PI/180;return [(p.lon+180)/360,(1-Math.log(Math.tan(Math.PI/4+lat/2))/Math.PI)/2];};
@@ -89,12 +89,14 @@ export class RouteMap {
   const add=(p:Point,i:number,mid=false)=>{const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));b.type='button';b.title=mid?'Drag to insert waypoint':`Waypoint ${i+1}: drag to move`;b.setAttribute('aria-label',b.title);b.onclick=e=>{e.stopPropagation();if(mid)this.actions.insert(i,p);else this.actions.select(i);};const m=new gl.Marker({element:b,draggable:true}).setLngLat([p.lon,p.lat]).addTo(this.map);m.on('dragend',()=>{const ll=m.getLngLat(),q={lat:ll.lat,lon:wrapLon(ll.lng)};if(mid)this.actions.insert(i,q);else this.actions.move(i,q);});this.markers.push(m);};
   pts.forEach((p,i)=>{add(p,i);if(i<pts.length-1)add(this.middle(i),i,true);});
   if(!pts.length&&this.a.path.length){[this.a.path[0],this.a.path.at(-1)!].forEach((p,i)=>{const b=el('span',`waypoint ${i?'finish':'start'}`,i?'B':'A');this.markers.push(new gl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map));});}
-  if(this.plan)this.planMarks().forEach(m=>{const b=el('span',`waypoint ${m.cls}`,m.text);b.title=m.title;b.setAttribute('aria-label',m.title);this.markers.push(new gl.Marker({element:b}).setLngLat([m.p.lon,m.p.lat]).addTo(this.map));});
+  if(this.plan)this.planMarks().forEach(m=>{const b=el('span',`waypoint ${m.cls}`,m.text);b.title=m.title;b.setAttribute('aria-label',m.title);const mk=new gl.Marker({element:b,draggable:m.draggable}).setLngLat([m.p.lon,m.p.lat]).addTo(this.map);if(m.draggable)mk.on('dragend',()=>{const ll=mk.getLngLat();this.actions.loopStart(this.fractionAt({lat:ll.lat,lon:wrapLon(ll.lng)}));});this.markers.push(mk);});
  }
- private planMarks():{p:Point;cls:string;text:string;title:string}[] {
+ private planMarks():{p:Point;cls:string;text:string;title:string;draggable:boolean}[] {
   const plan=this.plan;if(!plan)return [];
-  return [{p:plan.start,cls:'plan-start',text:'S',title:'Loop start'},{p:plan.end,cls:'plan-finish',text:'E',title:'Loop end'}];
+  return [{p:plan.start,cls:'plan-start',text:'S',title:'Loop start: drag along the loop',draggable:true},{p:plan.end,cls:'plan-finish',text:'E',title:'Loop end',draggable:false}];
  }
+ /** Normalized distance of the point on the closed route nearest `p`. */
+ private fractionAt(p:Point):number {const path=this.a?.path??[];if(path.length<2)return 0;const c=cumulative(path),total=c.at(-1)||0;return total>0?(nearestOnPath(path,p,c)/total)%1:0;}
  private middle(i:number):Point {
   const a=this.a!;if(a.source==='draft'||a.path.length<2)return interpolate(a.waypoints[i],a.waypoints[i+1],.5);
   // Find the nearest route samples to each waypoint, then follow route distance.
@@ -118,15 +120,15 @@ export class RouteMap {
   const make=(tag:string,attrs:Record<string,string>)=>{const n=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));this.svg.append(n);return n;};
   const path=(p:Point[],cls:string)=>{if(p.length<2)return;const step=Math.max(1,Math.ceil(p.length/5000));const v=p.filter((_,i)=>i%step===0||i===p.length-1);make('path',{d:v.map((p,i)=>`${i?'L':'M'}${this.xy(p).map(n=>n.toFixed(1)).join(',')}`).join(' '),class:cls});};
   if(this.a){path(this.a.path,'fallback-route');if(this.a.source==='draft')path(this.a.waypoints,'fallback-draft');this.a.waypoints.forEach((p,i)=>{const [x,y]=this.xy(p);make('circle',{cx:String(x),cy:String(y),r:'12',class:`fallback-point ${i===this.selected?'selected':''}`,'data-index':String(i)});const t=make('text',{x:String(x),y:String(y+4),class:'fallback-number','data-index':String(i)});t.textContent=String(i+1);if(i<this.a!.waypoints.length-1){const [mx,my]=this.xy(this.middle(i));make('circle',{cx:String(mx),cy:String(my),r:'6',class:'fallback-mid','data-mid':String(i)});}});}
-  if(this.plan)this.planMarks().forEach(m=>{const [x,y]=this.xy(m.p);make('circle',{cx:String(x),cy:String(y),r:'10',class:`fallback-${m.cls}`,'data-loop':'1'});const t=make('text',{x:String(x),y:String(y+3.5),class:'fallback-plan-label','data-loop':'1'});t.textContent=m.text;});
+  if(this.plan)this.planMarks().forEach(m=>{const [x,y]=this.xy(m.p),flag:Record<string,string>=m.draggable?{'data-loop-start':'1'}:{};make('circle',{cx:String(x),cy:String(y),r:'10',class:`fallback-${m.cls}`,'data-loop':'1',...flag});const t=make('text',{x:String(x),y:String(y+3.5),class:'fallback-plan-label','data-loop':'1',...flag});t.textContent=m.text;});
   if(this.hoverPoint){const [x,y]=this.xy(this.hoverPoint);make('circle',{cx:String(x),cy:String(y),r:'6',class:'chart-map-marker'});}
   this.svg.style.cursor=this.drawing?'crosshair':'grab';
  }
  private bindFallback():void {
   this.svg.addEventListener('wheel',e=>{e.preventDefault();this.zoom(e.deltaY<0?.5:-.5);},{passive:false});
-  this.svg.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=e.target as Element;if(target.getAttribute('data-loop'))return;const idx=target.getAttribute('data-index'),mid=target.getAttribute('data-mid'),x=e.clientX,y=e.clientY,start={...this.view};let moved=false;this.svg.setPointerCapture(e.pointerId);
-   const move=(v:PointerEvent)=>{moved ||=Math.hypot(v.clientX-x,v.clientY-y)>4;if(idx===null&&mid===null&&moved){const scale=this.dimensions().scale;this.view.x=start.x-(v.clientX-x)/scale;this.view.y=start.y-(v.clientY-y)/scale;this.drawFallback();}};
-   const up=(v:PointerEvent)=>{this.svg.removeEventListener('pointermove',move);this.svg.removeEventListener('pointerup',up);this.svg.removeEventListener('pointercancel',cancel);this.moveCleanup=null;if(idx!==null){if(moved)this.actions.move(+idx,this.point(v));else this.actions.select(+idx);}else if(mid!==null)this.actions.insert(+mid,this.point(v));else if(!moved&&this.drawing)this.actions.add(this.point(v));else if(moved&&this.map){const p=unworld(this.view.x,this.view.y);this.map.jumpTo({center:[p.lon,p.lat],zoom:this.view.zoom});}};
+  this.svg.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=e.target as Element,loopStart=target.getAttribute('data-loop-start')==='1';if(target.getAttribute('data-loop')&&!loopStart)return;const idx=target.getAttribute('data-index'),mid=target.getAttribute('data-mid'),x=e.clientX,y=e.clientY,start={...this.view};let moved=false;this.svg.setPointerCapture(e.pointerId);
+   const move=(v:PointerEvent)=>{moved ||=Math.hypot(v.clientX-x,v.clientY-y)>4;if(!loopStart&&idx===null&&mid===null&&moved){const scale=this.dimensions().scale;this.view.x=start.x-(v.clientX-x)/scale;this.view.y=start.y-(v.clientY-y)/scale;this.drawFallback();}};
+   const up=(v:PointerEvent)=>{this.svg.removeEventListener('pointermove',move);this.svg.removeEventListener('pointerup',up);this.svg.removeEventListener('pointercancel',cancel);this.moveCleanup=null;if(loopStart)this.actions.loopStart(this.fractionAt(this.point(v)));else if(idx!==null){if(moved)this.actions.move(+idx,this.point(v));else this.actions.select(+idx);}else if(mid!==null)this.actions.insert(+mid,this.point(v));else if(!moved&&this.drawing)this.actions.add(this.point(v));else if(moved&&this.map){const p=unworld(this.view.x,this.view.y);this.map.jumpTo({center:[p.lon,p.lat],zoom:this.view.zoom});}};
    const cancel=()=>{this.svg.removeEventListener('pointermove',move);this.svg.removeEventListener('pointerup',up);this.svg.removeEventListener('pointercancel',cancel);};this.moveCleanup=cancel;this.svg.addEventListener('pointermove',move);this.svg.addEventListener('pointerup',up);this.svg.addEventListener('pointercancel',cancel);
   });
  }

@@ -13,7 +13,7 @@ let preferences=readPreferences();document.documentElement.dataset.theme=prefere
 const store=new LocalStore(),editor=new Editor(new ValhallaProvider(()=>preferences));
 let initialized=false,saveTimer:ReturnType<typeof setTimeout>|undefined,sim:Simulation|null=null,lastPath:Point[]|null=null,lastSettings='',simulationError='';
 let searchController:AbortController|null=null,searchId=0;
-const map=new RouteMap($('map'),{add:p=>{if(editor.activity.source==='imported'){toast('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}editor.add(p);},move:(i,p)=>editor.move(i,p),insert:(i,p)=>editor.insert(i,p),select:i=>{editor.selected=i;render();$('waypoint-details').setAttribute('open','');},message:toast});
+const map=new RouteMap($('map'),{add:p=>{if(editor.activity.source==='imported'){toast('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}editor.add(p);},move:(i,p)=>editor.move(i,p),insert:(i,p)=>editor.insert(i,p),select:i=>{editor.selected=i;render();$('waypoint-details').setAttribute('open','');},message:toast,loopStart:f=>editor.setLoop({start:f})});
 const charts=new Charts($('chart'),p=>map.hover(p));
 function guarded(fn:()=>void|Promise<void>):()=>void{return ()=>{try{Promise.resolve(fn()).catch(e=>toast(e instanceof Error?e.message:'The action could not be completed.'));}catch(e){toast(e instanceof Error?e.message:'The action could not be completed.');}};}
 function on(id:string,fn:()=>void|Promise<void>):void{$(id).addEventListener('click',guarded(fn));}
@@ -54,7 +54,7 @@ function render():void {
  loopInput.disabled=!closed;$<HTMLButtonElement>('loop-mode-laps').disabled=!closed;$<HTMLButtonElement>('loop-mode-distance').disabled=!closed;$<HTMLButtonElement>('loop-clear').hidden=!a.loop;
  const startSelect=$<HTMLSelectElement>('loop-start');startSelect.replaceChildren();startSelect.disabled=!closed;
  if(closed){const seen:number[]=[];a.waypoints.forEach((p,i)=>{const f=editor.startFor(i);if(f===null||seen.some(v=>Math.abs(v-f)<1e-6))return;seen.push(f);const o=el('option');o.value=String(f);o.textContent=`Waypoint ${i+1} · ${distanceValue(f*loopLen)} ${unit} in`;startSelect.append(o);});
-  const current=a.loop?.start??0;if(!seen.some(v=>Math.abs(v-current)<1e-6)){const o=el('option');o.value=String(current);o.textContent=`Route's first point · ${distanceValue(current*loopLen)} ${unit} in`;startSelect.append(o);}startSelect.value=String(current);}
+  const current=a.loop?.start??0;if(!seen.some(v=>Math.abs(v-current)<1e-6)){const o=el('option');o.value=String(current);o.textContent=`${Math.abs(current)<1e-9?"Route's first point":'Custom start'} · ${distanceValue(current*loopLen)} ${unit} in`;startSelect.append(o);}startSelect.value=String(current);}
  if(initialized){clearTimeout(saveTimer);const snapshot=structuredClone(a);saveTimer=setTimeout(()=>store.saveDraft(snapshot).catch(e=>{setText('storage-state','Save failed');$('storage-state').classList.add('warning');toast(`Draft not saved: ${e.message}`);}),350);}
 }
 editor.onChange=render;editor.onMessage=toast;

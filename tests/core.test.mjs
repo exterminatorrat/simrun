@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {distance, cumulative, atDistance, elevationStats, outAndBack, closeLoop, isClosedLoop, loopPath, rotatedLoop} from '../dist/src/geometry.js';
+import {distance, cumulative, atDistance, elevationStats, outAndBack, closeLoop, isClosedLoop, loopPath, rotatedLoop, nearestOnPath} from '../dist/src/geometry.js';
 import {defaults, simulate, durationFor, parseClock, clock, validateActivity, loopPlan, plannedPath} from '../dist/src/model.js';
 import {exportGPX, safeFilename} from '../dist/src/gpx.js';
 const path=[{lon:0,lat:0,ele:10},{lon:0.045,lat:0,ele:20}];
@@ -18,6 +18,7 @@ test('closed loops rotate from a start fraction and walk whole or partial laps',
  assert.ok(Math.abs(cumulative(loopPath(square,0,2.5)).at(-1)-2.5*total)<1);
  assert.ok(Math.abs(cumulative(loopPath(square,0,.25)).at(-1)-.25*total)<1);
  assert.deepEqual(loopPath(square,0,0),[]);
+ assert.ok(Math.abs(nearestOnPath(square,{lat:0,lon:.005})-.005*111319)<50);
 });
 test('a lap plan drives simulated distance, duration and export path',()=>{
  const total=cumulative(square).at(-1),a=defaults();a.path=square;a.source='routed';

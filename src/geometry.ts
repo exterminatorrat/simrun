@@ -65,10 +65,18 @@ export function loopPath(path:Point[],start:number,laps:number):Point[] {
  }
  return out;
 }
-/** Distance along a route to the point nearest `p`; pass `c` to reuse a cumulative array. */
+/** Distance along a route to the nearest point on its polyline; pass `c` to reuse a cumulative array. */
 export function nearestOnPath(path:Point[],p:Point,c:number[]=cumulative(path)):number {
  let best=Infinity,d=0;
- for(let i=0;i<path.length;i++){const v=distance(path[i],p);if(v<best){best=v;d=c[i];}}
+ for(let i=1;i<path.length;i++){
+  const a=path[i-1],b=path[i],seg=c[i]-c[i-1];let t=0;
+  if(seg>0){
+   const cos=Math.cos(a.lat*rad),bx=wrapLon(b.lon-a.lon)*cos,by=b.lat-a.lat,den=bx*bx+by*by;
+   if(den>0)t=clamp((wrapLon(p.lon-a.lon)*cos*bx+(p.lat-a.lat)*by)/den,0,1);
+  }
+  const v=distance(p,interpolate(a,b,t));
+  if(v<best){best=v;d=c[i-1]+seg*t;}
+ }
  return d;
 }
 export function elevationStats(path:Point[]):ElevationStats {
