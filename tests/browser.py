@@ -89,7 +89,10 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   expect(page.locator('#inspector')).to_be_hidden();page.locator('#open-inspector').click();expect(page.locator('#inspector')).to_be_visible();expect(page.locator('#export')).to_be_visible();screenshot(page,'mobile-settings')
   page.locator('#close-inspector').click();screenshot(page,'mobile-map')
   passed('1440 desktop, 1280 laptop and 390 mobile layouts; accessible mobile settings')
-  page.set_viewport_size({'width':1440,'height':900});page.locator('#clear').click();page.locator('#draw').click()
+  page.set_viewport_size({'width':1440,'height':900});page.wait_for_timeout(150)
+  assert page.evaluate("(()=>{const m=document.getElementById('map').getBoundingClientRect();const s=(document.querySelector('.maplibregl-canvas')||document.querySelector('svg.coordinate-map')).getBoundingClientRect();return m.height>200&&s.height>200})()")
+  passed('Map container keeps a full-height renderer surface')
+  page.locator('#clear').click();page.locator('#draw').click()
   page.mouse.click(390,260);page.mouse.click(730,270);page.mouse.click(700,520)
   expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
   assert page.evaluate('window.testRequests.some(r=>r.data.costing==="pedestrian")')
@@ -115,7 +118,7 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
    expect(page.locator('#storage-state')).to_contain_text('Session only')
    passed('Blocked storage is reported honestly instead of promising persistence')
   else:
-   page.locator('#save').click();page.wait_for_timeout(500);name=page.locator('#activity-name').input_value();page.reload();expect(page.locator('#activity-name')).to_have_value(name);page.locator('#history').click();assert page.locator('.history-row').count()>=2
+   page.locator('#save').click();page.wait_for_timeout(500);name=page.locator('#activity-name').input_value();page.reload();expect(page.locator('#activity-name')).to_have_value(name);page.locator('#history').click();expect(page.locator('.history-row')).to_have_count(2)
    passed('Native IndexedDB draft and history survive reload')
   assert not errors,errors
   passed('No uncaught JavaScript exceptions throughout tested interactions')
