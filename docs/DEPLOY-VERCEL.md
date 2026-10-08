@@ -36,6 +36,6 @@ A login-free `npx vercel@latest deploy --temporary` creates an anonymous deploym
 
 ## Notes
 
-- Deployment Protection (Vercel Authentication) is enabled for the project and governs who can open preview and production URLs. Confirm the access policy before sharing any link.
+- Deployment Protection (Vercel Authentication) is enabled. Preview URLs require authentication, but the production alias `https://simrun.vercel.app` is publicly reachable (verified with an anonymous request). Enable production protection in the Vercel dashboard before relying on the deployment to stay private.
 - The app relies on public third-party services (OpenFreeMap, FOSSGIS Valhalla, opt-in Nominatim). Do not run this personal configuration as a high-volume public service.
 - Keep the deployment private until the acceptance scenarios in `docs/ACCEPTANCE.md` pass in the target environment.
