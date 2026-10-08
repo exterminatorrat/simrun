@@ -1,0 +1,41 @@
+# Deploying SimRun to Vercel
+
+SimRun is a static site. The build compiles TypeScript and copies `public/` into `dist/`, so Vercel must serve `dist/` and never the unbuilt `public/` sources.
+
+## Linked project
+
+| Item | Value |
+| --- | --- |
+| Vercel account | `exterminatorrat` |
+| Scope | `warriorsvsrobloxs-projects` |
+| Project | `simrun` |
+| Production alias | https://simrun.vercel.app |
+| Source of truth | https://github.com/exterminatorrat/simrun |
+
+`vercel.json` pins the build: install `npm ci`, build `npm run build`, output `dist/`.
+
+## Authentication
+
+The CLI needs a Vercel token, and none is committed to this repository. Provide one per session:
+
+```sh
+export VERCEL_TOKEN=...   # create at https://vercel.com/account/tokens
+```
+
+`vercel login` also works interactively. `vercel link` writes `.vercel/` and `.env.local`; both stay gitignored and must not be committed.
+
+## Commands
+
+```sh
+npx vercel@latest link --yes --project simrun --token "$VERCEL_TOKEN"
+npx vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
+npx vercel@latest curl https://simrun.vercel.app --token "$VERCEL_TOKEN"
+```
+
+A login-free `npx vercel@latest deploy --temporary` creates an anonymous deployment that expires in about an hour and can be claimed from its output link.
+
+## Notes
+
+- Deployment Protection (Vercel Authentication) is enabled. Preview URLs require authentication, but the production alias `https://simrun.vercel.app` is publicly reachable (verified with an anonymous request). Enable production protection in the Vercel dashboard before relying on the deployment to stay private.
+- The app relies on public third-party services (OpenFreeMap, FOSSGIS Valhalla, opt-in Nominatim). Do not run this personal configuration as a high-volume public service.
+- Keep the deployment private until the acceptance scenarios in `docs/ACCEPTANCE.md` pass in the target environment.

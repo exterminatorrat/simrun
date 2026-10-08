@@ -17,6 +17,10 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 For static hosting, run `npm run build` and serve **`dist/`**. Its entry is `dist/index.html`. The development Node server is not a production dependency. Relative asset paths support deployment below a URL prefix. Use HTTPS (or a normal localhost development origin), not file://.
 
+## Deploy to Vercel
+
+This repository is preconfigured for static Vercel deployment through `vercel.json` (`npm ci`, `npm run build`, output `dist`). Never serve the unbuilt `public/` directory. The linked project, deploy commands and credential handling are documented in [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md).
+
 ## What is here
 
 MapLibre/OpenFreeMap integration; cancellable and throttled Valhalla pedestrian/bicycle requests; waypoint editing, shaping handles, undo/redo, reverse and out-and-back; time/pace/speed conversion; smooth deterministic simulation; optional synthetic HR; GPX import/export; SVG profiles; IndexedDB history/drafts with an explicitly labeled memory fallback; JSON backup/restore; metric/imperial units; light/dark appearance; mobile settings sheet.
