@@ -12,7 +12,7 @@ Branch: `main`. This ZIP is a snapshot, not a replacement source of truth. Check
 
 ## Product
 
-SimRun is a personal running/cycling route editor and simulated GPX activity studio. No auth, payments, analytics or cloud database. Map-first UI; waypoint editing, undo/redo, reverse, out-and-back, import, timing/simulation, optional synthetic HR, profiles, history and backups. All exports identify themselves as simulated, not recorded device activities.
+SimRun is a personal running/cycling route editor and simulated GPX activity studio. No auth, payments, analytics or cloud database. Map-first UI; waypoint editing, undo/redo, reverse, out-and-back, close-loop, import, timing/simulation, optional synthetic HR, profiles, history and backups. All exports identify themselves as simulated, not recorded device activities.
 
 ## Architecture
 
@@ -64,7 +64,7 @@ A private Site was created. During the 2026-09-27 compatibility update, its map-
 
 ## Verification
 
-Run `npm test`. Then rerun `docs/ACCEPTANCE.md` in the actual private Site: live 5 km pedestrian route; drag/insert/delete/reorder; cancellation and undo/redo; reverse/out-back; run/ride costing; pace-duration math; natural timing and HR XML; midnight offset; import/re-export; history/draft reload and duplicate; JSON backup/restore; forced routing/429 failures; no empty/stale export; desktop/mobile; attribution and console. XML parsing was tested; independent GPX XSD validation and third-party importer compatibility were not certified.
+Run `npm test`. Then rerun `docs/ACCEPTANCE.md` in the actual private Site: live 5 km pedestrian route; drag/insert/delete/reorder; cancellation and undo/redo; reverse/out-back/close-loop; run/ride costing; pace-duration math; natural timing and HR XML; midnight offset; import/re-export; history/draft reload and duplicate; JSON backup/restore; forced routing/429 failures; no empty/stale export; desktop/mobile; attribution and console. XML parsing was tested; independent GPX XSD validation and third-party importer compatibility were not certified.
 
 ## Deployment Goal
 

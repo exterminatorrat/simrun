@@ -1,6 +1,6 @@
 import type {Activity,Point,RouteSource,Settings} from './types.js';
 import {defaults} from './model.js';
-import {outAndBack,validPoint} from './geometry.js';
+import {closeLoop,distance,outAndBack,validPoint} from './geometry.js';
 import type {RoutingProvider} from './providers.js';
 type Snapshot={path:Point[];waypoints:Point[];source:RouteSource};
 export class Editor {
@@ -24,6 +24,7 @@ export class Editor {
  clear(){this.checkpoint();this.invalidate();this.activity.path=[];this.activity.waypoints=[];this.activity.source='draft';this.selected=-1;this.status='Click the map to begin.';this.notify();}
  reverse(){if(this.activity.source==='imported'){this.checkpoint();this.activity.path=[...this.activity.path].reverse();this.notify();}else this.edit([...this.activity.waypoints].reverse());}
  outAndBack(){if(this.activity.source==='imported'){this.checkpoint();this.activity.path=outAndBack(this.activity.path);this.notify();}else this.edit(outAndBack(this.activity.waypoints));}
+ closeLoop(){if(this.activity.source==='imported'){this.onMessage('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}const points=this.activity.waypoints;if(points.length<2){this.onMessage('Add at least two waypoints before closing a loop.');return;}if(distance(points[0],points[points.length-1])<=5){this.onMessage('This route already returns to its start.');return;}this.edit(closeLoop(points));}
  undo(){const s=this.past.pop();if(!s)return;this.future.push(this.snapshot());this.restore(s);}
  redo(){const s=this.future.pop();if(!s)return;this.past.push(this.snapshot());this.restore(s);}
  private restore(s:Snapshot){this.invalidate();Object.assign(this.activity,s);this.selected=-1;this.status=s.source==='draft'?'Restoring waypoints…':'Route restored';this.notify();if(s.source==='draft')this.recalculate();}

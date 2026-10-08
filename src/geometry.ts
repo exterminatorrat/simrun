@@ -38,6 +38,7 @@ export function atDistance(path:Point[],c:number[],d:number):Point {
 }
 export function resample(path:Point[],count:number):Point[] {const c=cumulative(path);return Array.from({length:count},(_,i)=>atDistance(path,c,c[c.length-1]*i/(count-1)));}
 export function outAndBack<T>(path:T[]):T[]{return [...path,...path.slice(0,-1).reverse()];}
+export function closeLoop<T>(path:T[]):T[]{return path.length?[...path,path[0]]:[];}
 export function elevationStats(path:Point[]):ElevationStats {
  const values=path.filter(p=>Number.isFinite(p.ele));if(values.length<2)return {gain:null,loss:null,min:null,max:null};
  let gain=0,loss=0,anchor=values[0].ele!,min=anchor,max=anchor;

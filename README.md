@@ -19,7 +19,7 @@ For static hosting, run `npm run build` and serve **`dist/`**. Its entry is `dis
 
 ## What is here
 
-MapLibre/OpenFreeMap integration; cancellable and throttled Valhalla pedestrian/bicycle requests; waypoint editing, shaping handles, undo/redo, reverse and out-and-back; time/pace/speed conversion; smooth deterministic simulation; optional synthetic HR; GPX import/export; SVG profiles; IndexedDB history/drafts with an explicitly labeled memory fallback; JSON backup/restore; metric/imperial units; light/dark appearance; mobile settings sheet.
+MapLibre/OpenFreeMap integration; cancellable and throttled Valhalla pedestrian/bicycle requests; waypoint editing, shaping handles, undo/redo, reverse, out-and-back and close-loop (return to the start); time/pace/speed conversion; smooth deterministic simulation; optional synthetic HR; GPX import/export; SVG profiles; IndexedDB history/drafts with an explicitly labeled memory fallback; JSON backup/restore; metric/imperial units; light/dark appearance; mobile settings sheet.
 
 There is **no seeded activity, artificial road network, or fake successful routing in the application**. Browser tests use their own synthetic fixtures and mocked provider responses. If the basemap cannot load, a clearly labeled coordinate canvas can display/edit geometry. Failed road routing never promotes a straight waypoint preview into an exportable route.
 

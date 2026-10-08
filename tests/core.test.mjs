@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {distance, cumulative, atDistance, elevationStats, outAndBack} from '../dist/src/geometry.js';
+import {distance, cumulative, atDistance, elevationStats, outAndBack, closeLoop} from '../dist/src/geometry.js';
 import {defaults, simulate, durationFor, parseClock, clock, validateActivity} from '../dist/src/model.js';
 import {exportGPX, safeFilename} from '../dist/src/gpx.js';
 const path=[{lon:0,lat:0,ele:10},{lon:0.045,lat:0,ele:20}];
@@ -8,6 +8,7 @@ test('geodesic distance and interpolation',()=>{assert.ok(Math.abs(distance(path
 test('known pace and speed arithmetic',()=>{assert.equal(durationFor(10000,'run',300,20),3000);assert.equal(durationFor(5000,'run',240,20),1200);assert.equal(durationFor(20000,'ride',300,20),3600);});
 test('clock rounds safely',()=>{assert.equal(clock(299.8),'5:00');assert.equal(parseClock('1:02:03'),3723);assert.throws(()=>parseClock('5:99'));});
 test('turnaround has no duplicated pivot',()=>{let a=outAndBack([1,2,3]);assert.deepEqual(a,[1,2,3,2,1]);});
+test('closing a loop returns to the start and tolerates an empty route',()=>{assert.deepEqual(closeLoop([1,2,3]),[1,2,3,1]);assert.deepEqual(closeLoop([]),[]);});
 test('elevation missing stays missing',()=>{assert.equal(elevationStats([{lon:0,lat:0},{lon:1,lat:0}]).gain,null);});
 test('smooth natural simulation normalizes exact duration across midnight',()=>{let a=defaults();a.path=path;a.settings.start='2026-09-27T23:59';a.settings.utcOffset=540;a.settings.mode='natural';a.settings.hrEnabled=true;let s=simulate(a);assert.equal(s.points.at(-1).time-s.points[0].time,Math.round(s.duration*1000));assert.ok(s.points.every((p,i)=>i===0||p.time>s.points[i-1].time));assert.ok(s.points[0].time===Date.UTC(2026,8,27,14,59));assert.deepEqual(s,simulate(a));assert.ok(s.points.at(-1).lon===path.at(-1).lon);assert.ok(s.points.every(p=>p.hr>=30 && p.hr<=240));});
 test('constant pace yields stable speeds',()=>{let a=defaults();a.path=path;let s=simulate(a);assert.ok(Math.max(...s.points.map(p=>p.speed))-Math.min(...s.points.map(p=>p.speed))<.00001);});
