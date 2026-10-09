@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Editor} from '../dist/src/editor.js';
 import {defaults} from '../dist/src/model.js';
-import {cumulative} from '../dist/src/geometry.js';
+import {cumulative, isClosedLoop} from '../dist/src/geometry.js';
 import {loopPlan} from '../dist/src/model.js';
 const a={lat:0,lon:0},b={lat:0,lon:.045},c={lat:.01,lon:.045};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -27,3 +27,18 @@ test('loop plan sets laps, converts to distance, pins the start and survives an 
 });
 test('stale routing response cannot overwrite a newer edit',async()=>{const pending=[];const e=new Editor({route:(p,s,signal)=>new Promise(resolve=>pending.push({resolve,p,signal})),elevation:async p=>p});e.edit([a,b]);await sleep(480);assert.equal(pending.length,1);e.move(1,c);assert.equal(pending[0].signal.aborted,true);await sleep(480);assert.equal(pending.length,2);pending[1].resolve([a,c]);await sleep(10);pending[0].resolve([a,b]);await sleep(10);assert.deepEqual(e.activity.path,[a,c]);assert.equal(e.pending,false);assert.equal(e.activity.source,'routed');e.dispose();});
 test('route failure leaves editable waypoints and never blesses straight lines as roads',async()=>{const e=new Editor({route:async()=>{throw Error('Unavailable');},elevation:async p=>p});let message='';e.onMessage=m=>message=m;e.edit([a,b]);await sleep(480);assert.equal(e.pending,false);assert.equal(e.activity.source,'draft');assert.equal(e.activity.path.length,0);assert.equal(e.activity.waypoints.length,2);assert.match(message,/Unavailable/);e.dispose();});
+test('a routed loop stays a loop when the router returns an open seam',async()=>{
+ const s={lat:0,lon:0},n={lat:0,lon:.01},east={lat:.01,lon:.01},south={lat:.01,lon:0};
+ const seam={lat:0,lon:.0015};
+ const routed=[s,n,east,south,seam];
+ const e=new Editor({route:async()=>routed,elevation:async p=>p});
+ e.edit([s,n,east,south,s]);await sleep(480);
+ assert.equal(e.activity.waypoints.length,5);
+ assert.equal(isClosedLoop(e.activity.path),true);
+ e.setLoop({mode:'laps',value:2});
+ assert.equal(loopPlan(e.activity).laps,2);
+ let message='';e.onMessage=m=>message=m;
+ e.closeLoop();assert.match(message,/already returns/);
+ assert.equal(e.activity.waypoints.length,5);
+ e.dispose();
+});
