@@ -18,8 +18,8 @@ export class Charts {
   let lo=Math.min(...valid.map(r=>r.v)),hi=Math.max(...valid.map(r=>r.v));const pad=Math.max((hi-lo)*.2,this.mode==='elevation'?2:this.mode==='pace'?this.sport==='run'?5:1:2);lo-=pad;hi+=pad;
   const span=this.width-70;const px=(d:number)=>50+d/Math.max(1,this.total)*span,py=(v:number)=>98-(v-lo)/(hi-lo)*85;
   for(let i=0;i<3;i++){const y=15+i*41.5,v=hi-i*(hi-lo)/2;make('line',{x1:'50',x2:String(this.width-20),y1:String(y),y2:String(y),class:'grid'});make('text',{x:'40',y:String(y+3),'text-anchor':'end',class:'axis'},this.format(v));}
-  const step=Math.max(1,Math.ceil(this.rows.length/1000)),sample=this.rows.filter((_,i)=>i%step===0||i===this.rows.length-1);let d='',started=false;
-  for(const r of sample){if(!Number.isFinite(r.v)){started=false;continue;}d+=`${started?'L':'M'}${px(r.d).toFixed(2)} ${py(r.v).toFixed(2)} `;started=true;}
+  const step=Math.max(1,Math.ceil(this.rows.length/1000)),sample=this.rows.filter((_,i)=>i%step===0||i===this.rows.length-1);let d='',started=false,lastTime:number|undefined;const gapMs=s?Math.max(1,s.interval*1000)*1.5:0;
+  for(const r of sample){if(!Number.isFinite(r.v)){started=false;lastTime=undefined;continue;}if(started&&gapMs>0&&lastTime!==undefined&&r.p.time!==undefined&&r.p.time-lastTime>gapMs)started=false;d+=`${started?'L':'M'}${px(r.d).toFixed(2)} ${py(r.v).toFixed(2)} `;started=true;lastTime=r.p.time;}
   make('path',{d,class:'profile-line'});
   for(let i=0;i<5;i++)make('text',{x:String(50+i*span/4),y:'119','text-anchor':i===0?'start':i===4?'end':'middle',class:'axis'},`${(this.total*i/4/(imperial?1609.344:1000)).toFixed(1)} ${imperial?'mi':'km'}`);
  }
