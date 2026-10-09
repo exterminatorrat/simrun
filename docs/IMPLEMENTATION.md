@@ -22,6 +22,10 @@ Native TypeScript/DOM was chosen because no Sites scaffold was exposed and React
 
 All network fixtures live in test code only. Draft/failed waypoint geometry is not promoted to a successful road route. Exported activities always identify synthetic timing. Community map providers are not treated as unlimited free infrastructure.
 
+## Map style and cue sheets
+
+Each appearance has its own MapLibre style URL: OpenFreeMap Liberty for light, the OpenFreeMap dark style for dark. Both are stored as preferences and validated through the same HTTPS-only endpoint rule, so either can be replaced. A turn cue is a heading change measured across a short span either side of a route vertex, above a minimum angle and de-duplicated within one corner. Deriving cues from the exported geometry keeps routed, imported and loop-planned routes on the same path. The cue sheet is a CSV file and not a navigation source: it carries no street names and is labelled as simulated.
+
 See README and the agent handoff for current limitations and deployment instructions.
 
 ## Offline cache

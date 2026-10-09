@@ -12,7 +12,7 @@ const paths:Record<string,string>={
  close:'m6 6 12 12M18 6 6 18',check:'m5 12 4 4L19 6',save:'M5 3h12l4 4v14H3V3h2Zm2 0v6h10V3M7 21v-8h10v8',chevron:'m8 4 8 8-8 8',up:'m6 15 6-6 6 6',down:'m6 9 6 6 6-6',
  sun:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2',
  hand:'M7 12V6a2 2 0 0 1 4 0v6-8a2 2 0 0 1 4 0v8-6a2 2 0 0 1 4 0v8-3a2 2 0 0 1 4 0v6c0 5-3 7-7 7-3 0-5-2-7-5l-4-5a2 2 0 0 1 3-3l3 3',
- info:'M12 11v6m0-10v.1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',duplicate:'M9 9h12v12H9V9Zm-4 6H3V3h12v2',pin:'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Zm-5 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0'
+ info:'M12 11v6m0-10v.1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',duplicate:'M9 9h12v12H9V9Zm-4 6H3V3h12v2',pin:'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Zm-5 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0',list:'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01'
 };
 export function icon(name:string):SVGSVGElement {const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('viewBox','0 0 24 24');s.setAttribute('fill','none');s.setAttribute('stroke','currentColor');s.setAttribute('stroke-width','1.65');s.setAttribute('stroke-linecap','round');s.setAttribute('stroke-linejoin','round');s.setAttribute('aria-hidden','true');s.classList.add('icon');const p=document.createElementNS(s.namespaceURI,'path');p.setAttribute('d',paths[name]||paths.info);s.append(p);return s;}
 export function button(label:string,action:()=>void,ico?:string,cls=''):HTMLButtonElement {const b=el('button',cls);b.type='button';b.title=label;b.setAttribute('aria-label',label);if(ico)b.append(icon(ico));else b.textContent=label;b.onclick=action;return b;}
