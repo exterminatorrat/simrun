@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="public/mark.jpg" alt="SimRun mark" width="96" height="96">
-
 # SimRun
 
 **Local-first route editor and explicitly simulated GPX activity studio.**
@@ -165,4 +163,4 @@ Creates `simrun-sites-handoff.zip` with one `simrun/` root. The packager exclude
 
 ## License
 
-No license file is currently included, so all rights are reserved by default. Third-party components and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Confirm rights to the brand artwork described there before redistributing.
+[MIT](LICENSE). The license does not cover the brand images in `public/` (`logo.jpg`, `mark.jpg`, `favicon.png`, `apple-touch-icon.png`): they are third-party artwork the project owner has no rights to, and they are not licensed for reuse. Third-party components and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
