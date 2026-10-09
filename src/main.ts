@@ -13,6 +13,7 @@ let preferences=readPreferences();document.documentElement.dataset.theme=prefere
 const store=new LocalStore(),editor=new Editor(new ValhallaProvider(()=>preferences));
 let initialized=false,saveTimer:ReturnType<typeof setTimeout>|undefined,sim:Simulation|null=null,lastPath:Point[]|null=null,lastSettings='',simulationError='';
 let searchController:AbortController|null=null,searchId=0;
+let emptyDismissed=false;
 const map=new RouteMap($('map'),{add:p=>{if(editor.activity.source==='imported'){toast('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}editor.add(p);},move:(i,p)=>editor.move(i,p),insert:(i,p)=>editor.insert(i,p),select:i=>{editor.selected=i;render();$('waypoint-details').setAttribute('open','');},message:toast,loopStart:f=>editor.setLoop({start:f})});
 const charts=new Charts($('chart'),p=>map.hover(p));
 function guarded(fn:()=>void|Promise<void>):()=>void{return ()=>{try{Promise.resolve(fn()).catch(e=>toast(e instanceof Error?e.message:'The action could not be completed.'));}catch(e){toast(e instanceof Error?e.message:'The action could not be completed.');}};}
@@ -30,7 +31,7 @@ function render():void {
  if(lastPath!==a.path||lastSettings!==key){lastPath=a.path;lastSettings=key;sim=null;simulationError='';if(a.path.length>1)try{sim=simulate(a);}catch(e){simulationError=e instanceof Error?e.message:'Invalid simulation.';}}
  const plan=loopPlan(a),route=plan?plan.path:a.path;
  map.update(a,editor.selected,editor.drawing,plan?{start:route[0],end:route[route.length-1]}:undefined);charts.render(a,sim,preferences);
- $('empty').hidden=a.path.length>0||a.waypoints.length>0;
+ $('empty').hidden=emptyDismissed||a.path.length>0||a.waypoints.length>0;
  const meters=sim?.distance||cumulative(route).at(-1)||0,imperial=preferences.units==='imperial',unit=distanceUnit(),heights=elevationStats(route),pace=s.pace*(imperial?1.609344:1),speed=s.speed/(imperial?1.609344:1);
  stat('distance',distanceValue(meters),unit);stat('duration-stat',sim?clock(sim.duration):'0:00');stat('pace-stat',s.sport==='run'?clock(pace):speed.toFixed(1),s.sport==='run'?`/${unit}`:imperial?'mph':'km/h');stat('elevation-stat',heightValue(heights.gain),imperial?'ft':'m');
  setText('pace-stat-label',s.sport==='run'?'Avg. pace':'Avg. speed');setText('target-label',s.sport==='run'?`Target pace /${unit}`:`Target speed ${imperial?'mph':'km/h'}`);
@@ -76,7 +77,7 @@ change('loop-start',e=>editor.setLoop({start:Number(e.value)}));
 on('save',async()=>{validRoute();await store.save(editor.activity);toast(store.available?'Saved to your local route library.':'Kept for this session only. Export a backup before closing.');});
 on('export',async()=>{validRoute();downloadActivity(editor.activity);try{await store.save(editor.activity);toast(store.available?'GPX downloaded. Activity saved locally.':'GPX downloaded. History is session-only in this browser.');}catch{toast('GPX downloaded, but local history could not be saved.');}});
 on('edit-import',()=>{if(!confirm('Replace the imported geometry with a freshly routed path through up to 8 waypoints? Undo restores the original geometry.'))return;editor.edit(resample(editor.activity.path,Math.min(8,editor.activity.path.length)));editor.drawing=true;render();});
-const upload=()=>{$<HTMLInputElement>('gpx-file').value='';$('gpx-file').click();};on('import',upload);on('empty-import',upload);
+const upload=()=>{$<HTMLInputElement>('gpx-file').value='';$('gpx-file').click();};on('import',upload);on('empty-import',upload);on('empty-close',()=>{emptyDismissed=true;render();});
 $('gpx-file').addEventListener('change',guarded(async()=>{const file=$<HTMLInputElement>('gpx-file').files?.[0];if(!file)return;if(file.size>15000000)throw Error('GPX must be smaller than 15 MB.');const result=importGPX(await file.text());if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(result.activity);map.fit();toast(result.notice);}));
 for(const mode of ['elevation','pace','hr'] as ChartMode[])on(`chart-${mode}`,()=>{charts.mode=mode;for(const m of ['elevation','pace','hr']){$(`chart-${m}`).classList.toggle('active',m===mode);$(`chart-${m}`).setAttribute('aria-selected',String(m===mode));}charts.render(editor.activity,sim,preferences);});
 on('toggle-chart',()=>{const collapsed=$('chart-panel').classList.toggle('collapsed');$('toggle-chart').setAttribute('aria-expanded',String(!collapsed));$('toggle-chart').setAttribute('aria-label',collapsed?'Expand chart':'Collapse chart');});
