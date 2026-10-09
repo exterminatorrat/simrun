@@ -108,10 +108,20 @@ export function simulate(a:Activity):Simulation {
   points.push({...point,time:start+ms,distance:d,speed});
  }
  if(s.hrEnabled){
-  const baseline=points.map(p=>{const t=(p.time-start)/1000;return s.hrVariation*(.5*Math.sin(p.distance/650+phase)+.2*Math.sin(p.distance/180))-Math.min(14,s.hrVariation*2)*Math.exp(-t/150);});
-  let sum=0;for(let i=1;i<points.length;i++)sum+=(baseline[i]+baseline[i-1])/2*(points[i].time-points[i-1].time);
+  const avgSpeed=total/(durationMs/1000),next=gpsRandom(s.seed^0x27d4eb2f),step=intervalMs/1000;
+  const phi=Math.exp(-step/25),sigma=s.hrVariation*.55,gauss=()=>{const u=Math.max(1e-9,next());return Math.sqrt(-2*Math.log(u))*Math.cos(next()*Math.PI*2);};
+  const rest=Math.min(90,s.hrAverage),raw:number[]=[];let walk=0;
+  points.forEach(p=>{
+   walk=walk*phi+sigma*Math.sqrt(1-phi*phi)*gauss();
+   const t=(p.time-start)/1000,ratio=clamp(p.speed/avgSpeed-1,-.4,.4);
+   const lo=Math.max(0,p.distance-100),hi=Math.min(total,p.distance+100),a=atDistance(route,c,lo),b=atDistance(route,c,hi);
+   const grade=Number.isFinite(a.ele)&&Number.isFinite(b.ele)?clamp((b.ele!-a.ele!)/(hi-lo),-.15,.15):0;
+   const drift=Math.min(s.hrVariation*3,s.hrVariation*.03*Math.max(0,t-600)/60);
+   raw.push(walk+s.hrVariation*(2.4*ratio+16*grade)+(rest-s.hrAverage)*Math.exp(-t/50)+drift);
+  });
+  let sum=0;for(let i=1;i<points.length;i++)sum+=(raw[i]+raw[i-1])/2*(points[i].time-points[i-1].time);
   const mean=sum/durationMs;
-  points.forEach((p,i)=>p.hr=Math.round(clamp(s.hrAverage+baseline[i]-mean,30,240)));
+  points.forEach((p,i)=>p.hr=Math.round(clamp(s.hrAverage+raw[i]-mean,30,240)));
  }
  const gps=s.gps;
  return {points:applyDropout(applyGpsNoise(points,gps?.noise??0,s.seed),gps?.dropout??0,s.seed),duration:durationMs/1000,distance:total,interval:intervalMs/1000};
