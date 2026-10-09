@@ -1,7 +1,17 @@
-import type {Point,Preferences,Sport} from './types.js';
+import type {Point,Preferences,RouteProfile,Sport} from './types.js';
 import {atDistance,cumulative,decodePolyline,lowerBound,resample,validPoint} from './geometry.js';
-export interface RoutingProvider {route(points:Point[],sport:Sport,signal:AbortSignal):Promise<Point[]>;elevation(path:Point[],signal:AbortSignal):Promise<Point[]>}
-export class ProviderError extends Error {constructor(message:string,public status=0){super(message);}}
+export interface RoutingProvider {route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>;elevation(path:Point[],signal:AbortSignal):Promise<Point[]>}
+export class ProviderError extends Error {constructor(message:string,public status=0,public code=0){super(message);}}
+/** Valhalla costing per profile; bicycle_type aliases are case-insensitive. */
+export const PROFILE_OPTIONS:Record<RouteProfile,{costing:'pedestrian'|'bicycle';options:Record<string,unknown>}>={walk:{costing:'pedestrian',options:{}},hike:{costing:'pedestrian',options:{max_hiking_difficulty:6}},road:{costing:'bicycle',options:{bicycle_type:'Hybrid'}},mtb:{costing:'bicycle',options:{bicycle_type:'Mountain',use_roads:.1}}};
+/** Per-activity profile, defaulting a run to walk and a ride to road. */
+export const resolveProfile=(sport:Sport,profile?:RouteProfile):RouteProfile=>profile??(sport==='run'?'walk':'road');
+/** Public Valhalla distance caps: about 100 km on foot and 150 km by bicycle. */
+export const PUBLIC_CAP_METERS:Record<RouteProfile,number>={walk:100000,hike:100000,road:150000,mtb:150000};
+const footProfile=(p:RouteProfile):boolean=>p==='walk'||p==='hike';
+export const capMessage=(profile:RouteProfile):string=>`This route is longer than the public routing service allows for ${footProfile(profile)?'walking and hiking':'cycling'} (about ${Math.round(PUBLIC_CAP_METERS[profile]/1000)} km). Shorten the route, or self-host routing — see docs/SELF-HOST-VALHALLA.md.`;
+/** Advisory warning above 80% of the public cap; routing is never blocked. */
+export const routeCapWarning=(profile:RouteProfile,meters:number):string|null=>{const cap=PUBLIC_CAP_METERS[profile];return meters>cap*.8?`Long route: the public service caps ${footProfile(profile)?'walking and hiking':'cycling'} near ${Math.round(cap/1000)} km, so routing may fail. Self-hosting is documented in docs/SELF-HOST-VALHALLA.md.`:null;};
 const queues=new Map<string,Promise<unknown>>(),lastRequests=new Map<string,number>();
 const pause=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>{signal.throwIfAborted();const done=()=>{signal.removeEventListener('abort',cancel);resolve();};const timer=setTimeout(done,ms);const cancel=()=>{clearTimeout(timer);reject(signal.reason);};signal.addEventListener('abort',cancel,{once:true});});
 export function endpoint(value:string):string {const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||u.hash||u.search)throw Error('Provider URL must be HTTPS, without credentials, a query or a fragment.');return u.toString();}
@@ -19,7 +29,7 @@ async function getJSON<T>(url:URL,signal:AbortSignal,retry=true):Promise<T>{
    try{
     const response=await fetch(url,{signal:controller.signal,referrerPolicy:'strict-origin-when-cross-origin',headers:{Accept:'application/json'}});
     if(response.status===429){if(attempt===0&&retry){const after=response.headers.get('Retry-After');const wait=after?(Number.isFinite(Number(after))?Number(after)*1000:Date.parse(after)-Date.now()):2500;if(wait>30000)throw new ProviderError('Service is rate-limited. Please retry later.',429);await pause(Math.max(2500,wait||2500),signal);continue;}throw new ProviderError('Service is rate-limited. Please retry later.',429);}
-    if(!response.ok){if(response.status>=500&&attempt===0&&retry){await pause(2000,signal);continue;}throw new ProviderError(response.status===400?'No suitable route. Move the waypoints to nearby accessible paths.':`Service unavailable (${response.status}). Please retry.`,response.status);}
+    if(!response.ok){if(response.status>=500&&attempt===0&&retry){await pause(2000,signal);continue;}if(response.status===400){const body=await response.json().catch(()=>null) as {error_code?:number}|null;throw new ProviderError('No suitable route. Move the waypoints to nearby accessible paths.',400,typeof body?.error_code==='number'?body.error_code:0);}throw new ProviderError(`Service unavailable (${response.status}). Please retry.`,response.status);}
     return await response.json() as T;
    }catch(error){if(signal.aborted)throw signal.reason;if(error instanceof ProviderError)throw error;throw new ProviderError('Service could not be reached. Check your connection or provider settings.');}
    finally{clearTimeout(timer);signal.removeEventListener('abort',cancel);}
@@ -28,11 +38,14 @@ async function getJSON<T>(url:URL,signal:AbortSignal,retry=true):Promise<T>{
 }
 export class ValhallaProvider implements RoutingProvider {
  constructor(private prefs:()=>Preferences){}
- async route(points:Point[],sport:Sport,signal:AbortSignal):Promise<Point[]>{
+ async route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>{
   if(points.length<2||points.length>50||!points.every(validPoint))throw new ProviderError('Use between 2 and 50 valid waypoints.');
+  const {costing,options}=PROFILE_OPTIONS[profile]??PROFILE_OPTIONS.walk;
   const url=new URL(endpoint(this.prefs().routingUrl));
-  url.searchParams.set('json',JSON.stringify({locations:points.map(({lat,lon})=>({lat,lon})),costing:sport==='run'?'pedestrian':'bicycle',units:'kilometers',directions_type:'none'}));
-  const data=await getJSON<{trip?:{legs?:{shape:string}[]}}>(url,signal);
+  url.searchParams.set('json',JSON.stringify({locations:points.map(({lat,lon})=>({lat,lon})),costing,costing_options:Object.keys(options).length?{[costing]:options}:undefined,units:'kilometers',directions_type:'none'}));
+  let data:{trip?:{legs?:{shape:string}[]}};
+  try{data=await getJSON<{trip?:{legs?:{shape:string}[]}}>(url,signal);}
+  catch(error){if(error instanceof ProviderError&&error.status===400&&error.code===154)throw new ProviderError(capMessage(profile),400,154);throw error;}
   const legs=data.trip?.legs;if(!legs?.length)throw new ProviderError('No accessible route found. Move a waypoint and try again.');
   const path:Point[]=[];
   for(const leg of legs){const p=decodePolyline(leg.shape);path.push(...(path.length?p.slice(1):p));}

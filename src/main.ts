@@ -1,4 +1,4 @@
-import type {Activity,Point,Preferences,Settings,Simulation} from './types.js';
+import type {Activity,Point,Preferences,RouteProfile,Settings,Simulation} from './types.js';
 import {defaults,simulate,clock,parseClock,validateSettings,loopPlan,plannedPath,mapStyleFor,computeSplits} from './model.js';
 import {cumulative,elevationStats,isClosedLoop,resample} from './geometry.js';
 import {download,downloadActivity} from './gpx.js';
@@ -6,7 +6,7 @@ import {importRouteFile} from './import.js';
 import {downloadCues} from './cues.js';
 import {clearCachedMap,offlineSupported,offlineStatus,registerOfflineCache} from './sw.js';
 import {readPreferences,writePreferences,validatePreferences,LocalStore,parseBackup} from './storage.js';
-import {ValhallaProvider,searchPlaces} from './providers.js';
+import {ValhallaProvider,resolveProfile,searchPlaces} from './providers.js';
 import {Editor} from './editor.js';
 import {RouteMap} from './map.js';
 import {Charts,type ChartMode} from './charts.js';
@@ -38,7 +38,7 @@ function render():void {
  const meters=sim?.distance||cumulative(route).at(-1)||0,imperial=preferences.units==='imperial',unit=distanceUnit(),heights=elevationStats(route),pace=s.pace*(imperial?1.609344:1),speed=s.speed/(imperial?1.609344:1);
  stat('distance',distanceValue(meters),unit);stat('duration-stat',sim?clock(sim.duration):'0:00');stat('pace-stat',s.sport==='run'?clock(pace):speed.toFixed(1),s.sport==='run'?`/${unit}`:imperial?'mph':'km/h');stat('elevation-stat',heightValue(heights.gain),imperial?'ft':'m');
  setText('pace-stat-label',s.sport==='run'?'Avg. pace':'Avg. speed');setText('target-label',s.sport==='run'?`Target pace /${unit}`:`Target speed ${imperial?'mph':'km/h'}`);
- setInput('activity-name',a.name);setInput('start',s.start);setInput('offset',s.utcOffset);setInput('target',s.sport==='run'?clock(pace):speed.toFixed(2));setInput('duration',sim?clock(sim.duration):'0:00');setInput('sample',s.sample);setInput('variation',s.variation*100);setInput('hr-average',s.hrAverage);setInput('hr-variation',s.hrVariation);setInput('gps-noise',s.gps?.noise??0);setInput('gps-dropout',Math.round((s.gps?.dropout??0)*100));
+ setInput('activity-name',a.name);setInput('start',s.start);setInput('offset',s.utcOffset);setInput('target',s.sport==='run'?clock(pace):speed.toFixed(2));setInput('duration',sim?clock(sim.duration):'0:00');setInput('sample',s.sample);$<HTMLSelectElement>('profile').value=resolveProfile(s.sport,s.profile);setInput('variation',s.variation*100);setInput('hr-average',s.hrAverage);setInput('hr-variation',s.hrVariation);setInput('gps-noise',s.gps?.noise??0);setInput('gps-dropout',Math.round((s.gps?.dropout??0)*100));
  $<HTMLInputElement>('hr-enabled').checked=s.hrEnabled;$('hr-fields').hidden=!s.hrEnabled;$('variation-wrap').hidden=s.mode!=='natural';setText('variation-value',`${Math.round(s.variation*100)}%`);
  mark('run',s.sport==='run');mark('ride',s.sport==='ride');mark('constant',s.mode==='constant');mark('natural',s.mode==='natural');mark('draw',editor.drawing);mark('pan',!editor.drawing);
  $<HTMLButtonElement>('undo').disabled=!editor.canUndo;$<HTMLButtonElement>('redo').disabled=!editor.canRedo;
@@ -86,7 +86,7 @@ change('activity-name',e=>{editor.activity.name=e.value.trim()||'Untitled activi
 change('start',e=>updateSettings({start:e.value}));change('offset',e=>updateSettings({utcOffset:Number(e.value)}));
 change('target',e=>{const imperial=preferences.units==='imperial';updateSettings(editor.activity.settings.sport==='run'?{pace:parseClock(e.value)/(imperial?1.609344:1)}:{speed:Number(e.value)*(imperial?1.609344:1)});});
 change('duration',e=>{if(!sim)throw Error('Create a route before setting its duration.');const seconds=parseClock(e.value);if(seconds<=0)throw Error('Duration must be greater than zero.');updateSettings(editor.activity.settings.sport==='run'?{pace:seconds/(sim.distance/1000)}:{speed:sim.distance/1000/seconds*3600});});
-change('sample',e=>updateSettings({sample:Number(e.value) as 1|2|5}));change('variation',e=>updateSettings({variation:Number(e.value)/100}));change('hr-enabled',e=>updateSettings({hrEnabled:e.checked}));change('hr-average',e=>updateSettings({hrAverage:Number(e.value)}));change('hr-variation',e=>updateSettings({hrVariation:Number(e.value)}));
+change('sample',e=>updateSettings({sample:Number(e.value) as 1|2|5}));change('profile',e=>updateSettings({profile:e.value as RouteProfile}));change('variation',e=>updateSettings({variation:Number(e.value)/100}));change('hr-enabled',e=>updateSettings({hrEnabled:e.checked}));change('hr-average',e=>updateSettings({hrAverage:Number(e.value)}));change('hr-variation',e=>updateSettings({hrVariation:Number(e.value)}));
 change('loop-value',e=>{const raw=Number(e.value);if(!Number.isFinite(raw)||raw<=0)throw Error('Enter a value above zero.');const mode=editor.activity.loop?.mode??'distance';editor.setLoop(mode==='laps'?{mode,value:raw}:{mode,value:raw*(preferences.units==='imperial'?1609.344:1000)});});
 change('loop-start',e=>editor.setLoop({start:Number(e.value)}));
 change('gps-noise',e=>updateSettings({gps:{noise:Number(e.value),dropout:editor.activity.settings.gps?.dropout??0}}));

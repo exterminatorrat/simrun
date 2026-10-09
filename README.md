@@ -30,7 +30,7 @@ Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, pr
 
 ## Features
 
-- **Routing:** cancellable, throttled Valhalla pedestrian/bicycle requests (never automobile costing); waypoint editing, shaping handles, undo/redo, reverse, out-and-back, close-loop, and loop planning by lap count or target distance.
+- **Routing:** cancellable, throttled Valhalla requests (never automobile costing) with **walk**, **hike**, **road** and **mountain-bike** profiles; over-long routes get a clear public-limit message (about 100 km on foot, 150 km by bike) that points at self-hosting. Waypoint editing, shaping handles, undo/redo, reverse, out-and-back, close-loop, and loop planning by lap count or target distance.
 - **Simulation:** deterministic and seeded; time/pace/speed conversion, optional synthetic heart rate, simulated GPS noise and signal dropout, custom splits with a per-segment table.
 - **Import/export:** GPX, KML and GeoJSON in; GPX, turn-by-turn cue-sheet CSV, SVG profiles and JSON backup out.
 - **Local-first:** IndexedDB history and drafts with an explicitly labeled **Session only** fallback; offline app shell via service worker.

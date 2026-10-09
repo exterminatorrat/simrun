@@ -36,6 +36,7 @@ export function startTime(s:Settings):number {
 }
 export function validateSettings(s:Settings):void {
  if(!s||!['run','ride'].includes(s.sport)||!['constant','natural'].includes(s.mode)||![1,2,5].includes(s.sample))throw Error('Activity settings are invalid.');
+ if(s.profile!==undefined&&!['walk','hike','road','mtb'].includes(s.profile))throw Error('Invalid routing profile.');
  for(const [value,min,max] of [[s.pace,60,3600],[s.speed,1,150],[s.variation,0,.25],[s.utcOffset,-720,840],[s.hrAverage,30,240],[s.hrVariation,0,30],[s.seed,0,2147483647]])if(!Number.isFinite(value)||value<min||value>max)throw Error('Activity settings are outside supported limits.');
  if(typeof s.hrEnabled!=='boolean')throw Error('Invalid heart-rate setting.');startTime(s);
  if(s.gps!==undefined&&(typeof s.gps!=='object'||!Number.isFinite(s.gps.noise)||s.gps.noise<0||s.gps.noise>50||!Number.isFinite(s.gps.dropout)||s.gps.dropout<0||s.gps.dropout>.5))throw Error('Invalid GPS simulation setting.');
@@ -65,7 +66,7 @@ export function validateActivity(value:unknown):Activity {
  const loop=cleanLoop(a.loop);
  const splits=cleanSplits(a.splits);
  // Explicitly select fields; never merge untrusted objects into app state.
- return {id:a.id,version:1,name:a.name,createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path:a.path.map(clean),waypoints:a.waypoints.map(clean),settings:{sport:s.sport,start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{})},...(loop?{loop}:{}),...(splits?{splits}:{})};
+ return {id:a.id,version:1,name:a.name,createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path:a.path.map(clean),waypoints:a.waypoints.map(clean),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{})},...(loop?{loop}:{}),...(splits?{splits}:{})};
 }
 /** Resolves a lap plan against the current closed route, or null when it cannot apply. */
 export function loopPlan(a:Activity):LoopResult|null {
