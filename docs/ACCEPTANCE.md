@@ -18,4 +18,6 @@ Use the actual Sites preview after deployment. A mocked response is not evidence
 14. Check 1440x900, 1280x800 and 390x844: labels/fields readable, no toolbar overlap, no horizontal overflow, useful map area, mobile settings open/close, charts rescale, all controls reachable by keyboard. Verify focus indicators and reduced-motion setting.
 15. Verify GPX XML independently against GPX 1.1 and its HR extension schema if available, and import it into the intended GPX reader. Do not claim schema certification from DOMParser alone. Review network calls: no auth, analytics, cloud history, secrets or paid service requirement.
 
+16. Set GPS noise to a few meters and dropout to a nonzero percent: the point count drops, exported coordinates jitter while distance/timing stay on the route, and an outage becomes more than one `<trkseg>` rather than a straight connection. Set an auto-split distance and custom markers: the Splits table shows per-segment time, pace/speed and gain that sum to the activity total, in the selected units. Confirm the same seed reproduces identical output.
+
 For public-service testing, keep requests sparse; never load-test the community endpoints. Review provider terms again before public publication. Keep the Site private until the user approves it.

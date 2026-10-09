@@ -29,5 +29,9 @@ The private Site's initial unpkg-based map could become blank. The renderer now 
 ## KML/GeoJSON import (2026-10-09)
 
 - Added `src/import.ts` for KML (LineString and gx:Track coordinates) and GeoJSON (LineString/MultiLineString, bare geometry or FeatureCollection). The GPX import builder moved to `model.importedActivity` and is shared, so GPX, KML and GeoJSON keep the largest continuous segment and never invent connecting paths. Files without timestamps fall back to the activity timing settings.
-- `npm test` passes 36 Node tests, including 5 new cases for GeoJSON import, KML coordinate parsing and file dispatch.
+- `npm test` passes 41 Node tests (5 added here), including new cases for GeoJSON import, KML coordinate parsing, largest-segment selection and file dispatch.
 - The Playwright harness passes all checks in HTTP mode (19) and the isolated DOM harness, including new KML and GeoJSON file-import checks. Verification used the repo's own browser tool with mocked providers; live WebGL basemap rendering remains unverified here.
+
+## Custom splits and GPS simulation (2026-10-09)
+
+Added deterministic GPS noise and dropout plus custom splits. `npm run typecheck`, `npm run build` and **36 Node tests** pass (12 new cases cover noise determinism and bounded coordinates, dropout gaps and strictly increasing timestamps, split boundaries/totals, validation round-trips and multi-`trkseg` export). A headless Chrome run against `npm run dev` imported a 2.17 km GPX route, set 6 m noise and 15% dropout (point count 436 → 356, no console errors), and rendered a 4-row Splits table for a 1 km auto split plus a 1.5 km marker. The basemap stayed on the labeled coordinate fallback because external providers are unreachable here; the new controls are not yet checked in the private Sites preview.

@@ -1,5 +1,5 @@
 import type {Activity,Point,Preferences,Settings,Simulation} from './types.js';
-import {defaults,simulate,clock,parseClock,validateSettings,loopPlan,plannedPath} from './model.js';
+import {defaults,simulate,clock,parseClock,validateSettings,loopPlan,plannedPath,computeSplits} from './model.js';
 import {cumulative,elevationStats,isClosedLoop,resample} from './geometry.js';
 import {download,downloadActivity} from './gpx.js';
 import {importRouteFile} from './import.js';
@@ -36,7 +36,7 @@ function render():void {
  const meters=sim?.distance||cumulative(route).at(-1)||0,imperial=preferences.units==='imperial',unit=distanceUnit(),heights=elevationStats(route),pace=s.pace*(imperial?1.609344:1),speed=s.speed/(imperial?1.609344:1);
  stat('distance',distanceValue(meters),unit);stat('duration-stat',sim?clock(sim.duration):'0:00');stat('pace-stat',s.sport==='run'?clock(pace):speed.toFixed(1),s.sport==='run'?`/${unit}`:imperial?'mph':'km/h');stat('elevation-stat',heightValue(heights.gain),imperial?'ft':'m');
  setText('pace-stat-label',s.sport==='run'?'Avg. pace':'Avg. speed');setText('target-label',s.sport==='run'?`Target pace /${unit}`:`Target speed ${imperial?'mph':'km/h'}`);
- setInput('activity-name',a.name);setInput('start',s.start);setInput('offset',s.utcOffset);setInput('target',s.sport==='run'?clock(pace):speed.toFixed(2));setInput('duration',sim?clock(sim.duration):'0:00');setInput('sample',s.sample);setInput('variation',s.variation*100);setInput('hr-average',s.hrAverage);setInput('hr-variation',s.hrVariation);
+ setInput('activity-name',a.name);setInput('start',s.start);setInput('offset',s.utcOffset);setInput('target',s.sport==='run'?clock(pace):speed.toFixed(2));setInput('duration',sim?clock(sim.duration):'0:00');setInput('sample',s.sample);setInput('variation',s.variation*100);setInput('hr-average',s.hrAverage);setInput('hr-variation',s.hrVariation);setInput('gps-noise',s.gps?.noise??0);setInput('gps-dropout',Math.round((s.gps?.dropout??0)*100));
  $<HTMLInputElement>('hr-enabled').checked=s.hrEnabled;$('hr-fields').hidden=!s.hrEnabled;$('variation-wrap').hidden=s.mode!=='natural';setText('variation-value',`${Math.round(s.variation*100)}%`);
  mark('run',s.sport==='run');mark('ride',s.sport==='ride');mark('constant',s.mode==='constant');mark('natural',s.mode==='natural');mark('draw',editor.drawing);mark('pan',!editor.drawing);
  $<HTMLButtonElement>('undo').disabled=!editor.canUndo;$<HTMLButtonElement>('redo').disabled=!editor.canRedo;
@@ -45,6 +45,18 @@ function render():void {
  setText('route-status',simulationError||editor.status);$('status-dot').classList.toggle('pending',editor.pending);$('retry').hidden=editor.pending||a.source!=='draft'||a.waypoints.length<2;
  setText('chart-note',sim?`${distanceValue(meters)} ${unit} · ${clock(sim.duration)}`:'No route yet');setText('chart-pace',s.sport==='run'?'Pace':'Speed');
  setText('elevation-detail',heights.min===null?'Elevation unavailable; no climbing is invented.':`Low ${heightValue(heights.min)} ${imperial?'ft':'m'} · High ${heightValue(heights.max)} ${imperial?'ft':'m'} · Descent ${heightValue(heights.loss)} ${imperial?'ft':'m'}`);
+ const splits=sim?computeSplits(a,sim):[],hasSplits=!!a.splits&&(a.splits.auto>0||a.splits.markers.length>0);
+ setText('splits-count',sim?String(splits.length):'—');
+ setText('splits-summary',!sim?'A completed route is needed for splits.':hasSplits?`${splits.length} segment${splits.length===1?'':'s'} across ${distanceValue(sim.distance)} ${unit}.`:'Set an auto-split distance or add custom markers to see per-segment pace.');
+ setText('splits-auto-unit',unit);setText('splits-markers-unit',unit);
+ setInput('splits-auto',a.splits&&a.splits.auto>0?distanceValue(a.splits.auto):'');
+ setInput('splits-markers',(a.splits?.markers??[]).map(m=>distanceValue(m)).join(', '));
+ $('splits-clear').hidden=!hasSplits;
+ const splitTable=$('splits-table');splitTable.replaceChildren();
+ if(sim&&hasSplits){
+  const head=el('div','split-row split-head');head.append(el('span','','#'),el('span','','Split'),el('span','','Time'),el('span','',s.sport==='run'?'Pace':'Speed'),el('span','','Gain'));splitTable.append(head);
+  splits.forEach((sp,i)=>{const row=el('div','split-row');const value=s.sport==='run'?(sp.duration>0?sp.duration/(sp.distance/(imperial?1609.344:1000)):0):sp.speed*(imperial?2.2369362920544:3.6);row.append(el('span','',String(i+1)),el('span','',`${distanceValue(sp.distance)} ${unit}`),el('span','',clock(sp.duration)),el('span','',s.sport==='run'?clock(value):value.toFixed(1)),el('span','',sp.gain===null?'—':heightValue(sp.gain)));splitTable.append(row);});
+ }
  setText('waypoint-count',String(a.waypoints.length));$('edit-import').hidden=a.source!=='imported';const list=$('waypoints');list.replaceChildren();
  a.waypoints.forEach((p,i)=>{const row=el('div',`waypoint-row ${i===editor.selected?'selected':''}`);row.append(el('span','point-index',String(i+1)),button(`${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`,()=>{editor.selected=i;map.focus(p);render();},undefined,'coordinate'),button('Move earlier',()=>editor.reorder(i,-1),'up','icon-button'),button('Move later',()=>editor.reorder(i,1),'down','icon-button'),button(`Delete waypoint ${i+1}`,()=>editor.remove(i),'close','icon-button'));list.append(row);});
  const closed=isClosedLoop(a.path),loopLen=closed?cumulative(a.path).at(-1)??0:0,loopMode=a.loop?.mode??'distance';
@@ -66,7 +78,7 @@ on('run',()=>updateSettings({sport:'run'}));on('ride',()=>updateSettings({sport:
 for(const [id,fn] of Object.entries({undo:()=>editor.undo(),redo:()=>editor.redo(),reverse:()=>editor.reverse(),'out-back':()=>editor.outAndBack(),loop:()=>editor.closeLoop(),clear:()=>editor.clear(),fit:()=>map.fit(),retry:()=>editor.recalculate(),'zoom-in':()=>map.zoom(1),'zoom-out':()=>map.zoom(-1)}))on(id,fn);
 on('new',async()=>{const previous=editor.activity;if(previous.path.length>1||previous.waypoints.length){await store.save(previous);}editor.load(defaults());toast(store.available?'New activity. The previous project remains in local history.':'New activity. History lasts for this session only.');});
 on('constant',()=>updateSettings({mode:'constant'}));on('natural',()=>updateSettings({mode:'natural'}));
-on('loop-mode-laps',()=>editor.setLoopMode('laps'));on('loop-mode-distance',()=>editor.setLoopMode('distance'));on('loop-clear',()=>editor.setLoop(null));
+on('loop-mode-laps',()=>editor.setLoopMode('laps'));on('loop-mode-distance',()=>editor.setLoopMode('distance'));on('loop-clear',()=>editor.setLoop(null));on('splits-clear',()=>editor.setSplits(null));
 const change=(id:string,fn:(input:HTMLInputElement)=>void)=>$(id).addEventListener('change',guarded(()=>{try{fn($<HTMLInputElement>(id));}catch(e){($<HTMLInputElement>(id)).blur();render();throw e;}}));
 change('activity-name',e=>{editor.activity.name=e.value.trim()||'Untitled activity';editor.activity.updatedAt=Date.now();render();});
 change('start',e=>updateSettings({start:e.value}));change('offset',e=>updateSettings({utcOffset:Number(e.value)}));
@@ -75,6 +87,10 @@ change('duration',e=>{if(!sim)throw Error('Create a route before setting its dur
 change('sample',e=>updateSettings({sample:Number(e.value) as 1|2|5}));change('variation',e=>updateSettings({variation:Number(e.value)/100}));change('hr-enabled',e=>updateSettings({hrEnabled:e.checked}));change('hr-average',e=>updateSettings({hrAverage:Number(e.value)}));change('hr-variation',e=>updateSettings({hrVariation:Number(e.value)}));
 change('loop-value',e=>{const raw=Number(e.value);if(!Number.isFinite(raw)||raw<=0)throw Error('Enter a value above zero.');const mode=editor.activity.loop?.mode??'distance';editor.setLoop(mode==='laps'?{mode,value:raw}:{mode,value:raw*(preferences.units==='imperial'?1609.344:1000)});});
 change('loop-start',e=>editor.setLoop({start:Number(e.value)}));
+change('gps-noise',e=>updateSettings({gps:{noise:Number(e.value),dropout:editor.activity.settings.gps?.dropout??0}}));
+change('gps-dropout',e=>updateSettings({gps:{noise:editor.activity.settings.gps?.noise??0,dropout:Number(e.value)/100}}));
+change('splits-auto',e=>{if(e.value.trim()===''){editor.setSplits({auto:0});return;}const raw=Number(e.value);if(!Number.isFinite(raw)||raw<0)throw Error('Enter an auto-split distance of zero or more.');editor.setSplits({auto:raw*(preferences.units==='imperial'?1609.344:1000)});});
+change('splits-markers',e=>{const markers=e.value.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{const n=Number(v);if(!Number.isFinite(n)||n<=0)throw Error(`Invalid split marker: ${v}`);return n*(preferences.units==='imperial'?1609.344:1000);});editor.setSplits({markers});});
 on('save',async()=>{validRoute();await store.save(editor.activity);toast(store.available?'Saved to your local route library.':'Kept for this session only. Export a backup before closing.');});
 on('export',async()=>{validRoute();downloadActivity(editor.activity);try{await store.save(editor.activity);toast(store.available?'GPX downloaded. Activity saved locally.':'GPX downloaded. History is session-only in this browser.');}catch{toast('GPX downloaded, but local history could not be saved.');}});
 on('edit-import',()=>{if(!confirm('Replace the imported geometry with a freshly routed path through up to 8 waypoints? Undo restores the original geometry.'))return;editor.edit(resample(editor.activity.path,Math.min(8,editor.activity.path.length)));editor.drawing=true;render();});
