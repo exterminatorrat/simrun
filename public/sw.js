@@ -6,6 +6,9 @@
 const MAP_CACHE='simrun-map-v1';
 const MAP_HOST='tiles.openfreemap.org';
 const MAP_LIMIT=1500;
+// Only the worker script itself is left to the network; the application's own
+// compiled src/sw.js module is part of the shell and must be served from cache.
+const WORKER_PATH=new URL('sw.js',self.location.href).pathname;
 const digest=text=>{let hash=5381;for(let i=0;i<text.length;i++)hash=((hash<<5)+hash+text.charCodeAt(i))>>>0;return hash.toString(36);};
 const shellCacheName=files=>`simrun-shell-${digest([...files].sort().join('|'))}`;
 const shellName=async()=>(await caches.keys()).find(name=>name.startsWith('simrun-shell-'))||null;
@@ -61,7 +64,7 @@ self.addEventListener('fetch',event=>{
  let url;
  try{url=new URL(request.url);}catch{return;}
  if(url.origin===self.location.origin){
-  if(url.pathname.endsWith('/sw.js')||url.pathname.endsWith('/sw-manifest.json'))return;
+  if(url.pathname===WORKER_PATH||url.pathname.endsWith('/sw-manifest.json'))return;
   event.respondWith(request.mode==='navigate'?navigation(request):shell(request));
   return;
  }
