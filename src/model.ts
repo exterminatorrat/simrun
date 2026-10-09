@@ -1,10 +1,22 @@
-import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preferences,Split,Splits} from './types.js';
+import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preferences,Split,Splits,WeatherPreset,WeatherSim,PowerSim,CadenceSim,FatigueSim,Workout,WorkoutStep,Pauses} from './types.js';
 import {atDistance,clamp,cumulative,elevationStats,isClosedLoop,loopPath,lowerBound,rotatedLoop,validPoint,wrapLon} from './geometry.js';
 import {newId} from './id.js';
 export const PRODUCT='SimRun';
 export const MAX_LOOP_LAPS=20000,MAX_LOOP_DISTANCE=5000000,MAX_LOOP_POINTS=100000;
+export const WEATHER_PRESETS:Record<WeatherPreset,{label:string;tempC:number;humidity:number;headwindKph:number}>={ideal:{label:'Ideal',tempC:15,humidity:50,headwindKph:0},cool:{label:'Cool',tempC:6,humidity:60,headwindKph:3},mild:{label:'Mild',tempC:18,humidity:55,headwindKph:5},warm:{label:'Warm',tempC:26,humidity:50,headwindKph:5},hot:{label:'Hot',tempC:34,humidity:30,headwindKph:4},humid:{label:'Humid',tempC:28,humidity:85,headwindKph:3},windy:{label:'Windy',tempC:16,humidity:55,headwindKph:22}};
+/** Deterministic weather penalty applied to total duration; neutral conditions return exactly 1. */
+export function weatherFactor(w:WeatherSim|undefined):number {
+ if(!w)return 1;
+ const heat=Math.max(0,w.tempC-15)*.012,cold=Math.max(0,8-w.tempC)*.01,humid=Math.max(0,w.humidity-60)*.0015*(w.tempC>20?1:.4),wind=w.headwindKph*.004;
+ return clamp(1+heat+cold+humid+wind,1,2);
+}
+/** Heat and humidity deepen cardiac drift; neutral conditions return exactly 1. */
+export function weatherHeat(w:WeatherSim|undefined):number {
+ if(!w)return 1;
+ return clamp(1+Math.max(0,w.tempC-20)*.03+Math.max(0,w.humidity-60)*.004,1,2);
+}
 export interface LoopResult {path:Point[];loopLength:number;distance:number;laps:number;capped:boolean}
-export const defaultPreferences:Preferences={units:'metric',theme:'light',mapStyle:'https://tiles.openfreemap.org/styles/liberty',mapStyleDark:'https://tiles.openfreemap.org/styles/dark',routingUrl:'https://valhalla1.openstreetmap.de/route',elevationUrl:'https://valhalla1.openstreetmap.de/height',geocodingUrl:'https://nominatim.openstreetmap.org/search',geocodingEnabled:false};
+export const defaultPreferences:Preferences={units:'metric',theme:'light',mapStyle:'https://tiles.openfreemap.org/styles/liberty',mapStyleDark:'https://tiles.openfreemap.org/styles/dark',routingUrl:'https://valhalla1.openstreetmap.de/route',elevationUrl:'https://valhalla1.openstreetmap.de/height',geocodingUrl:'https://nominatim.openstreetmap.org/search',geocodingEnabled:false,hrMax:190,offlineRouting:false,corridorZoom:12,avoidHighways:false,avoidHills:false};
 export function localInput(date=new Date()):string{return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 /** The map style that matches the chosen appearance; each theme has its own endpoint. */
 export const mapStyleFor=(p:Preferences):string=>p.theme==='dark'?p.mapStyleDark:p.mapStyle;
@@ -40,6 +52,11 @@ export function validateSettings(s:Settings):void {
  for(const [value,min,max] of [[s.pace,60,3600],[s.speed,1,150],[s.variation,0,.25],[s.utcOffset,-720,840],[s.hrAverage,30,240],[s.hrVariation,0,30],[s.seed,0,2147483647]])if(!Number.isFinite(value)||value<min||value>max)throw Error('Activity settings are outside supported limits.');
  if(typeof s.hrEnabled!=='boolean')throw Error('Invalid heart-rate setting.');startTime(s);
  if(s.gps!==undefined&&(typeof s.gps!=='object'||!Number.isFinite(s.gps.noise)||s.gps.noise<0||s.gps.noise>50||!Number.isFinite(s.gps.dropout)||s.gps.dropout<0||s.gps.dropout>.5))throw Error('Invalid GPS simulation setting.');
+ const within=(v:number,min:number,max:number)=>Number.isFinite(v)&&v>=min&&v<=max;
+ if(s.power!==undefined&&(typeof s.power!=='object'||typeof s.power.enabled!=='boolean'||!within(s.power.weightKg,30,300)))throw Error('Invalid power setting.');
+ if(s.cadence!==undefined&&(typeof s.cadence!=='object'||typeof s.cadence.enabled!=='boolean'))throw Error('Invalid cadence setting.');
+ if(s.fatigue!==undefined&&(typeof s.fatigue!=='object'||!within(s.fatigue.percent,0,30)))throw Error('Invalid fatigue setting.');
+ if(s.weather!==undefined&&(typeof s.weather!=='object'||!(s.weather.preset in WEATHER_PRESETS)||!within(s.weather.tempC,-40,60)||!within(s.weather.humidity,0,100)||!within(s.weather.headwindKph,0,80)))throw Error('Invalid weather setting.');
 }
 export function validateActivity(value:unknown):Activity {
  if(!value||typeof value!=='object')throw Error('Not a SimRun activity.');const a=value as Activity;
@@ -65,8 +82,30 @@ export function validateActivity(value:unknown):Activity {
  const s=a.settings;
  const loop=cleanLoop(a.loop);
  const splits=cleanSplits(a.splits);
+ const cleanPower=(v:PowerSim|undefined):PowerSim|undefined=>v===undefined||v===null?undefined:{enabled:v.enabled===true,weightKg:v.weightKg};
+ const cleanCadence=(v:CadenceSim|undefined):CadenceSim|undefined=>v===undefined||v===null?undefined:{enabled:v.enabled===true};
+ const cleanFatigue=(v:FatigueSim|undefined):FatigueSim|undefined=>v===undefined||v===null?undefined:{percent:v.percent};
+ const cleanWeather=(v:WeatherSim|undefined):WeatherSim|undefined=>v===undefined||v===null?undefined:{preset:v.preset,tempC:v.tempC,humidity:v.humidity,headwindKph:v.headwindKph};
+ const cleanTags=(v:string[]|undefined):string[]|undefined=>{
+  if(v===undefined||v===null)return undefined;
+  if(!Array.isArray(v))throw Error('Invalid tags.');
+  const out=[...new Set(v.map(t=>String(t).trim()).filter(Boolean))].map(t=>t.slice(0,24));
+  if(out.length>8)throw Error('Use at most eight tags.');
+  return out.length?out:undefined;
+ };
+ const cleanWorkout=(v:Workout|undefined):Workout|undefined=>{
+  if(v===undefined||v===null)return undefined;
+  if(typeof v!=='object'||!Array.isArray(v.steps)||!v.steps.length||v.steps.length>200)throw Error('Invalid workout.');
+  return {steps:v.steps.map(st=>{if(typeof st!=='object'||(st.kind!=='work'&&st.kind!=='rest')||!Number.isFinite(st.distance)||st.distance<=0||st.distance>MAX_LOOP_DISTANCE)throw Error('Invalid workout step.');const step:WorkoutStep={kind:st.kind,distance:st.distance};if(st.pace!==undefined&&Number.isFinite(st.pace))step.pace=st.pace;if(st.speed!==undefined&&Number.isFinite(st.speed))step.speed=st.speed;if(st.hr!==undefined&&Number.isFinite(st.hr))step.hr=st.hr;return step;})};
+ };
+ const cleanPauses=(v:Pauses|undefined):Pauses|undefined=>{
+  if(v===undefined||v===null)return undefined;
+  if(typeof v!=='object'||!Array.isArray(v.rests)||v.rests.length>200)throw Error('Invalid pauses.');
+  return {rests:v.rests.map(r=>{if(typeof r!=='object'||!Number.isFinite(r.distance)||r.distance<0||!Number.isFinite(r.seconds)||r.seconds<=0||r.seconds>86400)throw Error('Invalid rest stop.');return {distance:r.distance,seconds:r.seconds};})};
+ };
+ const power=cleanPower(s.power)||undefined,cadence=cleanCadence(s.cadence)||undefined,fatigue=cleanFatigue(s.fatigue)||undefined,weather=cleanWeather(s.weather)||undefined,workout=cleanWorkout(a.workout),pauses=cleanPauses(a.pauses),tags=cleanTags(a.tags);
  // Explicitly select fields; never merge untrusted objects into app state.
- return {id:a.id,version:1,name:a.name,createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path:a.path.map(clean),waypoints:a.waypoints.map(clean),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{})},...(loop?{loop}:{}),...(splits?{splits}:{})};
+ return {id:a.id,version:1,name:a.name,createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path:a.path.map(clean),waypoints:a.waypoints.map(clean),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{}),...(power?{power}:{}),...(cadence?{cadence}:{}),...(fatigue?{fatigue}:{}),...(weather?{weather}:{})},...(loop?{loop}:{}),...(splits?{splits}:{}),...(workout?{workout}:{}),...(pauses?{pauses}:{}),...(tags?{tags}:{})};
 }
 /** Resolves a lap plan against the current closed route, or null when it cannot apply. */
 export function loopPlan(a:Activity):LoopResult|null {
@@ -85,16 +124,18 @@ export function simulate(a:Activity):Simulation {
  if(total<1||total>5000000)throw Error('Route must be between 1 meter and 5,000 km.');
  const duration=durationFor(total,s.sport,s.pace,s.speed);
  if(duration<.01||duration>604800)throw Error('Activity duration must be between 0.01 seconds and 7 days.');
- const durationMs=Math.max(1,Math.round(duration*1000)),start=startTime(s);
+ const durationMs=Math.max(1,Math.round(duration*1000*weatherFactor(s.weather))),start=startTime(s);
  const n=Math.min(40000,Math.max(2,Math.ceil(total/10))),times=[0],ds=total/n;
  const phase=(s.seed%997)/997*Math.PI*2;
+ const waveAt=(d:number)=>.62*Math.sin(d/430+phase)+.27*Math.sin(d/180+phase*.7)+.11*Math.sin(d/70);
+ // Centered 30 m smoothed grade; uphill costs more than downhill saves.
+ const gradeAt=(d:number):number=>{const lo=Math.max(0,d-15),hi=Math.min(total,d+15);if(!(hi>lo))return 0;const p=atDistance(route,c,lo),q=atDistance(route,c,hi);return Number.isFinite(p.ele)&&Number.isFinite(q.ele)?clamp((q.ele!-p.ele!)/(hi-lo),-.15,.15):0;};
  const weights:number[]=[];
  for(let i=0;i<n;i++) {
   const d=(i+.5)*ds;
-  const wave=.62*Math.sin(d/430+phase)+.27*Math.sin(d/180+phase*.7)+.11*Math.sin(d/70);
-  const p=atDistance(route,c,i*ds),q=atDistance(route,c,(i+1)*ds);
-  const grade=Number.isFinite(p.ele)&&Number.isFinite(q.ele)?clamp((q.ele!-p.ele!)/ds,-.15,.15):0;
-  const w=s.mode==='natural'?clamp(1+s.variation*wave+grade*.7,.65,1.4):1;
+  const grade=gradeAt(d),terrain=grade>0?grade*2:grade*1.1;
+  const fatigue=s.fatigue?1+s.fatigue.percent/100*(i/n):1;
+  const w=s.mode==='natural'?clamp((1+s.variation*waveAt(d)+terrain)*fatigue,.65,1.4):1;
   weights.push(w);times.push(times[i]+w*ds);
  }
  const raw=times[n];for(let i=1;i<times.length;i++)times[i]=times[i]/raw*durationMs;
@@ -116,12 +157,21 @@ export function simulate(a:Activity):Simulation {
    const t=(p.time-start)/1000,ratio=clamp(p.speed/avgSpeed-1,-.4,.4);
    const lo=Math.max(0,p.distance-100),hi=Math.min(total,p.distance+100),a=atDistance(route,c,lo),b=atDistance(route,c,hi);
    const grade=Number.isFinite(a.ele)&&Number.isFinite(b.ele)?clamp((b.ele!-a.ele!)/(hi-lo),-.15,.15):0;
-   const drift=Math.min(s.hrVariation*3,s.hrVariation*.03*Math.max(0,t-600)/60);
+   const drift=Math.min(s.hrVariation*3,s.hrVariation*.03*Math.max(0,t-600)/60)*weatherHeat(s.weather);
    raw.push(walk+s.hrVariation*(2.4*ratio+16*grade)+(rest-s.hrAverage)*Math.exp(-t/50)+drift);
   });
   let sum=0;for(let i=1;i<points.length;i++)sum+=(raw[i]+raw[i-1])/2*(points[i].time-points[i-1].time);
   const mean=sum/durationMs;
   points.forEach((p,i)=>p.hr=Math.round(clamp(s.hrAverage+raw[i]-mean,30,240)));
+ }
+ // Estimated (not measured) power and cadence, derived deterministically from speed and grade.
+ if(s.power?.enabled||s.cadence?.enabled){
+  const mass=s.power?.weightKg??70,cda=s.profile==='mtb'?.45:.34;
+  points.forEach(p=>{
+   const v=Math.max(0,p.speed),grade=gradeAt(p.distance);
+   if(s.power?.enabled){const watts=s.sport==='run'?mass*v*(.98+5*Math.max(0,grade)):v*(.005*mass*9.81+mass*9.81*grade+.5*1.225*cda*v*v)/.97;p.power=Math.round(clamp(watts,0,2000));}
+   if(s.cadence?.enabled)p.cad=s.sport==='run'?Math.round(clamp(168+6*waveAt(p.distance),150,190)):Math.round(clamp(60+v*3.6*1.2+4*waveAt(p.distance),50,110));
+  });
  }
  const gps=s.gps;
  return {points:applyDropout(applyGpsNoise(points,gps?.noise??0,s.seed),gps?.dropout??0,s.seed),duration:durationMs/1000,distance:total,interval:intervalMs/1000};

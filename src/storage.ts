@@ -4,7 +4,9 @@ import {endpoint} from './providers.js';
 export function readPreferences():Preferences {try{return validatePreferences(JSON.parse(localStorage.getItem('simrun-preferences')||'{}'));}catch{return {...defaultPreferences};}}
 export function validatePreferences(value:unknown):Preferences {
  const p=value&&typeof value==='object'?value as Partial<Preferences>:{};
- return {units:p.units==='imperial'?'imperial':'metric',theme:p.theme==='dark'?'dark':'light',geocodingEnabled:p.geocodingEnabled===true,mapStyle:p.mapStyle?endpoint(p.mapStyle):defaultPreferences.mapStyle,mapStyleDark:p.mapStyleDark?endpoint(p.mapStyleDark):defaultPreferences.mapStyleDark,routingUrl:p.routingUrl?endpoint(p.routingUrl):defaultPreferences.routingUrl,elevationUrl:p.elevationUrl?endpoint(p.elevationUrl):defaultPreferences.elevationUrl,geocodingUrl:p.geocodingUrl?endpoint(p.geocodingUrl):defaultPreferences.geocodingUrl};
+ const hrMax=Number.isFinite(p.hrMax)?Math.min(240,Math.max(100,Math.round(p.hrMax!))):defaultPreferences.hrMax;
+ const corridorZoom=Number.isFinite(p.corridorZoom)?Math.min(14,Math.max(8,Math.round(p.corridorZoom!))):defaultPreferences.corridorZoom;
+ return {units:p.units==='imperial'?'imperial':'metric',theme:p.theme==='dark'?'dark':'light',geocodingEnabled:p.geocodingEnabled===true,mapStyle:p.mapStyle?endpoint(p.mapStyle):defaultPreferences.mapStyle,mapStyleDark:p.mapStyleDark?endpoint(p.mapStyleDark):defaultPreferences.mapStyleDark,routingUrl:p.routingUrl?endpoint(p.routingUrl):defaultPreferences.routingUrl,elevationUrl:p.elevationUrl?endpoint(p.elevationUrl):defaultPreferences.elevationUrl,geocodingUrl:p.geocodingUrl?endpoint(p.geocodingUrl):defaultPreferences.geocodingUrl,hrMax,offlineRouting:p.offlineRouting===true,corridorZoom,avoidHighways:p.avoidHighways===true,avoidHills:p.avoidHills===true};
 }
 export function writePreferences(p:Preferences):void {localStorage.setItem('simrun-preferences',JSON.stringify(p));}
 export class LocalStore {
