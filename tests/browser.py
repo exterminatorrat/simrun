@@ -101,6 +101,26 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
   page.locator('#undo').click();page.locator('#redo').click()
   passed('Coordinate canvas add/drag with real provider adapter and mocked responses')
+  page.locator('#loop').click();expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
+  expect(page.locator('#waypoint-count')).to_have_text('4');page.locator('#loop').click();expect(page.locator('#toast')).to_contain_text('already returns')
+  passed('Close loop appends the start as the final waypoint, reroutes and refuses to double-close')
+  one=float(page.locator('#distance').inner_text().split()[0]);page.locator('#loop-details summary').click()
+  page.locator('#export').click();page.wait_for_timeout(80)
+  lap_pts=page.evaluate('async()=>await window.testDownloads.at(-1)').count('<trkpt')
+  page.locator('#loop-mode-laps').click();change(page,'loop-value','2.5')
+  expect(page.locator('#loop-count')).to_have_text('2.5 laps');expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
+  assert abs(float(page.locator('#distance').inner_text().split()[0])-2.5*one)<.05
+  assert page.evaluate("(()=>{const a=document.querySelector('.fallback-plan-start'),b=document.querySelector('.fallback-plan-finish');return !!a&&!!b&&(a.getAttribute('cx')!==b.getAttribute('cx')||a.getAttribute('cy')!==b.getAttribute('cy'))})()")
+  box=page.locator('.fallback-plan-finish').bounding_box();page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
+  before=page.locator('#loop-start').input_value();box=page.locator('.fallback-plan-start').bounding_box()
+  page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down();page.mouse.move(box['x']+110,box['y']+60,steps=8);page.mouse.up();page.wait_for_timeout(250)
+  assert page.locator('#loop-start').input_value()!=before and page.locator('#waypoint-count').inner_text()=='4'
+  expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
+  page.locator('#export').click();page.wait_for_timeout(80)
+  assert abs(page.evaluate('async()=>await window.testDownloads.at(-1)').count('<trkpt')/lap_pts-2.5)<.2
+  page.locator('#loop-clear').click();assert abs(float(page.locator('#distance').inner_text().split()[0])-one)<.02
+  passed('Loop plan walks 2.5 laps, derives the finish, drags the start along the loop, exports the laps and clears')
+  page.locator('#undo').click();expect(page.locator('#waypoint-count')).to_have_text('3')
   page.locator('#ride').click();expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
   assert page.evaluate('window.testRequests.some(r=>r.data.costing==="bicycle")')
   passed('Cycling mode requests bicycle routing, not automobile routing')

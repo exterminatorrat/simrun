@@ -1,6 +1,6 @@
-import type {Activity,Point,RouteSource,Settings} from './types.js';
+import type {Activity,LoopPlan,Point,RouteSource,Settings} from './types.js';
 import {defaults} from './model.js';
-import {outAndBack,validPoint} from './geometry.js';
+import {closeLoop,cumulative,distance,isClosedLoop,nearestOnPath,outAndBack,validPoint} from './geometry.js';
 import type {RoutingProvider} from './providers.js';
 type Snapshot={path:Point[];waypoints:Point[];source:RouteSource};
 export class Editor {
@@ -24,6 +24,27 @@ export class Editor {
  clear(){this.checkpoint();this.invalidate();this.activity.path=[];this.activity.waypoints=[];this.activity.source='draft';this.selected=-1;this.status='Click the map to begin.';this.notify();}
  reverse(){if(this.activity.source==='imported'){this.checkpoint();this.activity.path=[...this.activity.path].reverse();this.notify();}else this.edit([...this.activity.waypoints].reverse());}
  outAndBack(){if(this.activity.source==='imported'){this.checkpoint();this.activity.path=outAndBack(this.activity.path);this.notify();}else this.edit(outAndBack(this.activity.waypoints));}
+ closeLoop(){if(this.activity.source==='imported'){this.onMessage('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}const points=this.activity.waypoints;if(points.length<2){this.onMessage('Add at least two waypoints before closing a loop.');return;}if(distance(points[0],points[points.length-1])<=5){this.onMessage('This route already returns to its start.');return;}this.edit(closeLoop(points));}
+ private loopLength():number{return this.activity.path.length>1?cumulative(this.activity.path).at(-1)??0:0;}
+ startFor(index:number):number|null {
+  if(!isClosedLoop(this.activity.path))return null;
+  const p=this.activity.waypoints[index],total=this.loopLength();if(!p||!(total>0))return null;
+  return (nearestOnPath(this.activity.path,p)/total)%1;
+ }
+ setLoop(plan:Partial<LoopPlan>|null):void {
+  if(plan===null){if(this.activity.loop){delete this.activity.loop;this.notify();}return;}
+  if(!isClosedLoop(this.activity.path)){this.onMessage('Close the loop before planning laps or a finish distance.');return;}
+  const base:LoopPlan=this.activity.loop??{start:0,mode:'distance',value:Math.round(this.loopLength())};
+  const next:LoopPlan={...base,...plan};next.start=((next.start%1)+1)%1;
+  if(!Number.isFinite(next.value)||next.value<=0){this.onMessage(next.mode==='laps'?'Enter a loop count above zero.':'Enter a target distance above zero.');return;}
+  this.activity.loop=next;this.notify();
+ }
+ setLoopMode(mode:'laps'|'distance'):void {
+  const total=this.loopLength(),plan=this.activity.loop;
+  if(!plan){this.setLoop({mode,value:mode==='laps'?1:Math.max(1,Math.round(total))});return;}
+  if(plan.mode===mode)return;
+  this.setLoop({mode,value:mode==='laps'?Math.max(.25,Math.round(plan.value/total*4)/4):Math.round(plan.value*total)});
+ }
  undo(){const s=this.past.pop();if(!s)return;this.future.push(this.snapshot());this.restore(s);}
  redo(){const s=this.future.pop();if(!s)return;this.past.push(this.snapshot());this.restore(s);}
  private restore(s:Snapshot){this.invalidate();Object.assign(this.activity,s);this.selected=-1;this.status=s.source==='draft'?'Restoring waypoints…':'Route restored';this.notify();if(s.source==='draft')this.recalculate();}

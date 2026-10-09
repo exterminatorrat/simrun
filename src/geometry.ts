@@ -38,6 +38,47 @@ export function atDistance(path:Point[],c:number[],d:number):Point {
 }
 export function resample(path:Point[],count:number):Point[] {const c=cumulative(path);return Array.from({length:count},(_,i)=>atDistance(path,c,c[c.length-1]*i/(count-1)));}
 export function outAndBack<T>(path:T[]):T[]{return [...path,...path.slice(0,-1).reverse()];}
+export function closeLoop<T>(path:T[]):T[]{return path.length?[...path,path[0]]:[];}
+/** A loop is a route whose end returns to its start, within a small tolerance for recorded GPS. */
+export function isClosedLoop(path:Point[]):boolean {
+ if(path.length<4)return false;
+ const c=cumulative(path),total=c[c.length-1];
+ return total>0&&distance(path[0],path[path.length-1])<=Math.max(5,total*.002);
+}
+/** Rotates a closed route so that `start` (a fraction of the loop) becomes its first point. */
+export function rotatedLoop(path:Point[],start:number):Point[] {
+ const c=cumulative(path),n=path.length-1,total=c[n],s=(clamp(start,0,1)%1)*total;
+ let i=1;while(i<n&&c[i]<s)i++;
+ const seg=c[i]-c[i-1],q=seg>0?interpolate(path[i-1],path[i],(s-c[i-1])/seg):{...path[i-1]};
+ return [q,...path.slice(i,n),...path.slice(0,i),q];
+}
+/** Walks `laps` (fractional allowed) around a closed route from its rotated start. */
+export function loopPath(path:Point[],start:number,laps:number):Point[] {
+ const ring=rotatedLoop(path,start);if(ring.length<2||!(laps>0))return [];
+ const c=cumulative(ring),total=c[c.length-1];if(!(total>0))return [];
+ const full=Math.floor(laps),remainder=laps-full,out:Point[]=[];
+ for(let k=0;k<full;k++)out.push(...(k?ring.slice(1):ring));
+ if(remainder>1e-9){
+  const target=remainder*total,part:Point[]=[];
+  for(let i=1;i<ring.length&&c[i]<target;i++)part.push(ring[i]);
+  part.push(atDistance(ring,c,target));if(!full)part.unshift(ring[0]);out.push(...part);
+ }
+ return out;
+}
+/** Distance along a route to the nearest point on its polyline; pass `c` to reuse a cumulative array. */
+export function nearestOnPath(path:Point[],p:Point,c:number[]=cumulative(path)):number {
+ let best=Infinity,d=0;
+ for(let i=1;i<path.length;i++){
+  const a=path[i-1],b=path[i],seg=c[i]-c[i-1];let t=0;
+  if(seg>0){
+   const cos=Math.cos(a.lat*rad),bx=wrapLon(b.lon-a.lon)*cos,by=b.lat-a.lat,den=bx*bx+by*by;
+   if(den>0)t=clamp((wrapLon(p.lon-a.lon)*cos*bx+(p.lat-a.lat)*by)/den,0,1);
+  }
+  const v=distance(p,interpolate(a,b,t));
+  if(v<best){best=v;d=c[i-1]+seg*t;}
+ }
+ return d;
+}
 export function elevationStats(path:Point[]):ElevationStats {
  const values=path.filter(p=>Number.isFinite(p.ele));if(values.length<2)return {gain:null,loss:null,min:null,max:null};
  let gain=0,loss=0,anchor=values[0].ele!,min=anchor,max=anchor;
