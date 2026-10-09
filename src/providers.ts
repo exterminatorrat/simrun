@@ -41,8 +41,13 @@ export class ValhallaProvider implements RoutingProvider {
  async route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>{
   if(points.length<2||points.length>50||!points.every(validPoint))throw new ProviderError('Use between 2 and 50 valid waypoints.');
   const {costing,options}=PROFILE_OPTIONS[profile]??PROFILE_OPTIONS.walk;
-  const url=new URL(endpoint(this.prefs().routingUrl));
-  url.searchParams.set('json',JSON.stringify({locations:points.map(({lat,lon})=>({lat,lon})),costing,costing_options:Object.keys(options).length?{[costing]:options}:undefined,units:'kilometers',directions_type:'none'}));
+  // Default-off avoid options. `use_hills` is documented for both pedestrian and bicycle;
+  // `use_roads` (avoid roads) is the closest documented bicycle lever for avoiding highways.
+  const prefs=this.prefs(),opts:Record<string,unknown>={...options};
+  if(prefs.avoidHills)opts.use_hills=0;
+  if(prefs.avoidHighways&&costing==='bicycle')opts.use_roads=0;
+  const url=new URL(endpoint(prefs.routingUrl));
+  url.searchParams.set('json',JSON.stringify({locations:points.map(({lat,lon})=>({lat,lon})),costing,costing_options:Object.keys(opts).length?{[costing]:opts}:undefined,units:'kilometers',directions_type:'none'}));
   let data:{trip?:{legs?:{shape:string}[]}};
   try{data=await getJSON<{trip?:{legs?:{shape:string}[]}}>(url,signal);}
   catch(error){if(error instanceof ProviderError&&error.status===400&&error.code===154)throw new ProviderError(capMessage(profile),400,154);throw error;}

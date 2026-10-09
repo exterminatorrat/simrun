@@ -1,0 +1,14 @@
+{
+  "name": "SimRun",
+  "short_name": "SimRun",
+  "description": "Local-first route planning and explicitly simulated GPX activities",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8f9f8",
+  "theme_color": "#f8f9f8",
+  "icons": [
+    {"src": "./favicon.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "./apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}
+  ]
+}

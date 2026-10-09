@@ -36,3 +36,9 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 
 .history-controls{display:flex;gap:8px;margin:8px 0}
 .history-controls input{flex:1}
+
+.share-body{display:grid;gap:10px;padding:4px 2px 8px}
+.share-body input{width:100%;font-family:ui-monospace,monospace;font-size:12px}
+.share-actions{display:flex;gap:8px}
+.print-only{display:none}
+@media print{body>*{display:none!important}#print-sheet{display:block!important;padding:24px;font:13px/1.5 system-ui,sans-serif;color:#111}#print-sheet h1{font-size:20px;margin:0 0 6px}#print-sheet svg{width:100%;height:auto;border:1px solid #ccc;margin:10px 0}#print-sheet p{word-break:break-all}}

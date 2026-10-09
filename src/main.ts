@@ -1,8 +1,9 @@
 import type {Activity,Point,Preferences,RouteProfile,Settings,Simulation,WeatherPreset} from './types.js';
-import {defaults,simulate,clock,parseClock,validateSettings,loopPlan,plannedPath,mapStyleFor,computeSplits,WEATHER_PRESETS} from './model.js';
+import {defaults,simulate,clock,parseClock,validateSettings,loopPlan,plannedPath,mapStyleFor,computeSplits,WEATHER_PRESETS,importedActivity} from './model.js';
 import {cumulative,elevationStats,isClosedLoop,resample} from './geometry.js';
 import {download,downloadActivity,safeFilename} from './gpx.js';
 import {exportTCX} from './tcx.js';
+import {decodeShare,shareUrl,shareWarning} from './share.js';
 import {importRouteFile} from './import.js';
 import {downloadCues} from './cues.js';
 import {clearCachedMap,offlineSupported,offlineStatus,registerOfflineCache} from './sw.js';
@@ -119,6 +120,22 @@ change('workout-steps',e=>{const raw=e.value.trim();if(!raw){editor.setWorkout(n
 on('workout-clear',()=>editor.setWorkout(null));
 change('tags',e=>editor.setTags(sanitizeTags(e.value.split(','))));
 on('export-tcx',()=>{validRoute();if(!sim)throw Error('Create a route before exporting.');download(exportTCX(editor.activity,sim),`${editor.activity.settings.start.slice(0,10)}-${safeFilename(editor.activity.name)}.tcx`,'application/vnd.garmin.tcx+xml');toast('TCX downloaded. Exports are simulated, not recorded.');});
+on('share',()=>{if(editor.activity.path.length<2)throw Error('Draw or import a route before sharing.');const url=shareUrl(location.origin+location.pathname,editor.activity);$<HTMLInputElement>('share-url').value=url;const warning=shareWarning(url);setText('share-warning',warning??'');$('share-warning').hidden=!warning;$<HTMLDialogElement>('share-dialog').showModal();});
+on('share-copy',guarded(async()=>{const value=$<HTMLInputElement>('share-url').value;if(!value)throw Error('Open Share again to build a link.');try{await navigator.clipboard.writeText(value);toast('Share link copied.');}catch{$<HTMLInputElement>('share-url').select();document.execCommand('copy');toast('Share link copied.');}}));
+on('share-print',()=>{if(editor.activity.path.length<2)throw Error('Draw or import a route before printing.');buildPrintSheet();window.print();});
+function buildPrintSheet():void{
+ const a=editor.activity,sheet=$('print-sheet');sheet.replaceChildren();
+ sheet.append(el('h1','',a.name),el('p','',`${a.settings.sport==='run'?'Run':'Ride'} · ${distanceValue(sim?.distance??0)} ${distanceUnit()} · ${sim?clock(sim.duration):'—'} · simulated activity, not a recorded workout.`));
+ const path=plannedPath(a);
+ if(path.length>1){
+  const NS='http://www.w3.org/2000/svg',svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 400 200');
+  const lats=path.map(p=>p.lat),lons=path.map(p=>p.lon),minLat=Math.min(...lats),maxLat=Math.max(...lats),minLon=Math.min(...lons),maxLon=Math.max(...lons);
+  const scale=Math.min(380/Math.max(1e-9,maxLon-minLon),180/Math.max(1e-9,maxLat-minLat));
+  const ox=(400-(maxLon-minLon)*scale)/2,oy=(200-(maxLat-minLat)*scale)/2;
+  const poly=document.createElementNS(NS,'polyline');poly.setAttribute('points',path.map(p=>`${(ox+(p.lon-minLon)*scale).toFixed(1)},${(200-oy-(p.lat-minLat)*scale).toFixed(1)}`).join(' '));poly.setAttribute('fill','none');poly.setAttribute('stroke','#e2571e');poly.setAttribute('stroke-width','2');svg.append(poly);sheet.append(svg);
+ }
+ const url=$<HTMLInputElement>('share-url').value;sheet.append(el('p','',url?`Share link: ${url}`:'Route sketch only; the basemap is not printed.'));
+}
 change('splits-auto',e=>{if(e.value.trim()===''){editor.setSplits({auto:0});return;}const raw=Number(e.value);if(!Number.isFinite(raw)||raw<0)throw Error('Enter an auto-split distance of zero or more.');editor.setSplits({auto:raw*(preferences.units==='imperial'?1609.344:1000)});});
 change('splits-markers',e=>{const markers=e.value.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{const n=Number(v);if(!Number.isFinite(n)||n<=0)throw Error(`Invalid split marker: ${v}`);return n*(preferences.units==='imperial'?1609.344:1000);});editor.setSplits({markers});});
 on('save',async()=>{validRoute();await store.save(editor.activity);toast(store.available?'Saved to your local route library.':'Kept for this session only. Export a backup before closing.');});
@@ -162,5 +179,5 @@ document.addEventListener('keydown',e=>{const target=e.target as Element;if(targ
 let resizeFrame=0;window.addEventListener('resize',()=>{cancelAnimationFrame(resizeFrame);resizeFrame=requestAnimationFrame(()=>{render();map.fit();});});
 window.addEventListener('pagehide',()=>{if(initialized)void store.saveDraft(editor.activity).catch(()=>{});});
 render();void map.init(mapStyleFor(preferences));registerOfflineCache();
-async function initialize():Promise<void>{try{await store.open();setText('storage-state','Saved on this device');const a=await store.readDraft();if(a){editor.load(a);map.fit();}}catch(e){setText('storage-state','Session only');$('storage-state').classList.add('warning');toast('Browser storage is unavailable here. History is session-only; export GPX or a backup before closing.');}finally{initialized=true;render();}}
+async function initialize():Promise<void>{try{await store.open();setText('storage-state','Saved on this device');const shared=decodeShare(location.hash);if(shared){const {activity,notices}=importedActivity(shared.points,'Shared route',shared.sport==='ride'?'Ride':'Run','Shared link');editor.load(activity);map.fit();toast(`${notices} Timing was re-simulated locally.`);}else{const a=await store.readDraft();if(a){editor.load(a);map.fit();}}}catch(e){setText('storage-state','Session only');$('storage-state').classList.add('warning');toast('Browser storage is unavailable here. History is session-only; export GPX or a backup before closing.');}finally{initialized=true;render();}}
 void initialize();
