@@ -1,11 +1,12 @@
 export interface Point { lat:number; lon:number; ele?:number; time?:number; hr?:number }
 export type Sport = 'run' | 'ride';
+export type RouteProfile = 'walk' | 'hike' | 'road' | 'mtb';
 export type RouteSource = 'draft' | 'routed' | 'imported';
 export interface LoopPlan { start:number; mode:'laps'|'distance'; value:number }
 export interface GpsSim { noise:number; dropout:number }
 export interface Splits { auto:number; markers:number[] }
 export interface Settings {
-  sport:Sport; start:string; utcOffset:number; pace:number; speed:number;
+  sport:Sport; profile?:RouteProfile; start:string; utcOffset:number; pace:number; speed:number;
   mode:'constant'|'natural'; variation:number; sample:1|2|5;
   hrEnabled:boolean; hrAverage:number; hrVariation:number; seed:number;
   gps?:GpsSim;
