@@ -1,6 +1,6 @@
 # SimRun
 
-A local-first route editor and **explicitly simulated** GPX activity studio. Draw pedestrian or bicycle routes, import GPX, adjust timing, preview profiles, export simulated activities, and keep a browser-local library. No login, payments, cloud database, analytics, or secrets.
+A local-first route editor and **explicitly simulated** GPX activity studio. Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, preview profiles, export simulated activities, and keep a browser-local library. No login, payments, cloud database, analytics, or secrets.
 
 **Canonical source:** https://github.com/exterminatorrat/simrun (private, `main`).
 **Sites agent:** read [CHATGPT-SITES-HANDOFF.md](CHATGPT-SITES-HANDOFF.md) first.
@@ -23,7 +23,7 @@ This repository is preconfigured for static Vercel deployment through `vercel.js
 
 ## What is here
 
-MapLibre/OpenFreeMap integration; cancellable and throttled Valhalla pedestrian/bicycle requests; waypoint editing, shaping handles, undo/redo, reverse, out-and-back and close-loop (return to the start); loop planning by lap count or target distance around a closed loop with a start you can drag along the loop and a derived finish; time/pace/speed conversion; smooth deterministic simulation; optional synthetic HR; GPX import/export; custom splits (auto interval and markers) with a per-segment table; deterministic simulated GPS noise and signal dropout; SVG profiles; IndexedDB history/drafts with an explicitly labeled memory fallback; JSON backup/restore; metric/imperial units; light/dark appearance; mobile settings sheet.
+MapLibre/OpenFreeMap integration; cancellable and throttled Valhalla pedestrian/bicycle requests; waypoint editing, shaping handles, undo/redo, reverse, out-and-back and close-loop (return to the start); loop planning by lap count or target distance around a closed loop with a start you can drag along the loop and a derived finish; time/pace/speed conversion; smooth deterministic simulation; optional synthetic HR; custom splits (auto interval and markers) with a per-segment table; deterministic simulated GPS noise and signal dropout; GPX, KML and GeoJSON import, GPX export; SVG profiles; IndexedDB history/drafts with an explicitly labeled memory fallback; JSON backup/restore; metric/imperial units; light/dark appearance; mobile settings sheet.
 
 There is **no seeded activity, artificial road network, or fake successful routing in the application**. Browser tests use their own synthetic fixtures and mocked provider responses. If the basemap cannot load, a clearly labeled coordinate canvas can display/edit geometry. Failed road routing never promotes a straight waypoint preview into an exportable route.
 
@@ -39,6 +39,7 @@ Strict TypeScript, native DOM components, ES modules, and standard browser APIs.
 | `src/providers.ts` | Routing, elevation, intentional geocoding and rate limits |
 | `src/geometry.ts`, `src/model.ts` | Geodesic math, validation and deterministic simulation |
 | `src/gpx.ts` | Browser-local XML parsing and GPX serialization |
+| `src/import.ts` | KML and GeoJSON parsing onto the shared import pipeline |
 | `src/storage.ts` | Versioned IndexedDB, preferences and validated backups |
 | `src/charts.ts`, `src/ui.ts` | Responsive SVG profiles and DOM primitives |
 
@@ -69,7 +70,7 @@ IndexedDB database `simrun-local`, schema version 1: `activities` and `meta` (cu
 
 See [docs/VERIFICATION.md](docs/VERIFICATION.md) and [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). The creation environment had no Sites tool, no package-network access and a browser that blocked HTTP/file navigation. The source builds and logic tests run locally; UI tests ran in an isolated DOM harness with mocked providers. **A private Sites preview, live road routing, actual MapLibre rendering, hosted CORS/CSP and native IndexedDB reload persistence are not verified here.**
 
-GPX import retains the largest continuous segment when a file contains disjoint segments and tells the user; it does not invent connecting paths. Exports are resimulations, not lossless copies of original recordings. Start time uses an explicit fixed UTC offset; check that offset for the chosen date, including daylight-saving changes. Very long simulations increase the effective sample interval to cap output at approximately 50,000 points. Optional custom splits and GPS noise/dropout are simulated deterministically from the saved seed: noise jitters exported coordinates while distance and timing stay on the true route, and dropout removes fixes in outages, which export as separate track segments instead of invented straight lines. These remain synthetic effects, not device measurements.
+GPX, KML and GeoJSON imports retain the largest continuous segment when a file contains disjoint segments and tell the user; they do not invent connecting paths. GeoJSON and KML geometry without timestamps falls back to the activity timing settings. Exports are resimulations, not lossless copies of original recordings. Start time uses an explicit fixed UTC offset; check that offset for the chosen date, including daylight-saving changes. Very long simulations increase the effective sample interval to cap output at approximately 50,000 points. Optional custom splits and GPS noise/dropout are simulated deterministically from the saved seed: noise jitters exported coordinates while distance and timing stay on the true route, and dropout removes fixes in outages, which export as separate track segments instead of invented straight lines. These remain synthetic effects, not device measurements.
 
 ## Browser checks
 
