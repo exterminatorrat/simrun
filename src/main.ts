@@ -10,6 +10,7 @@ import {ValhallaProvider,resolveProfile,searchPlaces} from './providers.js';
 import {Editor} from './editor.js';
 import {RouteMap} from './map.js';
 import {Charts,type ChartMode} from './charts.js';
+import {hrZones,paceHistogram} from './analysis.js';
 import {$,el,button,installIcons,setText,setInput,toast} from './ui.js';
 import {newId} from './id.js';
 let preferences=readPreferences();document.documentElement.dataset.theme=preferences.theme;installIcons();
@@ -63,6 +64,12 @@ function render():void {
   splits.forEach((sp,i)=>{const row=el('div','split-row');const value=s.sport==='run'?(sp.duration>0?sp.duration/(sp.distance/(imperial?1609.344:1000)):0):sp.speed*(imperial?2.2369362920544:3.6);row.append(el('span','',String(i+1)),el('span','',`${distanceValue(sp.distance)} ${unit}`),el('span','',sp.stopped?`${clock(sp.duration)} · rest`:clock(sp.duration)),el('span','',s.sport==='run'?clock(value):value.toFixed(1)),el('span','',sp.gain===null?'—':heightValue(sp.gain)));splitTable.append(row);});
  }
  setText('waypoint-count',String(a.waypoints.length));$('edit-import').hidden=a.source!=='imported';const list=$('waypoints');list.replaceChildren();
+ const zoneBox=$('hr-zones');zoneBox.replaceChildren();
+ if(sim&&s.hrEnabled){for(const z of hrZones(sim.points,preferences.hrMax)){const row=el('div','zone-row');row.append(el('span','',`Z${z.index} · ${z.min}\u2013${z.max} bpm`),el('span','',`${clock(z.seconds)} \u00b7 ${z.percent.toFixed(0)}%`));zoneBox.append(row);}}
+ else zoneBox.append(el('p','fine-print','Enable simulated heart rate to see time in each zone.'));
+ const hist=sim?paceHistogram(sim.points,s.sport,preferences.units)[0]:null,histBox=$('pace-hist');histBox.replaceChildren();
+ if(hist&&hist.bins.length){for(const b of hist.bins){if(b.seconds<=0)continue;const row=el('div','hist-row');row.append(el('span','',s.sport==='run'?`${clock(b.min)}\u2013${clock(b.max)} /${unit}`:`${b.min}\u2013${b.max} ${hist.unit}`),el('span','',clock(b.seconds)));histBox.append(row);}}
+ else histBox.append(el('p','fine-print','A completed route is needed for the pace histogram.'));
  a.waypoints.forEach((p,i)=>{const row=el('div',`waypoint-row ${i===editor.selected?'selected':''}`);row.append(el('span','point-index',String(i+1)),button(`${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`,()=>{editor.selected=i;map.focus(p);render();},undefined,'coordinate'),button('Move earlier',()=>editor.reorder(i,-1),'up','icon-button'),button('Move later',()=>editor.reorder(i,1),'down','icon-button'),button(`Delete waypoint ${i+1}`,()=>editor.remove(i),'close','icon-button'));list.append(row);});
  const closed=isClosedLoop(a.path),loopLen=closed?cumulative(a.path).at(-1)??0:0,loopMode=a.loop?.mode??'distance';
  setText('loop-count',plan?lapLabel(plan.laps):'—');
@@ -113,7 +120,7 @@ on('export',async()=>{validRoute();downloadActivity(editor.activity);try{await s
 on('edit-import',()=>{if(!confirm('Replace the imported geometry with a freshly routed path through up to 8 waypoints? Undo restores the original geometry.'))return;editor.edit(resample(editor.activity.path,Math.min(8,editor.activity.path.length)));editor.drawing=true;render();});
 const upload=()=>{$<HTMLInputElement>('gpx-file').value='';$('gpx-file').click();};on('import',upload);on('empty-import',upload);on('empty-close',()=>{emptyDismissed=true;render();});
 $('gpx-file').addEventListener('change',guarded(async()=>{const file=$<HTMLInputElement>('gpx-file').files?.[0];if(!file)return;if(file.size>15000000)throw Error('Route file must be smaller than 15 MB.');const result=importRouteFile(await file.text(),file.name);if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(result.activity);map.fit();toast(result.notice);}));
-for(const mode of ['elevation','pace','hr','power','cadence'] as ChartMode[])on(`chart-${mode}`,()=>{charts.mode=mode;for(const m of ['elevation','pace','hr','power','cadence']){$(`chart-${m}`).classList.toggle('active',m===mode);$(`chart-${m}`).setAttribute('aria-selected',String(m===mode));}charts.render(editor.activity,sim,preferences);});
+for(const mode of ['elevation','pace','hr','power','cadence','splits'] as ChartMode[])on(`chart-${mode}`,()=>{charts.mode=mode;for(const m of ['elevation','pace','hr','power','cadence','splits']){$(`chart-${m}`).classList.toggle('active',m===mode);$(`chart-${m}`).setAttribute('aria-selected',String(m===mode));}charts.render(editor.activity,sim,preferences);});
 on('toggle-chart',()=>{const collapsed=$('chart-panel').classList.toggle('collapsed');$('toggle-chart').setAttribute('aria-expanded',String(!collapsed));$('toggle-chart').setAttribute('aria-label',collapsed?'Expand chart':'Collapse chart');});
 on('open-inspector',()=>{$('inspector').classList.add('open');$('activity-name').focus();});on('close-inspector',()=>$('inspector').classList.remove('open'));
 document.querySelectorAll<HTMLButtonElement>('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog')!.close());

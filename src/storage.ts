@@ -1,5 +1,6 @@
 import type {Activity,Preferences} from './types.js';
-import {defaultPreferences,validateActivity} from './model.js';
+import {defaultPreferences,validateActivity,plannedPath,simulate} from './model.js';
+import {cumulative} from './geometry.js';
 import {endpoint} from './providers.js';
 export function readPreferences():Preferences {try{return validatePreferences(JSON.parse(localStorage.getItem('simrun-preferences')||'{}'));}catch{return {...defaultPreferences};}}
 export function validatePreferences(value:unknown):Preferences {
@@ -38,4 +39,44 @@ export function parseBackup(text:string):{activities:Activity[];preferences:Pref
  if(text.length>50000000)throw Error('Backup must be smaller than 50 MB.');const b=JSON.parse(text);
  if(b?.product!=='SimRun'||b.version!==1||!Array.isArray(b.activities)||b.activities.length>500)throw Error('Unsupported SimRun backup.');
  return {activities:b.activities.map(validateActivity),preferences:validatePreferences(b.preferences)};
+}
+export function sanitizeTags(value:unknown):string[]|undefined{
+ if(!Array.isArray(value))return undefined;
+ const out:string[]=[],seen=new Set<string>();
+ for(const v of value){
+  if(typeof v!=='string')continue;
+  const tag=v.trim().slice(0,24),key=tag.toLowerCase();
+  if(!tag||seen.has(key))continue;
+  seen.add(key);out.push(tag);
+  if(out.length>=8)break;
+ }
+ return out.length?out:undefined;
+}
+export function searchActivities(rows:Activity[],query:string):Activity[]{
+ const tokens=query.toLowerCase().split(/\s+/).filter(Boolean);
+ if(!tokens.length)return rows;
+ return rows.filter(a=>{const hay=[a.name,...(a.tags??[])].join('\n').toLowerCase();return tokens.every(t=>hay.includes(t));});
+}
+export function sortActivities(rows:Activity[],key:'updated'|'name'|'distance'|'duration'):Activity[]{
+ const distances=new Map<Activity,number>(),durations=new Map<Activity,number>();
+ for(const a of rows){
+  if(key==='distance')distances.set(a,cumulative(plannedPath(a)).at(-1)??0);
+  else if(key==='duration'){
+   try{durations.set(a,simulate(a).duration);}catch{durations.set(a,Number.POSITIVE_INFINITY);}
+  }
+ }
+ return [...rows].sort((a,b)=>{
+  if(key==='updated')return b.updatedAt-a.updatedAt;
+  if(key==='name')return a.name.localeCompare(b.name);
+  if(key==='distance')return (distances.get(a)??0)-(distances.get(b)??0);
+  return (durations.get(a)??Number.POSITIVE_INFINITY)-(durations.get(b)??Number.POSITIVE_INFINITY);
+ });
+}
+export async function storageUsage():Promise<{usage:number;quota:number}|null>{
+ const estimate=globalThis.navigator?.storage?.estimate;
+ if(!estimate)return null;
+ try{
+  const e=await estimate(),usage=Number(e?.usage),quota=Number(e?.quota);
+  return Number.isFinite(usage)&&Number.isFinite(quota)?{usage,quota}:null;
+ }catch{return null;}
 }
