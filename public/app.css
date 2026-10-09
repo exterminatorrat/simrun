@@ -21,3 +21,4 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 @media(min-width:761px) and (max-width:1100px){.zoom-tools{right:337px}}
 @media(min-width:761px) and (max-height:760px){.zoom-tools{top:18px}}
 .axis{font-size:10px}
+.empty-state .empty-close{position:absolute;top:8px;right:8px;margin:0;padding:6px;color:var(--muted)}.empty-state .empty-close:hover{color:var(--text)}
