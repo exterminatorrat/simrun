@@ -136,3 +136,82 @@ Optional `settings.fatigue` (0–0.3, UI 0–30 %, default 0). Applied to the ti
 - **`drawFallback()` (line 118):** stroke each graded piece with `gradeColor` when elevations exist; the fallback already redraws on every state change, so this is contained.
 - **Scrub marker:** new `scrub(p:Point|null)` beside `hover()` (line 114): a distinct persistent `scrub-marker` (MapLibre marker, or a ring in `drawFallback()` beside the `chart-map-marker` hover circle at line 124), preserved across re-renders until cleared. It never touches `hoverMarker`, plan markers, or the drawing flow.
 
+## 7. UI/settings changes in `src/main.ts`
+
+- **Settings markup (`public/index.html` line 21, after the GPS fields):** a "Power" group (`#power-enabled` checkbox, `#weight` number 30–200 kg), a "Cadence" group (`#cadence-enabled`, `#cadence-average`, `#cadence-variation`), a `#fatigue` numeric input (0–30) beside `#variation`, and a "Conditions" group (`#weather-preset` select defaulting to `ideal`, `#weather-temp` number, plus a static resolved-effect line such as "≈ +11 % duration"). Styles follow the existing `#hr-fields` fieldset in `public/app.css`. Helper text says "estimated power", "estimated cadence", "simulated offline weather"; the existing fine-print sentence stays.
+- **Bindings (`src/main.ts`):** `change('power-enabled'|'weight'|'cadence-enabled'|'cadence-average'|'cadence-variation'|'fatigue'|'weather-preset'|'weather-temp', …)` beside `change('hr-…')` (main.ts:89), all routed through `updateSettings` (main.ts:31) so `validateSettings`, the guarded change handler and the debounced save run unchanged.
+- **`render()` (main.ts:32):** reflect the new fields beside the existing `hr-*`/`gps-*` `setInput`/`mark` block (lines 47–49) and the resolved-weather effect line; `updateSettings` resets `cadence.average` to the sport default on run/ride switch, mirroring the activity-name suffix switch (main.ts:31).
+- **Chart tabs (`public/index.html` line 29 + `main.ts:102`):** add `#chart-power` and `#chart-cadence` buttons; extend the loop at main.ts:102 to `['elevation','pace','hr','power','cadence']` for both the click wiring and the active-class toggling; empty-state copy names the enabling toggle.
+- **Gradient legend + scrubber wiring:** a `.gradient-legend` element in the chart panel near `#chart-note` (visible only when elevation exists); the chart gains a scrub callback calling `map.scrub(p)` alongside the existing `hover` callback (main.ts:33); `Charts` owns the focusable host and Left/Right/Escape handling.
+- Nothing here feeds `simulate()`: all new UI state (scrub pin, active tab, legend visibility, effect line) is presentation-only, so a scrubbed or tab-switched session simulates identically.
+
+## 8. Golden-test impact
+
+**Current state:** there is no pinned golden today; tests/core.test.mjs enforces behavior invariants only. This plan introduces one.
+
+- **What is pinned:** `tests/golden/depth-seed-12345.json` — the full `JSON.stringify` of `simulate()` output for a fixed workspace: run + ride variants, natural mode, `fatigue:0.15`, power/cadence/HR enabled, weather `mild`, `seed:12345`. Loaded and `assert.deepEqual`ed by `tests/depth.test.mjs`, so any formula change that silently alters seeded exports fails CI.
+- **The deliberate re-pin:** Milestone 3 (grade model) intentionally changes natural-mode timings — the smoothed 30 m grade and the asymmetric `×2.0/×1.1` term replace `grade*.7`. That shifts seeded split shapes (not totals) and therefore the pinned golden. This is the plan's only intentional breaking simulation change. The re-pin is a **deliberate, documented act**, never a side effect:
+  1. Implement the grade model; run `npm test` and observe only the golden case fail.
+  2. Regenerate with the explicit documented command `node scripts/regen-golden.mjs` (new script: rebuilds `dist/`, re-runs the fixed-workspace simulation, writes `tests/golden/depth-seed-12345.json`).
+  3. Re-run `npm test` to green.
+  4. Record the re-pin in `docs/VERIFICATION.md` with: the date, the seed, the formula change ("grade smoothing window 10 m → 30 m centered; uphill ×2.0 / downhill ×1.1 replacing grade×0.7"), the diff summary of what moved (split durations, not totals), and the regeneration command. Every future re-pin gets the same entry — this is what keeps "determinism per app version" honest.
+- **What must never need a re-pin silently:** the weather penalty and power/cadence/HR-drift/fatigue formulas are pinned by the same golden; changing any of them requires the same regenerate-and-document step.
+
+## 9. Test plan (new `tests/depth.test.mjs`, mirroring `tests/core.test.mjs` style)
+
+1. **`power and cadence output is deterministic`** — `assert.deepEqual(simulate(a), simulate(a))` with `seed:12345`, power/cadence/HR enabled, natural mode; run and ride variants.
+2. **`power anchors and grade response`** — run anchor ≈ 243 W @ 70 kg / 12 km/h flat, ride anchor ≈ 172 W @ 70 kg / 24 km/h flat (±5 %); uphill interval > flat > downhill at equal speed.
+3. **`cadence stays in bounds and follows the wave`** — all samples within 30–230; constant mode yields exactly `average`; `variation:0` flattens it; off ⇒ no `gpxtpx:cad` in the export.
+4. **`HR mean survives drift and heat`** — weighted mean within 0.6 bpm of `hrAverage` (existing invariant, `hot` weather on); drift still rises after 10 min; existing tests 'HR mean matches target…' and 'HR drifts upward…' stay green.
+5. **`fatigue shapes pace inside the exact target duration`** — final split slower than first under `fatigue:0.2`; `s.duration` and all timestamps identical to `fatigue:0`; `deepEqual` repeatability with `seed:42424`.
+6. **`weather penalty anchors`** — run `hot` factor exactly 1.1155 (1e-9); ride half-heat; `windy` adds 0.006·25; penalty capped at 2; ride < run for `hot`.
+7. **`weather changes timing, not geometry`** — distance and route coordinates unchanged with weather on; coordinates equal a weatherless run except timestamps; `deepEqual` repeatability.
+8. **`absent features leave simulate byte-identical`** — with `power`/`cadence`/`weather`/`fatigue` all absent, output `deepEqual`s the pre-change behavior for constant mode and (post-re-pin) the pinned natural-mode golden.
+9. **`gradeSegments and gradeColor`** — constant-slope path ⇒ grade ≈ tan within tolerance; mirrored profiles (climb-first vs climb-last) give different split durations with equal totals; 400-segment cap respected; missing elevation ⇒ empty array and plain-line behavior.
+10. **`GPX extensions and description are opt-in and honest`** — `<gpxpx:Watts>`, `<gpxtpx:cad>`, `<gpxtpx:atemp>` present only when enabled; desc sentences present when enabled; `creator="SimRun"` and the not-a-recording sentence always present; scrubbed export byte-identical to unscrubbed.
+11. **`power/cadence/fatigue/weather settings validate and round-trip`** — reject weight 25/220 kg, cadence 20/250, fatigue −0.1/0.4, tempC 60, humidity 140, wind −1; accept and round-trip valid values through `validateActivity` (pattern of 'GPS and split settings validate and round-trip', tests/core.test.mjs:81).
+12. **`scrubber state never affects simulation`** — Node-level guard that scrub state lives only in chart/map instances, plus the byte-identical export check.
+
+**Browser additions (`tests/browser.py`, after the natural/HR block):** select "Hot", assert the duration stat grows vs "Ideal"; export and assert `atemp` + weather desc in the blob; toggle power and assert `<gpxpx:Watts>` in the blob; power/cadence chart tabs render; pointer-down/drag on `#chart` moves the map scrub marker and Escape clears it; arrow keys move the pin; fallback canvas shows ≥ 2 stroke colors on an elevated route and a single color without elevation; screenshots via the existing `screenshot()` helper (tests/browser.py:35).
+
+## 10. Verification commands
+
+```
+npm test                            # build + typecheck + all Node suites incl. tests/depth.test.mjs and the golden
+python tests/browser.py --isolated  # DOM-only acceptance incl. new weather/scrubber/shading checks (python3 if needed)
+```
+
+Supporting checks: `npm run typecheck` after each milestone; `grep -rn "fetch(" src/` must show no new call sites (weather presets are source constants); final export with every feature enabled opened in an external GPX reader to confirm `hr`/`cad`/`atemp`/`Watts` appear only when enabled and the desc names simulated timing, estimated power/cadence and offline weather.
+
+## 11. Risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| Natural-mode timing shift breaks consumers of seeded output | The one deliberate change; golden re-pin with documented regeneration (§8) and a `docs/VERIFICATION.md` entry |
+| Power formulas are first-order approximations | Every surface says "estimated"; GPX desc says "not device measurements"; anchors tested at ±5 % |
+| HR drift interacts with the existing warm-up/walk term (model.ts:110–125) | The block already mean-centers; combined baseline stays mean-centered, so the HR-mean tests stay green by construction |
+| Weather semantics misread as "same duration, different shape" | Resolved: duration scales; documented in README, the inspector helper text, and `docs/ACCEPTANCE.md`; effect line in the UI shows the percentage |
+| Long-weather-penalty activities push past the 7-day cap | Existing duration validation error covers it; the penalty cap (2×) bounds it |
+| Render cost on 100k-point imported routes | Shading capped at 400 segments; charts already sample ≤ 1000 rows (charts.ts:21) |
+| MapLibre data-driven paint failure | Single-color `route-line` layer remains as a working fallback path |
+| Sparse imported elevations | `gradeSegments` returns fewer/empty segments; nothing is interpolated into existence |
+
+## 12. Ordered milestones (each with an explicit verification step)
+
+1. **Settings foundation** — types (`Settings.power/cadence/fatigue/weather`, `Sample.power/cad`, `WEATHER_PRESETS`), `defaults()`, `validateSettings`, `validateActivity` cleaning, UI inputs.
+   Verify: `npm test` green with existing suites untouched; new validation round-trip tests pass (mirror the GPS pattern).
+2. **Weather presets (Feature 2)** — smallest end-to-end loop through the duration pipeline; `weatherPenalty` exported and unit-tested; desc + `atemp` export.
+   Verify: exact penalty anchors in Node; absent weather leaves `simulate()` byte-identical for a fixed seed; browser test: "Hot" raises the duration stat vs "Ideal"; repeat export with the same seed is byte-identical.
+3. **Grade model (Feature 3 part 1)** — 30 m centered smoothing + asymmetric term in the `simulate()` weights loop; re-pin the seed-12345 golden and record it in `docs/VERIFICATION.md`.
+   Verify: mirrored-profile tests (climb-first vs climb-last give different split durations, totals exact); existing duration/HR invariants green; `deepEqual` repeatability.
+4. **Power, cadence, HR drift, fatigue (Feature 1)** — consumes the smoothed grades; per-sample outputs; GPX `gpxpx:Watts`/`gpxtpx:cad`; chart tabs; UI groups.
+   Verify: `assert.deepEqual(simulate(a), simulate(a))` with `seed:12345`; power anchors within ±5 %; cadence bounds; HR mean invariant green with heat on; fatigue changes split distribution while duration stays exact; golden pinned here.
+5. **Gradient shading + scrubber (Feature 3 remainder)** — `gradeSegments`/`gradeColor`, `route-grade` layer + fallback strokes + legend, scrubber with marker/tooltip/keyboard/Escape.
+   Verify: Node tests for `gradeSegments`/`gradeColor`; browser test: ≥ 2 stroke colors on an elevated route, single color without elevation, legend toggles, pointer drag moves the scrub marker, Escape clears, arrows move, scrubbed export byte-identical.
+6. **Docs and honesty pass** — `README.md`, `docs/IMPLEMENTATION.md`, `docs/ACCEPTANCE.md` items 7 and 16, `docs/VERIFICATION.md` (golden re-pin record), final full test pass.
+   Verify: `npm test` green including the golden; `python tests/browser.py --isolated` green; no new `fetch(` under `src/`; UI copy reads "estimated"/"simulated" throughout; GPX desc names simulated timing, estimated power/cadence and offline weather.
+
+## Effort summary
+
+Settings foundation 0.5 d · weather 1 d · grade model 0.5 d · power/cadence/HR drift/fatigue 1.5 d · shading 0.75 d · scrubber 0.75 d ≈ **5.5 dev-days**. The only deliberately breaking change is the natural-mode grade term, handled by the documented golden re-pin.
+

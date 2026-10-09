@@ -1,4 +1,4 @@
-import type {Activity,LoopPlan,Point,RouteSource,Settings,Splits} from './types.js';
+import type {Activity,LoopPlan,Point,RouteSource,Settings,Splits,Pauses} from './types.js';
 import {defaults} from './model.js';
 import {closeLoop,cumulative,distance,isClosedLoop,nearestOnPath,outAndBack,validPoint} from './geometry.js';
 import {resolveProfile,routeCapWarning,type RoutingProvider} from './providers.js';
@@ -47,6 +47,7 @@ export class Editor {
   if(plan.mode===mode)return;
   this.setLoop({mode,value:mode==='laps'?Math.max(.25,Math.round(plan.value/total*4)/4):Math.round(plan.value*total)});
  }
+ setPauses(p:Pauses|null):void {if(p===null){if(this.activity.pauses){delete this.activity.pauses;this.notify();}return;}this.activity.pauses={rests:p.rests};this.notify();}
  setSplits(plan:Partial<Splits>|null):void {
   if(plan===null){if(this.activity.splits){delete this.activity.splits;this.notify();}return;}
   const base=this.activity.splits??{auto:0,markers:[]},next={...base,...plan};

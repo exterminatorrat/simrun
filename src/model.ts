@@ -173,8 +173,29 @@ export function simulate(a:Activity):Simulation {
    if(s.cadence?.enabled)p.cad=s.sport==='run'?Math.round(clamp(168+6*waveAt(p.distance),150,190)):Math.round(clamp(60+v*3.6*1.2+4*waveAt(p.distance),50,110));
   });
  }
+ // Distance-anchored rest stops add elapsed time while moving pace excludes them.
+ const rests=(a.pauses?.rests??[]).filter(r=>r.distance>0&&r.distance<total).sort((x,y)=>x.distance-y.distance);
+ let stoppedMs=0;
+ if(rests.length){
+  const out:Sample[]=[];let shift=0,idx=0,last=points[0].time;
+  const emit=(s:Sample)=>{out.push(s);last=s.time;};
+  for(let i=0;i<points.length;i++){
+   while(idx<rests.length&&rests[idx].distance<points[i].distance){
+    const r=rests[idx],base=atDistance(route,c,r.distance),prev=points[i-1];
+    const f=points[i].distance>prev.distance?(r.distance-prev.distance)/(points[i].distance-prev.distance):0;
+    const tA=Math.max(prev.time+f*(points[i].time-prev.time)+shift,last+1);
+    const carry=prev.hr!==undefined?{hr:prev.hr}:{},carryP=prev.power!==undefined?{power:prev.power}:{},carryC=prev.cad!==undefined?{cad:prev.cad}:{};
+    emit({...base,time:tA,distance:r.distance,speed:0,...carry,...carryP,...carryC});
+    emit({...base,time:tA+r.seconds*1000,distance:r.distance,speed:0,...carry,...carryP,...carryC});
+    shift+=r.seconds*1000;stoppedMs+=r.seconds*1000;idx++;
+   }
+   emit({...points[i],time:points[i].time+shift});
+  }
+  for(let i=1;i<out.length;i++)if(out[i].time<=out[i-1].time)out[i].time=out[i-1].time+1;
+  points.length=0;points.push(...out);
+ }
  const gps=s.gps;
- return {points:applyDropout(applyGpsNoise(points,gps?.noise??0,s.seed),gps?.dropout??0,s.seed),duration:durationMs/1000,distance:total,interval:intervalMs/1000};
+ return {points:applyDropout(applyGpsNoise(points,gps?.noise??0,s.seed),gps?.dropout??0,s.seed),duration:(durationMs+stoppedMs)/1000,distance:total,interval:intervalMs/1000};
 }
 function gpsRandom(seed:number):()=>number {let t=seed>>>0;return ()=>{t=(t+0x6d2b79f5)>>>0;let r=Math.imul(t^(t>>>15),1|t);r=(r+Math.imul(r^(r>>>7),61|r))^r;return ((r^(r>>>14))>>>0)/4294967296;};}
 /** Deterministic horizontal GPS jitter; distance and timing keep their true route values. */
@@ -223,7 +244,8 @@ export function computeSplits(a:Activity,s:Simulation):Split[] {
  for(let i=1;i<bounds.length;i++){
   const start=bounds[i-1],end=bounds[i],duration=(timeAtDistance(s.points,end)-timeAtDistance(s.points,start))/1000;
   const slice=s.points.filter(p=>p.distance>=start-1e-6&&p.distance<=end+1e-6);
-  out.push({start,end,distance:end-start,duration,speed:duration>0?(end-start)/duration:0,gain:elevationStats(slice).gain});
+  const stopped=(a.pauses?.rests??[]).some(r=>r.distance>start&&r.distance<=end);
+  out.push({start,end,distance:end-start,duration,speed:duration>0?(end-start)/duration:0,gain:elevationStats(slice).gain,...(stopped?{stopped:true}:{})});
  }
  return out;
 }

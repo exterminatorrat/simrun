@@ -1,7 +1,7 @@
 import type {Activity,Point,Preferences,Simulation} from './types.js';
 import {cumulative} from './geometry.js';
 import {clock,plannedPath} from './model.js';
-export type ChartMode='elevation'|'pace'|'hr';
+export type ChartMode='elevation'|'pace'|'hr'|'power'|'cadence';
 const NS='http://www.w3.org/2000/svg';
 export class Charts {
  mode:ChartMode='elevation';private rows:{p:Point;d:number;v:number}[]=[];private total=0;private pref!:Preferences;private sport='run';private width=1000;
@@ -10,9 +10,13 @@ export class Charts {
   this.pref=pref;this.sport=a.settings.sport;const imperial=pref.units==='imperial',path=plannedPath(a),c=cumulative(path);this.total=c.at(-1)||0;this.rows=[];this.host.replaceChildren();
   if(this.mode==='elevation')this.rows=path.map((p,i)=>({p,d:c[i],v:p.ele===undefined?NaN:p.ele*(imperial?3.28084:1)}));
   else if(this.mode==='hr'&&!a.settings.hrEnabled)this.rows=path.map((p,i)=>({p,d:c[i],v:p.hr??NaN}));
+  else if(this.mode==='power'&&!a.settings.power?.enabled)this.rows=[];
+  else if(this.mode==='cadence'&&!a.settings.cadence?.enabled)this.rows=[];
+  else if(this.mode==='power')this.rows=s?s.points.map(p=>({p,d:p.distance,v:p.power??NaN})):[];
+  else if(this.mode==='cadence')this.rows=s?s.points.map(p=>({p,d:p.distance,v:p.cad??NaN})):[];
   else if(s)this.rows=s.points.map(p=>({p,d:p.distance,v:this.mode==='hr'?p.hr??NaN:a.settings.sport==='run'?(imperial?1609.344:1000)/p.speed:p.speed*3.6/(imperial?1.609344:1)}));
   const valid=this.rows.filter(r=>Number.isFinite(r.v));
-  if(valid.length<2){const empty=document.createElement('div');empty.className='chart-empty';empty.textContent=!path.length?'Your route profile will appear here.':this.mode==='elevation'?'Elevation unavailable. Route and GPX export still work.':this.mode==='hr'?'Enable simulated heart rate in Activity settings.':'A completed route is needed for this profile.';this.host.append(empty);return;}
+  if(valid.length<2){const empty=document.createElement('div');empty.className='chart-empty';empty.textContent=!path.length?'Your route profile will appear here.':this.mode==='elevation'?'Elevation unavailable. Route and GPX export still work.':this.mode==='hr'?'Enable simulated heart rate in Activity settings.':this.mode==='power'?'Enable estimated power in Activity settings.':this.mode==='cadence'?'Enable estimated cadence in Activity settings.':'A completed route is needed for this profile.';this.host.append(empty);return;}
   const svg=document.createElementNS(NS,'svg');this.width=Math.max(250,this.host.clientWidth);svg.setAttribute('viewBox',`0 0 ${this.width} 125`);svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('role','img');svg.setAttribute('aria-label',`${this.mode} profile along route`);this.host.append(svg);
   const make=(tag:string,attrs:Record<string,string>,text='')=>{const n=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));n.textContent=text;svg.append(n);return n;};
   let lo=Math.min(...valid.map(r=>r.v)),hi=Math.max(...valid.map(r=>r.v));const pad=Math.max((hi-lo)*.2,this.mode==='elevation'?2:this.mode==='pace'?this.sport==='run'?5:1:2);lo-=pad;hi+=pad;
@@ -27,7 +31,7 @@ export class Charts {
  private cursor(e:PointerEvent):void {
   if(this.rows.length<2||!this.host.querySelector('svg'))return;const r=this.host.getBoundingClientRect(),f=Math.max(0,Math.min(1,((e.clientX-r.left)/r.width*this.width-50)/(this.width-70))),d=f*this.total;let best=this.rows[0];for(const row of this.rows)if(Math.abs(row.d-d)<Math.abs(best.d-d))best=row;
   this.host.querySelector('.chart-tooltip')?.remove();this.host.querySelector('.cursor')?.remove();if(!Number.isFinite(best.v))return;
-  const tip=document.createElement('div');tip.className='chart-tooltip';const imperial=this.pref.units==='imperial';tip.textContent=`${(best.d/(imperial?1609.344:1000)).toFixed(2)} ${imperial?'mi':'km'} · ${this.format(best.v)} ${this.mode==='elevation'?imperial?'ft':'m':this.mode==='hr'?'bpm':this.sport==='run'?imperial?'/mi':'/km':imperial?'mph':'km/h'}`;tip.style.left=`${Math.max(5,Math.min(r.width-170,e.clientX-r.left))}px`;this.host.append(tip);
+  const tip=document.createElement('div');tip.className='chart-tooltip';const imperial=this.pref.units==='imperial';tip.textContent=`${(best.d/(imperial?1609.344:1000)).toFixed(2)} ${imperial?'mi':'km'} · ${this.format(best.v)} ${this.mode==='elevation'?imperial?'ft':'m':this.mode==='hr'?'bpm':this.mode==='power'?'W':this.mode==='cadence'?'rpm':this.sport==='run'?imperial?'/mi':'/km':imperial?'mph':'km/h'}`;tip.style.left=`${Math.max(5,Math.min(r.width-170,e.clientX-r.left))}px`;this.host.append(tip);
   const line=document.createElementNS(NS,'line');Object.entries({x1:String(50+f*(this.width-70)),x2:String(50+f*(this.width-70)),y1:'5',y2:'101',class:'cursor'}).forEach(([k,v])=>line.setAttribute(k,v));this.host.querySelector('svg')!.append(line);this.hover(best.p);
  }
 }
