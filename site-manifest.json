@@ -14,7 +14,7 @@
   "devCommand": "npm run dev -- --host 0.0.0.0 --port 5173",
   "testCommand": "npm test",
   "outputDirectory": "dist",
-  "persistence": ["IndexedDB", "localStorage"],
+  "persistence": ["IndexedDB", "localStorage", "Cache Storage (offline shell and viewed basemap)"],
   "storageFallback": "Explicitly labeled session-only memory",
   "requiresAuthentication": false,
   "requiresDatabase": false,

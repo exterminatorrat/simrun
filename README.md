@@ -66,6 +66,8 @@ Nominatim place search is **off by default**. Enable it deliberately only after 
 
 IndexedDB database `simrun-local`, schema version 1: `activities` and `meta` (current draft). Small preferences and search/rate-limit caches use localStorage. Each saved activity stores versioned settings, seed and geometry, not duplicated full simulation output. On unsupported/blocked storage, the interface explicitly says **Session only**. Clearing site data or moving to a different origin does not migrate your library. Use History → Back up local data / Restore backup. Do not expect a new Sites preview URL to inherit the old origin's data.
 
+**Offline map data.** A service worker precaches the built application shell from `dist/sw-manifest.json`, so the app opens without a network after one visit. Basemap resources from the OpenFreeMap endpoint are cached as you view them and served cache-first, bounded to 1,500 entries; routing, elevation and search are never cached. Cache Storage is a third store beside IndexedDB and localStorage, and clearing site data removes it too. Settings → Offline map data reports how many resources are cached and clears them. Only the areas you have actually viewed are available offline.
+
 ## Verification and real limitations
 
 See [docs/VERIFICATION.md](docs/VERIFICATION.md) and [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). The creation environment had no Sites tool, no package-network access and a browser that blocked HTTP/file navigation. The source builds and logic tests run locally; UI tests ran in an isolated DOM harness with mocked providers. **A private Sites preview, live road routing, actual MapLibre rendering, hosted CORS/CSP and native IndexedDB reload persistence are not verified here.**
