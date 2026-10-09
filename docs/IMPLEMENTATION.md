@@ -18,6 +18,8 @@ A loop plan (lap count or target distance, plus a start position on the loop) is
 
 Optional GPS noise and dropout are simulation settings resolved at simulate time, not route data: a seeded generator jitters exported coordinates and drops contiguous runs of fixes, so distance and timing keep their true values and a dropout exports as separate track segments rather than a bridged line. Custom splits (an auto interval plus explicit markers) are activity metadata; per-segment time, pace/speed and gain are derived from the simulated samples and are presentation-only, leaving the GPX export unchanged apart from those gaps.
 
+Simulated heart rate is a seeded mean-reverting random walk scaled by the variation setting, combined with a warm-up ramp and a pace/grade response sampled over a 200 m window. The series is mean-centered on the target average, so a saved seed reproduces the trace and a zero variation yields a flat line at the target rather than device-specific noise.
+
 Native TypeScript/DOM was chosen because no Sites scaffold was exposed and React/Vite/MapLibre npm packages could not be retrieved in this network-restricted workspace. This is an explicit change from the brief's preferred React stack, not a claim that React is unsupported by Sites. MapLibre remains the intended actual map renderer. A pinned remote bundle plus optional vendoring is isolated in the map adapter.
 
 All network fixtures live in test code only. Draft/failed waypoint geometry is not promoted to a successful road route. Exported activities always identify synthetic timing. Community map providers are not treated as unlimited free infrastructure.
