@@ -23,7 +23,7 @@ This repository is preconfigured for static Vercel deployment through `vercel.js
 
 ## What is here
 
-MapLibre/OpenFreeMap integration; cancellable and throttled Valhalla pedestrian/bicycle requests; waypoint editing, shaping handles, undo/redo, reverse, out-and-back and close-loop (return to the start); loop planning by lap count or target distance around a closed loop with a start you can drag along the loop and a derived finish; time/pace/speed conversion; smooth deterministic simulation; optional synthetic HR; custom splits (auto interval and markers) with a per-segment table; deterministic simulated GPS noise and signal dropout; GPX, KML and GeoJSON import, GPX export; SVG profiles; IndexedDB history/drafts with an explicitly labeled memory fallback; JSON backup/restore; metric/imperial units; light/dark appearance; mobile settings sheet.
+MapLibre/OpenFreeMap integration; cancellable and throttled Valhalla pedestrian/bicycle requests; waypoint editing, shaping handles, undo/redo, reverse, out-and-back and close-loop (return to the start); loop planning by lap count or target distance around a closed loop with a start you can drag along the loop and a derived finish; time/pace/speed conversion; smooth deterministic simulation; optional synthetic HR; turn-by-turn cue-sheet CSV export; custom splits (auto interval and markers) with a per-segment table; deterministic simulated GPS noise and signal dropout; GPX, KML and GeoJSON import, GPX export; SVG profiles; IndexedDB history/drafts with an explicitly labeled memory fallback; JSON backup/restore; metric/imperial units; light/dark appearance with a matching dark basemap; mobile settings sheet.
 
 There is **no seeded activity, artificial road network, or fake successful routing in the application**. Browser tests use their own synthetic fixtures and mocked provider responses. If the basemap cannot load, a clearly labeled coordinate canvas can display/edit geometry. Failed road routing never promotes a straight waypoint preview into an exportable route.
 
@@ -56,7 +56,9 @@ npm run vendor
 npm run build
 ```
 
-The OpenFreeMap Liberty style, vector tiles, sprites and glyphs remain external. If WebGL or all basemap resources fail, the app shows a labeled coordinate canvas and keeps route editing usable. A single failed tile or glyph does not immediately disable the map.
+The OpenFreeMap Liberty style, and the OpenFreeMap dark style that is selected automatically in dark appearance, keep their vector tiles, sprites and glyphs external. Both style URLs are replaceable in Settings. If WebGL or all basemap resources fail, the app shows a labeled coordinate canvas and keeps route editing usable. A single failed tile or glyph does not immediately disable the map.
+
+Cue-sheet export writes a CSV with start, turn and finish rows. Turns are read from the exported route geometry rather than from street names, so routed, imported and loop-planned routes all produce one.
 
 Nominatim place search is **off by default**. Enable it deliberately only after reading the policy linked in Settings: https://operations.osmfoundation.org/policies/nominatim/. No autocomplete; searches are user-submitted, cached and limited to a small result set. Service requests are queued at least 1.2 seconds apart, with cross-tab coordination where browser APIs permit. Public providers offer no availability guarantee. Before a public release, review current provider terms, notify the Valhalla demo operators as requested in their guidance, and configure a suitable identifying client header if required. Do not deploy this personal-use configuration as a high-volume public service.
 

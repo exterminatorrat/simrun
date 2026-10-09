@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ValhallaProvider,searchPlaces,endpoint} from '../dist/src/providers.js';
-import {defaultPreferences,defaults} from '../dist/src/model.js';
-import {parseBackup,LocalStore} from '../dist/src/storage.js';
+import {defaultPreferences,defaults,mapStyleFor} from '../dist/src/model.js';
+import {parseBackup,LocalStore,validatePreferences} from '../dist/src/storage.js';
 import {downloadActivity} from '../dist/src/gpx.js';
 const encode=p=>{let last=[0,0],out='';for(const q of p){for(const [i,v] of [q.lat,q.lon].entries()){const val=Math.round(v*1e6),diff=val-last[i];last[i]=val;let n=diff<0?~(diff<<1):diff<<1;while(n>=32){out+=String.fromCharCode((32|(n&31))+63);n>>=5;}out+=String.fromCharCode(n+63);}}return out;};
 test('provider rejects credentials and non-HTTPS URLs',()=>{assert.throws(()=>endpoint('http://example.com'));assert.throws(()=>endpoint('https://user:pass@example.com'));assert.throws(()=>endpoint('https://example.com?token=x'));assert.equal(endpoint('https://example.com/route'),'https://example.com/route');});
@@ -12,3 +12,12 @@ test('429 with long Retry-After fails without hammering the provider',async()=>{
 test('backups are sanitized; invalid geometry and versions are rejected',()=>{const a=defaults();a.path=[{lat:0,lon:0},{lat:1,lon:1}];const b=parseBackup(JSON.stringify({product:'SimRun',version:1,activities:[a],preferences:{...defaultPreferences,unknown:'ignored'}}));assert.equal(b.activities[0].id,a.id);assert.equal(b.preferences.unknown,undefined);a.path[0].lat=999;assert.throws(()=>parseBackup(JSON.stringify({product:'SimRun',version:1,activities:[a]})));assert.throws(()=>parseBackup('{"product":"SimRun","version":999,"activities":[]}'));});
 test('memory fallback preserves local-session history with independent duplicate IDs',async()=>{const s=new LocalStore();await assert.rejects(s.open());const a=defaults();await s.save(a);const b={...a,id:'separate',name:'copy'};await s.save(b);assert.equal((await s.list()).length,2);await s.remove(a.id);assert.equal((await s.list())[0].id,'separate');await s.saveDraft(a);assert.equal((await s.readDraft()).id,a.id);});
 test('draft projects cannot be directly exported from restored history',()=>{const a=defaults();a.path=[{lat:0,lon:0},{lat:1,lon:1}];assert.throws(()=>downloadActivity(a),/Resolve the route/);});
+test('light and dark map styles are validated preferences',()=>{
+ assert.equal(defaultPreferences.mapStyleDark,'https://tiles.openfreemap.org/styles/dark');
+ assert.equal(validatePreferences({}).mapStyleDark,defaultPreferences.mapStyleDark);
+ assert.equal(validatePreferences({mapStyleDark:'https://example.com/dark'}).mapStyleDark,'https://example.com/dark');
+ assert.throws(()=>validatePreferences({mapStyleDark:'http://example.com/dark'}));
+ assert.equal(validatePreferences({mapStyle:'https://example.com/light'}).mapStyle,'https://example.com/light');
+ assert.equal(mapStyleFor({...defaultPreferences,theme:'light'}),'https://tiles.openfreemap.org/styles/liberty');
+ assert.equal(mapStyleFor({...defaultPreferences,theme:'dark'}),'https://tiles.openfreemap.org/styles/dark');
+});

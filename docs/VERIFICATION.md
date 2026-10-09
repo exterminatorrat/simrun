@@ -35,3 +35,11 @@ The private Site's initial unpkg-based map could become blank. The renderer now 
 ## Custom splits and GPS simulation (2026-10-09)
 
 Added deterministic GPS noise and dropout plus custom splits. `npm run typecheck`, `npm run build` and **36 Node tests** pass (12 new cases cover noise determinism and bounded coordinates, dropout gaps and strictly increasing timestamps, split boundaries/totals, validation round-trips and multi-`trkseg` export). A headless Chrome run against `npm run dev` imported a 2.17 km GPX route, set 6 m noise and 15% dropout (point count 436 → 356, no console errors), and rendered a 4-row Splits table for a 1 km auto split plus a 1.5 km marker. The basemap stayed on the labeled coordinate fallback because external providers are unreachable here; the new controls are not yet checked in the private Sites preview.
+
+## Dark map style and cue-sheet export (2026-10-09)
+
+- Preferences gained a second style URL, `mapStyleDark` (OpenFreeMap dark), validated through the same HTTPS `endpoint()` rule. The style now follows the appearance; `mapStyleFor` is a pure exported function covered by a Node test.
+- `npm test` passes 44 Node tests after merging the splits/noise work, including 7 new cue-sheet cases (left/right/U-turn classification, straight and two-point routes, CSV structure and column order, unit labels, activity-name escaping, draft refusal) plus the preference validation case.
+- 19 browser checks pass in Chromium over HTTP with mocked providers, including the new cue-sheet download (the actual Blob parsed as CSV) and the separate light/dark style fields in Settings. The three-button inspector footer was inspected at 390px and does not overflow.
+- Cue-sheet output was inspected directly: a counter-clockwise rectangle yields three correct left turns with headings 90/0/270/180, monotonic distances and simulated elapsed times.
+- **Not verified here:** live basemap style switching. This sandbox's browser disables WebGL, so MapLibre never initializes and no OpenFreeMap style or tile request is made; the labeled coordinate canvas is used instead. Confirm the dark basemap against a WebGL-enabled browser in the acceptance checklist.
