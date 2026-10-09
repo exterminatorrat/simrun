@@ -30,5 +30,5 @@
   ],
   "sites": {"target":"ChatGPT Sites", "privatePreviewFirst":true, "runtimeVerified":false, "suggestedHosting":"static-directory"},
   "repository": {"provider":"GitHub", "repo":"exterminatorrat/simrun", "branch":"main"},
-  "handoff": {"document":"CHATGPT-SITES-HANDOFF.md", "buildInfo":"BUILD_INFO.json", "integrity":"SOURCE_HASHES.json", "archive":"simrun-sites-handoff.zip"}
+  "handoff": {"buildInfo":"BUILD_INFO.json", "integrity":"SOURCE_HASHES.json", "archive":"simrun-sites-handoff.zip"}
 }

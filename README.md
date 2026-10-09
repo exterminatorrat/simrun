@@ -3,7 +3,6 @@
 A local-first route editor and **explicitly simulated** GPX activity studio. Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, preview profiles, export simulated activities, and keep a browser-local library. No login, payments, cloud database, analytics, or secrets.
 
 **Canonical source:** https://github.com/exterminatorrat/simrun (private, `main`).
-**Sites agent:** read [CHATGPT-SITES-HANDOFF.md](CHATGPT-SITES-HANDOFF.md) first.
 
 ## Run from source
 
@@ -95,4 +94,4 @@ npm test
 npm run package
 ```
 
-Creates `simrun-sites-handoff.zip` with one `simrun/` root. The packager excludes dependencies, builds, caches, secrets and test outputs; includes a source hash manifest; and resolves Git metadata when available. It refuses a dirty Git checkout. For a connector-verified source copy without `.git`, use `node scripts/package.mjs --commit <verified-source-sha>`. `BUILD_INFO.json` is generated snapshot metadata: its Git SHA names the source commit, avoiding an impossible self-referential commit hash. `SOURCE_DATE_EPOCH` can fix archive creation time for repeatability. See the handoff for private-preview instructions.
+Creates `simrun-sites-handoff.zip` with one `simrun/` root. The packager excludes dependencies, builds, caches, secrets and test outputs; includes a source hash manifest; and resolves Git metadata when available. It refuses a dirty Git checkout. For a connector-verified source copy without `.git`, use `node scripts/package.mjs --commit <verified-source-sha>`. `BUILD_INFO.json` is generated snapshot metadata: its Git SHA names the source commit, avoiding an impossible self-referential commit hash. `SOURCE_DATE_EPOCH` can fix archive creation time for repeatability.
