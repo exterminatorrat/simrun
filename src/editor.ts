@@ -49,6 +49,7 @@ export class Editor {
  }
  setPauses(p:Pauses|null):void {if(p===null){if(this.activity.pauses){delete this.activity.pauses;this.notify();}return;}this.activity.pauses={rests:p.rests};this.notify();}
  setWorkout(w:Workout|null):void {if(w===null){if(this.activity.workout){delete this.activity.workout;this.notify();}return;}this.activity.workout=w;this.notify();}
+ setTags(tags:string[]|undefined):void {if(tags&&tags.length)this.activity.tags=tags;else delete this.activity.tags;this.notify();}
  setSplits(plan:Partial<Splits>|null):void {
   if(plan===null){if(this.activity.splits){delete this.activity.splits;this.notify();}return;}
   const base=this.activity.splits??{auto:0,markers:[]},next={...base,...plan};

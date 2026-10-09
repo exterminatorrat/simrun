@@ -33,3 +33,6 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 .zone-list,.hist-list{display:grid;gap:4px;margin-top:6px}
 .zone-row,.hist-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;opacity:.85}
 .zone-row span:last-child,.hist-row span:last-child{font-variant-numeric:tabular-nums}
+
+.history-controls{display:flex;gap:8px;margin:8px 0}
+.history-controls input{flex:1}
