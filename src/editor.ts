@@ -1,4 +1,4 @@
-import type {Activity,LoopPlan,Point,RouteSource,Settings} from './types.js';
+import type {Activity,LoopPlan,Point,RouteSource,Settings,Splits} from './types.js';
 import {defaults} from './model.js';
 import {closeLoop,cumulative,distance,isClosedLoop,nearestOnPath,outAndBack,validPoint} from './geometry.js';
 import type {RoutingProvider} from './providers.js';
@@ -46,6 +46,14 @@ export class Editor {
   if(!plan){this.setLoop({mode,value:mode==='laps'?1:Math.max(1,Math.round(total))});return;}
   if(plan.mode===mode)return;
   this.setLoop({mode,value:mode==='laps'?Math.max(.25,Math.round(plan.value/total*4)/4):Math.round(plan.value*total)});
+ }
+ setSplits(plan:Partial<Splits>|null):void {
+  if(plan===null){if(this.activity.splits){delete this.activity.splits;this.notify();}return;}
+  const base=this.activity.splits??{auto:0,markers:[]},next={...base,...plan};
+  if(!Number.isFinite(next.auto)||next.auto<0){this.onMessage('Enter an auto-split distance of zero or more.');return;}
+  const markers=[...new Set((next.markers??[]).filter(m=>Number.isFinite(m)&&m>0))].sort((x,y)=>x-y);
+  if(markers.length>200){this.onMessage('Use at most 200 split markers.');return;}
+  this.activity.splits={auto:next.auto,markers};this.notify();
  }
  undo(){const s=this.past.pop();if(!s)return;this.future.push(this.snapshot());this.restore(s);}
  redo(){const s=this.future.pop();if(!s)return;this.past.push(this.snapshot());this.restore(s);}
