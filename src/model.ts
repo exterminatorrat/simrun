@@ -1,6 +1,7 @@
 import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preferences,Split,Splits,WeatherPreset,WeatherSim,PowerSim,CadenceSim,FatigueSim,Workout,WorkoutStep,Pauses} from './types.js';
 import {atDistance,clamp,cumulative,elevationStats,isClosedLoop,loopPath,lowerBound,rotatedLoop,validPoint,wrapLon} from './geometry.js';
 import {newId} from './id.js';
+import {expandWorkout,stepAt} from './workout.js';
 export const PRODUCT='SimRun';
 export const MAX_LOOP_LAPS=20000,MAX_LOOP_DISTANCE=5000000,MAX_LOOP_POINTS=100000;
 export const WEATHER_PRESETS:Record<WeatherPreset,{label:string;tempC:number;humidity:number;headwindKph:number}>={ideal:{label:'Ideal',tempC:15,humidity:50,headwindKph:0},cool:{label:'Cool',tempC:6,humidity:60,headwindKph:3},mild:{label:'Mild',tempC:18,humidity:55,headwindKph:5},warm:{label:'Warm',tempC:26,humidity:50,headwindKph:5},hot:{label:'Hot',tempC:34,humidity:30,headwindKph:4},humid:{label:'Humid',tempC:28,humidity:85,headwindKph:3},windy:{label:'Windy',tempC:16,humidity:55,headwindKph:22}};
@@ -124,7 +125,9 @@ export function simulate(a:Activity):Simulation {
  if(total<1||total>5000000)throw Error('Route must be between 1 meter and 5,000 km.');
  const duration=durationFor(total,s.sport,s.pace,s.speed);
  if(duration<.01||duration>604800)throw Error('Activity duration must be between 0.01 seconds and 7 days.');
- const durationMs=Math.max(1,Math.round(duration*1000*weatherFactor(s.weather))),start=startTime(s);
+ const steps=a.workout?expandWorkout(a.workout,total):null;
+ const baseMs=steps?steps.reduce((n,st)=>n+durationFor(st.end-st.start,s.sport,st.step.pace??s.pace,st.step.speed??s.speed)*1000,0):duration*1000;
+ const durationMs=Math.max(1,Math.round(baseMs*weatherFactor(s.weather))),start=startTime(s);
  const n=Math.min(40000,Math.max(2,Math.ceil(total/10))),times=[0],ds=total/n;
  const phase=(s.seed%997)/997*Math.PI*2;
  const waveAt=(d:number)=>.62*Math.sin(d/430+phase)+.27*Math.sin(d/180+phase*.7)+.11*Math.sin(d/70);
@@ -135,7 +138,9 @@ export function simulate(a:Activity):Simulation {
   const d=(i+.5)*ds;
   const grade=gradeAt(d),terrain=grade>0?grade*2:grade*1.1;
   const fatigue=s.fatigue?1+s.fatigue.percent/100*(i/n):1;
-  const w=s.mode==='natural'?clamp((1+s.variation*waveAt(d)+terrain)*fatigue,.65,1.4):1;
+  const step=steps?stepAt(steps,d):null;
+  const paceFactor=s.sport==='run'?(step&&step.step.pace&&s.pace>0?step.step.pace/s.pace:1):(step&&step.step.speed&&step.step.speed>0?s.speed/step.step.speed:1);
+  const w=s.mode==='natural'?clamp((1+s.variation*waveAt(d)+terrain)*fatigue*paceFactor,.65,1.4):paceFactor;
   weights.push(w);times.push(times[i]+w*ds);
  }
  const raw=times[n];for(let i=1;i<times.length;i++)times[i]=times[i]/raw*durationMs;
@@ -158,7 +163,8 @@ export function simulate(a:Activity):Simulation {
    const lo=Math.max(0,p.distance-100),hi=Math.min(total,p.distance+100),a=atDistance(route,c,lo),b=atDistance(route,c,hi);
    const grade=Number.isFinite(a.ele)&&Number.isFinite(b.ele)?clamp((b.ele!-a.ele!)/(hi-lo),-.15,.15):0;
    const drift=Math.min(s.hrVariation*3,s.hrVariation*.03*Math.max(0,t-600)/60)*weatherHeat(s.weather);
-   raw.push(walk+s.hrVariation*(2.4*ratio+16*grade)+(rest-s.hrAverage)*Math.exp(-t/50)+drift);
+   const hrTarget=steps?stepAt(steps,p.distance)?.step.hr:undefined;
+   raw.push(walk+s.hrVariation*(2.4*ratio+16*grade)+(rest-s.hrAverage)*Math.exp(-t/50)+drift+(hrTarget!==undefined?hrTarget-s.hrAverage:0));
   });
   let sum=0;for(let i=1;i<points.length;i++)sum+=(raw[i]+raw[i-1])/2*(points[i].time-points[i-1].time);
   const mean=sum/durationMs;
@@ -234,6 +240,7 @@ export function splitBoundaries(a:Activity,total:number):number[] {
  const values=[0],auto=a.splits?.auto??0;
  if(auto>0)for(let d=auto;d<total-1e-6;d+=auto)values.push(d);
  for(const m of a.splits?.markers??[])if(m>0&&m<total-1e-6)values.push(m);
+ if(a.workout)for(const st of expandWorkout(a.workout,total))if(st.end>0&&st.end<total-1e-6)values.push(st.end);
  values.push(total);
  const out:number[]=[];
  for(const v of values.sort((x,y)=>x-y))if(!out.length||v-out[out.length-1]>1e-6)out.push(v);

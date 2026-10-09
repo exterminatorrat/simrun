@@ -57,6 +57,7 @@ function render():void {
  setInput('splits-auto',a.splits&&a.splits.auto>0?distanceValue(a.splits.auto):'');
  setInput('splits-markers',(a.splits?.markers??[]).map(m=>distanceValue(m)).join(', '));
  const rests=a.pauses?.rests??[];setText('pauses-count',rests.length?String(rests.length):'—');setText('pauses-unit',unit);setInput('pauses-rests',rests.map(r=>`${distanceValue(r.distance)}:${r.seconds}`).join(', '));$('pauses-clear').hidden=!rests.length;
+ const wsteps=a.workout?.steps??[];setText('workout-count',wsteps.length?String(wsteps.length):'—');setText('workout-unit',unit);setInput('workout-steps',wsteps.map(st=>`${distanceValue(st.distance)}:${s.sport==='run'?(st.pace!==undefined?clock(st.pace):''):(st.speed!==undefined?st.speed:'')}`).join(', '));$('workout-clear').hidden=!wsteps.length;
  $('splits-clear').hidden=!hasSplits;
  const splitTable=$('splits-table');splitTable.replaceChildren();
  if(sim&&hasSplits){
@@ -112,6 +113,8 @@ change('cadence-enabled',e=>updateSettings({cadence:{enabled:e.checked}}));
 change('fatigue',e=>updateSettings({fatigue:{percent:Number(e.value)}}));
 change('pauses-rests',e=>{const raw=e.value.trim();if(!raw){editor.setPauses(null);return;}const factor=preferences.units==='imperial'?1609.344:1000;const rests=raw.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{const parts=v.split(':');const dm=Number(parts[0]),sec=Number(parts[1]);if(!Number.isFinite(dm)||dm<=0||!Number.isFinite(sec)||sec<=0)throw Error(`Invalid rest stop: ${v}. Use distance:seconds.`);return {distance:dm*factor,seconds:sec};});editor.setPauses({rests});});
 on('pauses-clear',()=>editor.setPauses(null));
+change('workout-steps',e=>{const raw=e.value.trim();if(!raw){editor.setWorkout(null);return;}const factor=preferences.units==='imperial'?1609.344:1000,run=editor.activity.settings.sport==='run';const steps=raw.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{const i=v.indexOf(':');const d=Number(v.slice(0,i)),rest=v.slice(i+1);if(!(d>0))throw Error(`Invalid workout step: ${v}. Use distance:target.`);const step:{kind:'work';distance:number;pace?:number;speed?:number}={kind:'work',distance:d*factor};if(run){const pace=parseClock(rest);if(!(pace>0))throw Error(`Invalid pace: ${rest}.`);step.pace=pace;}else{const speed=Number(rest);if(!(speed>0))throw Error(`Invalid speed: ${rest}.`);step.speed=speed;}return step;});editor.setWorkout({steps});});
+on('workout-clear',()=>editor.setWorkout(null));
 change('splits-auto',e=>{if(e.value.trim()===''){editor.setSplits({auto:0});return;}const raw=Number(e.value);if(!Number.isFinite(raw)||raw<0)throw Error('Enter an auto-split distance of zero or more.');editor.setSplits({auto:raw*(preferences.units==='imperial'?1609.344:1000)});});
 change('splits-markers',e=>{const markers=e.value.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{const n=Number(v);if(!Number.isFinite(n)||n<=0)throw Error(`Invalid split marker: ${v}`);return n*(preferences.units==='imperial'?1609.344:1000);});editor.setSplits({markers});});
 on('save',async()=>{validRoute();await store.save(editor.activity);toast(store.available?'Saved to your local route library.':'Kept for this session only. Export a backup before closing.');});
