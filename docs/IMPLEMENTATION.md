@@ -21,3 +21,7 @@ Native TypeScript/DOM was chosen because no Sites scaffold was exposed and React
 All network fixtures live in test code only. Draft/failed waypoint geometry is not promoted to a successful road route. Exported activities always identify synthetic timing. Community map providers are not treated as unlimited free infrastructure.
 
 See README and the agent handoff for current limitations and deployment instructions.
+
+## Offline cache
+
+`npm run build` writes `dist/sw-manifest.json`, listing every built file except the service worker itself, so the precache list cannot drift from the build. `public/sw.js` precaches that list into a shell cache whose name is derived from the manifest contents, which makes a new deploy install a new cache and prune the previous one. Basemap resources from the OpenFreeMap host are cached as they are viewed, cache-first and bounded to 1,500 entries; routing, elevation and geocoding responses are deliberately left to the network. The interface reads the entry count and clears the basemap cache over a `MessageChannel`; `src/sw.ts` owns registration and that messaging and no-ops where service workers or a secure context are unavailable.

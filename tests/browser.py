@@ -130,7 +130,9 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   passed('Routing failure blocks stale export and retry recovers')
   page.locator('#search').fill('31.2304, 121.4737');page.locator('#search-form').evaluate('(f)=>f.requestSubmit()');expect(page.locator('#search-results')).to_be_visible();page.locator('#search-results button').first.click()
   passed('Coordinate search works without enabling geocoding')
-  page.locator('#history').click();page.locator('#backup').click();page.wait_for_timeout(50)
+  page.locator('#history').click()
+  downloads=page.evaluate('window.testDownloads.length');page.locator('#backup').click()
+  page.wait_for_function('(n)=>window.testDownloads.length>n',arg=downloads,timeout=10000);page.wait_for_timeout(50)
   backup=page.evaluate('async()=>await window.testDownloads.at(-1)');data=json.loads(backup);assert data['product']=='SimRun' and len(data['activities'])>=2
   page.locator('#history-dialog [data-close]').click();page.locator('#settings').click();page.locator('#units').select_option('imperial');page.locator('#theme').select_option('dark');page.locator('#preferences-form').evaluate('(f)=>f.requestSubmit()');expect(page.locator('#distance')).to_contain_text('mi');assert page.locator('html').get_attribute('data-theme')=='dark'
   passed('Backup output, imperial conversion and dark appearance')
@@ -140,6 +142,30 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   else:
    page.locator('#save').click();page.wait_for_timeout(500);name=page.locator('#activity-name').input_value();page.reload();expect(page.locator('#activity-name')).to_have_value(name);page.locator('#history').click();expect(page.locator('.history-row')).to_have_count(2)
    passed('Native IndexedDB draft and history survive reload')
+  if not args.isolated:
+   page.locator('#history-dialog [data-close]').click()
+   page.wait_for_function('()=>!!navigator.serviceWorker.controller',timeout=20000)
+   page.wait_for_timeout(400)
+   shell_files=page.evaluate("async()=>{const n=(await caches.keys()).find(k=>k.startsWith('simrun-shell-'));return n?(await (await caches.open(n)).keys()).length:0}")
+   assert shell_files>=8,shell_files
+   seeded=page.evaluate("""async()=>{
+    const cache=await caches.open('simrun-map-v1');
+    await cache.put('https://tiles.openfreemap.org/styles/dark',new Response('{}',{headers:{'Content-Type':'application/json'}}));
+    return (await cache.keys()).length;
+   }""")
+   assert seeded>=1,seeded
+   passed('The service worker precaches the app shell and exposes a bounded basemap cache')
+   page.locator('#settings').click()
+   expect(page.locator('#offline-status')).to_contain_text('of up to')
+   page.locator('#offline-clear').click()
+   expect(page.locator('#offline-status')).to_contain_text('No basemap resources cached')
+   page.locator('#settings-dialog [data-close]').click()
+   passed('Settings report and clear cached basemap data')
+   context.set_offline(True)
+   page.reload()
+   expect(page.locator('.brand')).to_contain_text('SimRun')
+   context.set_offline(False)
+   passed('The app shell reloads offline from the cache')
   assert not errors,errors
   passed('No uncaught JavaScript exceptions throughout tested interactions')
   print(json.dumps({'passed':len(results),'mode':'isolated DOM; mocked providers; no native persistence' if args.isolated else 'HTTP; mocked providers','checks':results},indent=2))
