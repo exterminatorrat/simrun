@@ -7,7 +7,7 @@ const root=resolve('dist');
 const args=process.argv.slice(2);
 const value=(flag,fallback)=>args.includes(flag)?args[args.indexOf(flag)+1]:fallback;
 const port=Number(value('--port',process.env.PORT || 5173));
-const types={'.js':'text/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.json':'application/json'};
+const types={'.js':'text/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.json':'application/json','.png':'image/png','.jpg':'image/jpeg'};
 http.createServer(async (req,res)=>{
   try {
     const pathname=decodeURIComponent(new URL(req.url,'http://local').pathname);
