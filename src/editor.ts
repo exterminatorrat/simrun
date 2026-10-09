@@ -24,8 +24,10 @@ export class Editor {
  clear(){this.checkpoint();this.invalidate();this.activity.path=[];this.activity.waypoints=[];this.activity.source='draft';this.selected=-1;this.status='Click the map to begin.';this.notify();}
  reverse(){if(this.activity.source==='imported'){this.checkpoint();this.activity.path=[...this.activity.path].reverse();this.notify();}else this.edit([...this.activity.waypoints].reverse());}
  outAndBack(){if(this.activity.source==='imported'){this.checkpoint();this.activity.path=outAndBack(this.activity.path);this.notify();}else this.edit(outAndBack(this.activity.waypoints));}
- closeLoop(){if(this.activity.source==='imported'){this.onMessage('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}const points=this.activity.waypoints;if(points.length<2){this.onMessage('Add at least two waypoints before closing a loop.');return;}if(distance(points[0],points[points.length-1])<=5){this.onMessage('This route already returns to its start.');return;}this.edit(closeLoop(points));}
+ closeLoop(){if(this.activity.source==='imported'){this.onMessage('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}const points=this.activity.waypoints;if(points.length<2){this.onMessage('Add at least two waypoints before closing a loop.');return;}if(this.waypointsClosed()){this.onMessage('This route already returns to its start.');return;}this.edit(closeLoop(points));}
  private loopLength():number{return this.activity.path.length>1?cumulative(this.activity.path).at(-1)??0:0;}
+ private waypointsClosed():boolean{const w=this.activity.waypoints;return w.length>=2&&distance(w[0],w[w.length-1])<=5;}
+ private closeRoutedPath(path:Point[]):Point[]{if(!path.length||!this.waypointsClosed()||isClosedLoop(path))return path;return [...path,path[0]];}
  startFor(index:number):number|null {
   if(!isClosedLoop(this.activity.path))return null;
   const p=this.activity.waypoints[index],total=this.loopLength();if(!p||!(total>0))return null;
@@ -55,8 +57,8 @@ export class Editor {
    const controller=new AbortController();this.controller=controller;
    try{
     const path=await this.provider.route(this.activity.waypoints,this.activity.settings.sport,controller.signal);
-    if(n!==this.sequence)return;this.activity.path=path;this.activity.source='routed';this.pending=false;this.status='Route ready · loading elevation';this.notify();
-    try{const elevated=await this.provider.elevation(path,controller.signal);if(n!==this.sequence)return;this.activity.path=elevated;this.status='Route ready';this.notify();}
+    if(n!==this.sequence)return;const routed=this.closeRoutedPath(path);this.activity.path=routed;this.activity.source='routed';this.pending=false;this.status='Route ready · loading elevation';this.notify();
+    try{const elevated=await this.provider.elevation(routed,controller.signal);if(n!==this.sequence)return;this.activity.path=elevated;this.status='Route ready';this.notify();}
     catch(error){if(n!==this.sequence)return;this.status='Route ready · elevation unavailable';this.notify();}
    }catch(error){if(n!==this.sequence)return;this.pending=false;this.status='Route unavailable · move a point or retry';this.onMessage(error instanceof Error?error.message:'Route unavailable.');this.notify();}
   },450);
