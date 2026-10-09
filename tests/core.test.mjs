@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {distance, cumulative, atDistance, elevationStats, outAndBack, closeLoop, isClosedLoop, loopPath, rotatedLoop, nearestOnPath} from '../dist/src/geometry.js';
-import {defaults, simulate, durationFor, parseClock, clock, validateActivity, loopPlan, plannedPath} from '../dist/src/model.js';
+import {defaults, simulate, durationFor, parseClock, clock, validateActivity, loopPlan, plannedPath, computeSplits, splitBoundaries} from '../dist/src/model.js';
 import {exportGPX, safeFilename} from '../dist/src/gpx.js';
 const path=[{lon:0,lat:0,ele:10},{lon:0.045,lat:0,ele:20}];
 test('geodesic distance and interpolation',()=>{assert.ok(Math.abs(distance(path[0],path[1])-5003.78)<1);let c=cumulative(path);assert.ok(Math.abs(atDistance(path,c,c.at(-1)/2).lon-.0225)<1e-6);});
@@ -45,3 +45,50 @@ test('antimeridian interpolation takes short path',()=>{const p=[{lat:0,lon:179}
 test('HR-off simulation never leaks imported heart-rate readings',()=>{let a=defaults();a.path=path.map(p=>({...p,hr:155}));a.source='imported';a.settings.hrEnabled=false;assert.ok(simulate(a).points.every(p=>p.hr===undefined));});
 test('small fractional last samples stay strictly increasing',()=>{let a=defaults();a.path=[{lat:0,lon:0},{lat:0,lon:0.000001}];assert.throws(()=>simulate(a));a.path=[{lat:0,lon:0},{lat:0,lon:0.00002}];assert.ok(simulate(a).points.length>=2);});
 test('HR mean approximately matches target and changes smoothly',()=>{let a=defaults();a.path=path;a.settings.hrEnabled=true;a.settings.mode='natural';const s=simulate(a);let sum=0;for(let i=1;i<s.points.length;i++){sum+=(s.points[i].hr+s.points[i-1].hr)/2*(s.points[i].time-s.points[i-1].time);assert.ok(Math.abs(s.points[i].hr-s.points[i-1].hr)<=1);}assert.ok(Math.abs(sum/(s.duration*1000)-a.settings.hrAverage)<.6);});
+test('GPS noise is deterministic, keeps true distance and shifts coordinates',()=>{
+ let a=defaults();a.path=path;a.settings.seed=12345;a.settings.gps={noise:8,dropout:0};
+ const s=simulate(a);assert.deepEqual(s,simulate(a));
+ assert.ok(Math.abs(s.distance-5003.78)<1);
+ assert.ok(s.points.every(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon)));
+ assert.ok(s.points.some(p=>Math.abs(p.lat)>1e-9));
+ const clean=simulate({...a,settings:{...a.settings,gps:{noise:0,dropout:0}}});
+ assert.deepEqual(s.points.map(p=>p.time),clean.points.map(p=>p.time));
+ assert.ok(s.points.some((p,i)=>Math.abs(p.lat-clean.points[i].lat)>1e-9));
+});
+test('GPS dropout removes fixes into gaps and stays deterministic',()=>{
+ let a=defaults();a.path=path;a.settings.seed=12345;a.settings.sample=1;a.settings.gps={noise:0,dropout:.4};
+ const s=simulate(a),full=simulate({...a,settings:{...a.settings,gps:{noise:0,dropout:0}}});
+ assert.deepEqual(s,simulate(a));
+ assert.ok(s.points.length>=2&&s.points.length<full.points.length);
+ assert.ok(s.points.every((p,i)=>i===0||p.time>s.points[i-1].time));
+ const gap=Math.max(...s.points.map((p,i)=>i?p.time-s.points[i-1].time:0));
+ assert.ok(gap>2*s.interval*1000);
+});
+test('splits honour auto intervals and custom markers',()=>{
+ let a=defaults();a.path=path;a.settings.seed=7;a.settings.gps={noise:0,dropout:0};
+ const s=simulate(a);a.splits={auto:1000,markers:[2500]};
+ const bounds=splitBoundaries(a,s.distance);
+ assert.equal(bounds[0],0);assert.equal(bounds.at(-1),s.distance);
+ assert.ok(bounds.every((v,i)=>i===0||v>bounds[i-1]));
+ assert.ok(bounds.includes(1000)&&bounds.includes(2500));
+ const splits=computeSplits(a,s);
+ assert.equal(splits.length,bounds.length-1);
+ assert.ok(splits.every(sp=>sp.distance>0&&sp.duration>0));
+ assert.ok(Math.abs(splits.reduce((n,sp)=>n+sp.duration,0)-s.duration)<.5);
+ assert.ok(Math.abs(splits.reduce((n,sp)=>n+sp.distance,0)-s.distance)<1);
+});
+test('GPS and split settings validate and round-trip',()=>{
+ const a=defaults();a.path=path;a.settings.gps={noise:5,dropout:.2};a.splits={auto:1000,markers:[2500,2500,500]};
+ const clean=validateActivity(a);
+ assert.deepEqual(clean.settings.gps,{noise:5,dropout:.2});
+ assert.deepEqual(clean.splits,{auto:1000,markers:[500,2500]});
+ assert.equal(validateActivity({...a,splits:undefined}).splits,undefined);
+ for(const gps of [{noise:-1,dropout:0},{noise:0,dropout:.9},{noise:100,dropout:0}])assert.throws(()=>validateActivity({...a,settings:{...a.settings,gps}}));
+ for(const splits of [{auto:-1,markers:[]},{auto:0,markers:[0]},{auto:0,markers:[6000000]}])assert.throws(()=>validateActivity({...a,splits}));
+});
+test('GPX export splits a dropout into separate track segments',()=>{
+ let a=defaults();a.path=path;a.source='routed';a.settings.seed=12345;a.settings.sample=1;a.settings.gps={noise:0,dropout:.4};
+ const xml=exportGPX(a,simulate(a));
+ assert.ok((xml.match(/<trkseg>/g)||[]).length>1);
+ assert.ok(xml.includes('simulated GPS noise'));
+});
