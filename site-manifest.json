@@ -24,7 +24,7 @@
   "externalServices": [
     {"purpose":"map", "provider":"OpenFreeMap / OpenStreetMap / OpenMapTiles", "endpoint":"https://tiles.openfreemap.org/styles/liberty", "replaceable":true},
     {"purpose":"map-renderer-assets", "provider":"MapLibre GL JS 5.6.1", "endpoint":"./vendor/maplibre-gl-csp.js", "worker":"./vendor/maplibre-gl-csp-worker.js", "bundled":true, "refreshCommand":"npm run vendor"},
-    {"purpose":"routing", "provider":"FOSSGIS public Valhalla", "endpoint":"https://valhalla1.openstreetmap.de/route", "replaceable":true},
+    {"purpose":"routing", "provider":"FOSSGIS public Valhalla", "endpoint":"https://valhalla1.openstreetmap.de/route", "replaceable":true, "limit":"100 km pedestrian / 150 km bicycle per route; see docs/SELF-HOST-VALHALLA.md"},
     {"purpose":"elevation", "provider":"FOSSGIS public Valhalla", "endpoint":"https://valhalla1.openstreetmap.de/height", "replaceable":true},
     {"purpose":"geocoding", "provider":"Public Nominatim", "endpoint":"https://nominatim.openstreetmap.org/search", "replaceable":true, "enabledByDefault":false, "policy":"https://operations.osmfoundation.org/policies/nominatim/"}
   ],
