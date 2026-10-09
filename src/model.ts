@@ -109,13 +109,13 @@ export function simulate(a:Activity):Simulation {
  if(s.hrEnabled){
   const avgSpeed=total/(durationMs/1000),next=gpsRandom(s.seed^0x27d4eb2f),step=intervalMs/1000;
   const phi=Math.exp(-step/25),sigma=s.hrVariation*.55,gauss=()=>{const u=Math.max(1e-9,next());return Math.sqrt(-2*Math.log(u))*Math.cos(next()*Math.PI*2);};
-  const raw:number[]=[];let walk=0;
+  const rest=Math.min(90,s.hrAverage),raw:number[]=[];let walk=0;
   points.forEach(p=>{
    walk=walk*phi+sigma*Math.sqrt(1-phi*phi)*gauss();
    const t=(p.time-start)/1000,ratio=clamp(p.speed/avgSpeed-1,-.4,.4);
    const lo=Math.max(0,p.distance-100),hi=Math.min(total,p.distance+100),a=atDistance(route,c,lo),b=atDistance(route,c,hi);
    const grade=Number.isFinite(a.ele)&&Number.isFinite(b.ele)?clamp((b.ele!-a.ele!)/(hi-lo),-.15,.15):0;
-   raw.push(walk+s.hrVariation*(2.4*ratio+16*grade)-Math.min(14,s.hrVariation*2)*Math.exp(-t/150));
+   raw.push(walk+s.hrVariation*(2.4*ratio+16*grade)+(rest-s.hrAverage)*Math.exp(-t/50));
   });
   let sum=0;for(let i=1;i<points.length;i++)sum+=(raw[i]+raw[i-1])/2*(points[i].time-points[i-1].time);
   const mean=sum/durationMs;
