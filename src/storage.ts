@@ -4,7 +4,7 @@ import {endpoint} from './providers.js';
 export function readPreferences():Preferences {try{return validatePreferences(JSON.parse(localStorage.getItem('simrun-preferences')||'{}'));}catch{return {...defaultPreferences};}}
 export function validatePreferences(value:unknown):Preferences {
  const p=value&&typeof value==='object'?value as Partial<Preferences>:{};
- return {units:p.units==='imperial'?'imperial':'metric',theme:p.theme==='dark'?'dark':'light',geocodingEnabled:p.geocodingEnabled===true,mapStyle:p.mapStyle?endpoint(p.mapStyle):defaultPreferences.mapStyle,routingUrl:p.routingUrl?endpoint(p.routingUrl):defaultPreferences.routingUrl,elevationUrl:p.elevationUrl?endpoint(p.elevationUrl):defaultPreferences.elevationUrl,geocodingUrl:p.geocodingUrl?endpoint(p.geocodingUrl):defaultPreferences.geocodingUrl};
+ return {units:p.units==='imperial'?'imperial':'metric',theme:p.theme==='dark'?'dark':'light',geocodingEnabled:p.geocodingEnabled===true,mapStyle:p.mapStyle?endpoint(p.mapStyle):defaultPreferences.mapStyle,mapStyleDark:p.mapStyleDark?endpoint(p.mapStyleDark):defaultPreferences.mapStyleDark,routingUrl:p.routingUrl?endpoint(p.routingUrl):defaultPreferences.routingUrl,elevationUrl:p.elevationUrl?endpoint(p.elevationUrl):defaultPreferences.elevationUrl,geocodingUrl:p.geocodingUrl?endpoint(p.geocodingUrl):defaultPreferences.geocodingUrl};
 }
 export function writePreferences(p:Preferences):void {localStorage.setItem('simrun-preferences',JSON.stringify(p));}
 export class LocalStore {

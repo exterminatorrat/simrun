@@ -9,5 +9,6 @@ prebuilt/
 verification/
 playwright-report/
 test-results/
+__pycache__/
 *.log
 .vercel

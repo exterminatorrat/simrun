@@ -13,5 +13,5 @@ export interface Activity {
 }
 export interface Sample extends Point { time:number; distance:number; speed:number }
 export interface Simulation { points:Sample[]; duration:number; distance:number; interval:number }
-export interface Preferences {units:'metric'|'imperial'; theme:'light'|'dark'; mapStyle:string; routingUrl:string; elevationUrl:string; geocodingUrl:string; geocodingEnabled:boolean }
+export interface Preferences {units:'metric'|'imperial'; theme:'light'|'dark'; mapStyle:string; mapStyleDark:string; routingUrl:string; elevationUrl:string; geocodingUrl:string; geocodingEnabled:boolean }
 export interface ElevationStats {gain:number|null;loss:number|null;min:number|null;max:number|null}
