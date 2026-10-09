@@ -115,7 +115,8 @@ export function simulate(a:Activity):Simulation {
    const t=(p.time-start)/1000,ratio=clamp(p.speed/avgSpeed-1,-.4,.4);
    const lo=Math.max(0,p.distance-100),hi=Math.min(total,p.distance+100),a=atDistance(route,c,lo),b=atDistance(route,c,hi);
    const grade=Number.isFinite(a.ele)&&Number.isFinite(b.ele)?clamp((b.ele!-a.ele!)/(hi-lo),-.15,.15):0;
-   raw.push(walk+s.hrVariation*(2.4*ratio+16*grade)+(rest-s.hrAverage)*Math.exp(-t/50));
+   const drift=Math.min(s.hrVariation*3,s.hrVariation*.03*Math.max(0,t-600)/60);
+   raw.push(walk+s.hrVariation*(2.4*ratio+16*grade)+(rest-s.hrAverage)*Math.exp(-t/50)+drift);
   });
   let sum=0;for(let i=1;i<points.length;i++)sum+=(raw[i]+raw[i-1])/2*(points[i].time-points[i-1].time);
   const mean=sum/durationMs;
