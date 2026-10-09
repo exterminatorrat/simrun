@@ -9,6 +9,20 @@ export function localInput(date=new Date()):string{return new Date(date.getTime(
 export function defaults():Activity {
  const now=Date.now();return {id:newId(),version:1,name:`${new Date().getHours()<12?'Morning':new Date().getHours()<18?'Afternoon':'Evening'} run`,createdAt:now,updatedAt:now,waypoints:[],path:[],source:'draft',settings:{sport:'run',start:localInput(),utcOffset:-new Date().getTimezoneOffset(),pace:300,speed:24,mode:'constant',variation:.06,sample:2,hrEnabled:false,hrAverage:150,hrVariation:5,seed:Math.floor(Math.random()*1000000)}};
 }
+/** Builds an imported activity from retained geometry. Missing or non-increasing timestamps never fabricate timing. */
+export function importedActivity(points:Point[],name:string,typeText:string,label='Imported'):{activity:Activity;notices:string[]} {
+ const a=defaults();a.path=points;a.source='imported';a.waypoints=[];
+ a.name=((name||'').trim()||'Imported activity').slice(0,160);
+ if(/cycl|bik|ride/i.test(typeText))a.settings.sport='ride';
+ const c=cumulative(points),d=c[c.length-1];if(d<1)throw Error(`${label} route is shorter than one meter.`);
+ const notices:string[]=[];
+ const timed=points.every((p,i)=>p.time!==undefined&&(i===0||p.time>points[i-1].time!));
+ if(timed){const date=new Date(points[0].time!);a.settings.start=localInput(date);a.settings.utcOffset=-date.getTimezoneOffset();const duration=(points[points.length-1].time!-points[0].time!)/1000;const pace=duration/(d/1000),speed=d/1000/duration*3600;
+  if(pace>=60&&pace<=3600)a.settings.pace=pace;if(speed>=1&&speed<=150)a.settings.speed=speed;
+ }else notices.push('Original timestamps were missing or not increasing; new timing uses the activity settings.');
+ notices.push('Geometry retained. Exports are explicitly resimulated, not original recordings.');
+ return {activity:a,notices};
+}
 export function durationFor(meters:number,sport:Sport,pace:number,speed:number):number{return sport==='run'?meters/1000*pace:meters/1000/speed*3600;}
 export function clock(value:number):string {const n=Math.max(0,Math.round(value)),h=Math.floor(n/3600),m=Math.floor(n%3600/60),s=n%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;}
 export function parseClock(s:string):number {

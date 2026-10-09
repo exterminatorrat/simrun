@@ -25,3 +25,9 @@ The packaging script writes an allowlisted, sorted source archive, resolves sour
 ## Sites compatibility update (2026-09-27)
 
 The private Site's initial unpkg-based map could become blank. The renderer now ships a pinned local MapLibre CSP build, worker, CSS and license. The coordinate canvas stays over the renderer until real vector features appear and returns when the basemap as a whole stops rendering; ordinary isolated tile/glyph errors are tolerated. The managed HTTP preview also uses a secure random ID fallback where `crypto.randomUUID` is unavailable. The 24 Node tests pass. In the managed browser, WebGL context creation is disabled, so the real basemap could not be verified there. The coordinate fallback, coordinate search, waypoint creation, native local storage and live Valhalla routing worked. A direct request to the hosted HTML showed no CSP header; the OpenFreeMap Liberty style, a Shanghai vector tile, sprite JSON/PNG and glyph PBF responded with CORS `*`. These HTTP checks do not prove browser WebGL rendering or 30-second stability in a WebGL-enabled browser. Rerun the acceptance checklist there before claiming the visual map is fixed.
+
+## KML/GeoJSON import (2026-10-09)
+
+- Added `src/import.ts` for KML (LineString and gx:Track coordinates) and GeoJSON (LineString/MultiLineString, bare geometry or FeatureCollection). The GPX import builder moved to `model.importedActivity` and is shared, so GPX, KML and GeoJSON keep the largest continuous segment and never invent connecting paths. Files without timestamps fall back to the activity timing settings.
+- `npm test` passes 36 Node tests, including 5 new cases for GeoJSON import, KML coordinate parsing and file dispatch.
+- The Playwright harness passes all checks in HTTP mode (19) and the isolated DOM harness, including new KML and GeoJSON file-import checks. Verification used the repo's own browser tool with mocked providers; live WebGL basemap rendering remains unverified here.

@@ -1,6 +1,6 @@
 import type {Activity,Point,Simulation} from './types.js';
-import {PRODUCT,defaults,localInput,simulate,startTime} from './model.js';
-import {cumulative,validPoint} from './geometry.js';
+import {PRODUCT,importedActivity,simulate,startTime} from './model.js';
+import {validPoint} from './geometry.js';
 export const escapeXML=(s:string)=>s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]!));
 export function safeFilename(name:string):string{return name.normalize('NFKD').replace(/[^a-zA-Z0-9 _-]/g,'').trim().replace(/\s+/g,'-').slice(0,70)||'simulated-activity';}
 export function exportGPX(a:Activity,s:Simulation):string {
@@ -33,16 +33,7 @@ export function importGPX(xml:string):{activity:Activity;notice:string} {
   if(time&&/Z$|[+-]\d{2}:\d{2}$/.test(time)&&Number.isFinite(Date.parse(time)))p.time=Date.parse(time);
   if(hr&&Number.isFinite(Number(hr))&&Number(hr)>=0&&Number(hr)<=255)p.hr=Number(hr);return p;
  });
- const a=defaults();a.path=points;a.source='imported';a.waypoints=[];
- a.name=(elements(doc,'name')[0]?.textContent?.trim()||'Imported activity').slice(0,160);
- const type=elements(doc,'type')[0]?.textContent||'';if(/cycl|bik|ride/i.test(type))a.settings.sport='ride';
- const c=cumulative(points),d=c[c.length-1];if(d<1)throw Error('GPX route is shorter than one meter.');
- let notices:string[]=[];
- if(candidates.length>1)notices.push(`Imported the largest of ${candidates.length} disjoint segments; no artificial connections were added.`);
- const timed=points.every((p,i)=>p.time!==undefined&&(i===0||p.time>points[i-1].time!));
- if(timed){const date=new Date(points[0].time!);a.settings.start=localInput(date);a.settings.utcOffset=-date.getTimezoneOffset();const duration=(points[points.length-1].time!-points[0].time!)/1000;const pace=duration/(d/1000),speed=d/1000/duration*3600;
-  if(pace>=60&&pace<=3600)a.settings.pace=pace;if(speed>=1&&speed<=150)a.settings.speed=speed;
- }else notices.push('Original timestamps were missing or not increasing; new timing uses the activity settings.');
- notices.push('Geometry retained. Exports are explicitly resimulated, not original recordings.');
+ const {activity:a,notices}=importedActivity(points,elements(doc,'name')[0]?.textContent??'',elements(doc,'type')[0]?.textContent??'','GPX');
+ if(candidates.length>1)notices.unshift(`Imported the largest of ${candidates.length} disjoint segments; no artificial connections were added.`);
  return {activity:a,notice:notices.join(' ')};
 }

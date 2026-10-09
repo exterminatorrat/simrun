@@ -1,7 +1,8 @@
 import type {Activity,Point,Preferences,Settings,Simulation} from './types.js';
 import {defaults,simulate,clock,parseClock,validateSettings,loopPlan,plannedPath} from './model.js';
 import {cumulative,elevationStats,isClosedLoop,resample} from './geometry.js';
-import {download,downloadActivity,importGPX} from './gpx.js';
+import {download,downloadActivity} from './gpx.js';
+import {importRouteFile} from './import.js';
 import {readPreferences,writePreferences,validatePreferences,LocalStore,parseBackup} from './storage.js';
 import {ValhallaProvider,searchPlaces} from './providers.js';
 import {Editor} from './editor.js';
@@ -78,7 +79,7 @@ on('save',async()=>{validRoute();await store.save(editor.activity);toast(store.a
 on('export',async()=>{validRoute();downloadActivity(editor.activity);try{await store.save(editor.activity);toast(store.available?'GPX downloaded. Activity saved locally.':'GPX downloaded. History is session-only in this browser.');}catch{toast('GPX downloaded, but local history could not be saved.');}});
 on('edit-import',()=>{if(!confirm('Replace the imported geometry with a freshly routed path through up to 8 waypoints? Undo restores the original geometry.'))return;editor.edit(resample(editor.activity.path,Math.min(8,editor.activity.path.length)));editor.drawing=true;render();});
 const upload=()=>{$<HTMLInputElement>('gpx-file').value='';$('gpx-file').click();};on('import',upload);on('empty-import',upload);on('empty-close',()=>{emptyDismissed=true;render();});
-$('gpx-file').addEventListener('change',guarded(async()=>{const file=$<HTMLInputElement>('gpx-file').files?.[0];if(!file)return;if(file.size>15000000)throw Error('GPX must be smaller than 15 MB.');const result=importGPX(await file.text());if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(result.activity);map.fit();toast(result.notice);}));
+$('gpx-file').addEventListener('change',guarded(async()=>{const file=$<HTMLInputElement>('gpx-file').files?.[0];if(!file)return;if(file.size>15000000)throw Error('Route file must be smaller than 15 MB.');const result=importRouteFile(await file.text(),file.name);if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(result.activity);map.fit();toast(result.notice);}));
 for(const mode of ['elevation','pace','hr'] as ChartMode[])on(`chart-${mode}`,()=>{charts.mode=mode;for(const m of ['elevation','pace','hr']){$(`chart-${m}`).classList.toggle('active',m===mode);$(`chart-${m}`).setAttribute('aria-selected',String(m===mode));}charts.render(editor.activity,sim,preferences);});
 on('toggle-chart',()=>{const collapsed=$('chart-panel').classList.toggle('collapsed');$('toggle-chart').setAttribute('aria-expanded',String(!collapsed));$('toggle-chart').setAttribute('aria-label',collapsed?'Expand chart':'Collapse chart');});
 on('open-inspector',()=>{$('inspector').classList.add('open');$('activity-name').focus();});on('close-inspector',()=>$('inspector').classList.remove('open'));
