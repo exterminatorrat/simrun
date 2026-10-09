@@ -1,12 +1,48 @@
+<div align="center">
+
+<img src="public/mark.jpg" alt="SimRun mark" width="96" height="96">
+
 # SimRun
 
-A local-first route editor and **explicitly simulated** GPX activity studio. Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, preview profiles, export simulated activities, and keep a browser-local library. No login, payments, cloud database, analytics, or secrets.
+**Local-first route editor and explicitly simulated GPX activity studio.**
 
-**Canonical source:** https://github.com/exterminatorrat/simrun (private, `main`).
+[![Live app](https://img.shields.io/badge/live%20app-simrun.vercel.app-000000?logo=vercel&logoColor=white)](https://simrun.vercel.app)
+[![Verify](https://github.com/exterminatorrat/simrun/actions/workflows/verify.yml/badge.svg)](https://github.com/exterminatorrat/simrun/actions/workflows/verify.yml)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=white)
+![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=nodedotjs&logoColor=white)
+![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)
 
-## Run from source
+### [Open the web app → simrun.vercel.app](https://simrun.vercel.app)
 
-Node.js 20 or newer, npm. The tested toolchain is Node 22 and TypeScript 5.8.3.
+[Features](#features) · [Quick start](#quick-start) · [Architecture](#architecture) · [Deploy](#deploy-to-vercel) · [Privacy](#external-services-and-privacy) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+
+</div>
+
+---
+
+Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, preview profiles, export simulated activities, and keep a browser-local library. No login, payments, cloud database, analytics, or secrets.
+
+| | |
+| --- | --- |
+| **Live app** | https://simrun.vercel.app (static Vercel deployment of `dist/`) |
+| **Source** | https://github.com/exterminatorrat/simrun (`main`) |
+| **Stack** | Strict TypeScript, native DOM, ES modules; no framework, zero runtime dependencies |
+| **Data** | Stays in your browser: IndexedDB, localStorage, Cache Storage |
+| **Hosting** | Any static host; preconfigured by `vercel.json` |
+
+## Features
+
+- **Routing:** cancellable, throttled Valhalla pedestrian/bicycle requests (never automobile costing); waypoint editing, shaping handles, undo/redo, reverse, out-and-back, close-loop, and loop planning by lap count or target distance.
+- **Simulation:** deterministic and seeded; time/pace/speed conversion, optional synthetic heart rate, simulated GPS noise and signal dropout, custom splits with a per-segment table.
+- **Import/export:** GPX, KML and GeoJSON in; GPX, turn-by-turn cue-sheet CSV, SVG profiles and JSON backup out.
+- **Local-first:** IndexedDB history and drafts with an explicitly labeled **Session only** fallback; offline app shell via service worker.
+- **UI:** MapLibre/OpenFreeMap basemap with a labeled coordinate-canvas fallback; metric/imperial units; light/dark appearance; mobile settings sheet.
+
+There is **no seeded activity, artificial road network, or fake successful routing**. Browser tests use their own synthetic fixtures and mocked providers. Failed road routing never promotes a straight waypoint preview into an exportable route.
+
+## Quick start
+
+Node.js 20 or newer and npm. The tested toolchain is Node 22 and TypeScript 5.8.3.
 
 ```sh
 npm ci
@@ -14,21 +50,36 @@ npm test
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-For static hosting, run `npm run build` and serve **`dist/`**. Its entry is `dist/index.html`. The development Node server is not a production dependency. Relative asset paths support deployment below a URL prefix. Use HTTPS (or a normal localhost development origin), not file://.
+| Script | Purpose |
+| --- | --- |
+| `npm run dev` / `npm start` | Local static server (`scripts/serve.mjs`); not a production dependency |
+| `npm run build` | `tsc` then `scripts/build.mjs`, producing `dist/` |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Build, then `node --test tests/*.test.mjs` |
+| `npm run vendor` | Refresh the pinned MapLibre bundle |
+| `npm run package` | Create the source handoff archive |
+
+For static hosting, serve **`dist/`** (entry `dist/index.html`). Relative asset paths support deployment below a URL prefix. Use HTTPS or a normal localhost origin, not `file://`.
 
 ## Deploy to Vercel
 
-This repository is preconfigured for static Vercel deployment through `vercel.json` (`npm ci`, `npm run build`, output `dist`). Never serve the unbuilt `public/` directory. The linked project, deploy commands and credential handling are documented in [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md).
-
-## What is here
-
-MapLibre/OpenFreeMap integration; cancellable and throttled Valhalla pedestrian/bicycle requests; waypoint editing, shaping handles, undo/redo, reverse, out-and-back and close-loop (return to the start); loop planning by lap count or target distance around a closed loop with a start you can drag along the loop and a derived finish; time/pace/speed conversion; smooth deterministic simulation; optional synthetic HR; turn-by-turn cue-sheet CSV export; custom splits (auto interval and markers) with a per-segment table; deterministic simulated GPS noise and signal dropout; GPX, KML and GeoJSON import, GPX export; SVG profiles; IndexedDB history/drafts with an explicitly labeled memory fallback; JSON backup/restore; metric/imperial units; light/dark appearance with a matching dark basemap; mobile settings sheet.
-
-There is **no seeded activity, artificial road network, or fake successful routing in the application**. Browser tests use their own synthetic fixtures and mocked provider responses. If the basemap cannot load, a clearly labeled coordinate canvas can display/edit geometry. Failed road routing never promotes a straight waypoint preview into an exportable route.
+The production app is live at **https://simrun.vercel.app**. `vercel.json` pins the build (`npm ci`, `npm run build`, output `dist`). Never serve the unbuilt `public/` directory. Project linkage, deploy commands and credential handling are in [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md).
 
 ## Architecture
 
-Strict TypeScript, native DOM components, ES modules, and standard browser APIs. The project does not use React/Vite: registry access was unavailable in the build environment, and a small standards-based static app was used instead of an unverified framework dependency chain. TypeScript is the only build dependency, exactly pinned in `package-lock.json`.
+Strict TypeScript, native DOM components, ES modules, and standard browser APIs. TypeScript is the only build dependency, exactly pinned in `package-lock.json`. The project does not use React/Vite: a small standards-based static app was chosen over an unverified framework dependency chain.
+
+```mermaid
+flowchart LR
+  UI[main.ts / ui.ts] --> Editor[editor.ts<br/>undo, redo, cancellation]
+  Editor --> Providers[providers.ts<br/>route, elevation, search]
+  Editor --> Model[model.ts / geometry.ts<br/>deterministic simulation]
+  UI --> Map[map.ts<br/>MapLibre or canvas fallback]
+  Model --> Export[gpx.ts / cues.ts / charts.ts]
+  Import[gpx.ts / import.ts] --> Editor
+  UI --> Storage[storage.ts<br/>IndexedDB, backups]
+  Providers -. HTTPS .-> Ext[(OpenFreeMap, FOSSGIS Valhalla, Nominatim opt-in)]
+```
 
 | Module | Responsibility |
 | --- | --- |
@@ -39,10 +90,25 @@ Strict TypeScript, native DOM components, ES modules, and standard browser APIs.
 | `src/geometry.ts`, `src/model.ts` | Geodesic math, validation and deterministic simulation |
 | `src/gpx.ts` | Browser-local XML parsing and GPX serialization |
 | `src/import.ts` | KML and GeoJSON parsing onto the shared import pipeline |
+| `src/cues.ts` | Cue-sheet CSV generation |
 | `src/storage.ts` | Versioned IndexedDB, preferences and validated backups |
 | `src/charts.ts`, `src/ui.ts` | Responsive SVG profiles and DOM primitives |
+| `src/sw.ts` | Service worker: app-shell precache and basemap cache |
 
-All application-specific assets are in `public/`. System fonts are used; there are no bundled font files.
+Application-specific assets are in `public/`. System fonts are used; there are no bundled font files.
+
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md) | Vercel project, commands, protection notes |
+| [docs/SELF-HOST-VALHALLA.md](docs/SELF-HOST-VALHALLA.md) | Self-hosting routing to lift public limits |
+| [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | Implementation notes |
+| [docs/VERIFICATION.md](docs/VERIFICATION.md) | What was and was not verified |
+| [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) | Acceptance scenarios |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and PR checklist |
+| [SECURITY.md](SECURITY.md) | Threat model and vulnerability reporting |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Licenses, attribution and data terms |
 
 ## External services and privacy
 
@@ -95,3 +161,8 @@ npm run package
 ```
 
 Creates `simrun-sites-handoff.zip` with one `simrun/` root. The packager excludes dependencies, builds, caches, secrets and test outputs; includes a source hash manifest; and resolves Git metadata when available. It refuses a dirty Git checkout. For a connector-verified source copy without `.git`, use `node scripts/package.mjs --commit <verified-source-sha>`. `BUILD_INFO.json` is generated snapshot metadata: its Git SHA names the source commit, avoiding an impossible self-referential commit hash. `SOURCE_DATE_EPOCH` can fix archive creation time for repeatability.
+
+
+## License
+
+No license file is currently included, so all rights are reserved by default. Third-party components and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Confirm rights to the brand artwork described there before redistributing.
