@@ -152,6 +152,15 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   else:
    page.locator('#save').click();page.wait_for_timeout(500);name=page.locator('#activity-name').input_value();page.reload();expect(page.locator('#activity-name')).to_have_value(name);page.locator('#history').click();expect(page.locator('.history-row')).to_have_count(2)
    passed('Native IndexedDB draft and history survive reload')
+  kml=('<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>KML route</name><Placemark><LineString><coordinates>'
+       '121.47,31.23,10 121.48,31.235,12 121.49,31.24,14</coordinates></LineString></Placemark></Document></kml>')
+  page.locator('#gpx-file').set_input_files({'name':'route.kml','mimeType':'application/vnd.google-earth.kml+xml','buffer':kml.encode()})
+  expect(page.locator('#activity-name')).to_have_value('KML route');expect(page.locator('#empty')).to_be_hidden()
+  passed('KML import builds route geometry from LineString coordinates')
+  geojson=json.dumps({'type':'FeatureCollection','features':[{'type':'Feature','properties':{'name':'GeoJSON run'},'geometry':{'type':'LineString','coordinates':[[121.47,31.23],[121.475,31.235],[121.48,31.24]]}}]})
+  page.locator('#gpx-file').set_input_files({'name':'route.geojson','mimeType':'application/geo+json','buffer':geojson.encode()})
+  expect(page.locator('#activity-name')).to_have_value('GeoJSON run')
+  passed('GeoJSON import builds route geometry from a LineString feature')
   assert not errors,errors
   passed('No uncaught JavaScript exceptions throughout tested interactions')
   print(json.dumps({'passed':len(results),'mode':'isolated DOM; mocked providers; no native persistence' if args.isolated else 'HTTP; mocked providers','checks':results},indent=2))

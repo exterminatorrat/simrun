@@ -50,7 +50,7 @@ IndexedDB `simrun-local`, version 1, holds saved activities and the current draf
 
 ## GPX
 
-Local File API + DOMParser. Invalid coordinates, entity declarations, excessive size and malformed XML are rejected. For disjoint segments, the largest is imported with a visible notice. Exports: GPX 1.1, escaped XML, geodesically resampled coordinates, increasing UTC timestamps, real elevation when available, optional Garmin TrackPointExtension v1 HR (namespace compatibility, not device impersonation). Pace variation is smooth, seeded and normalized to target duration. The selected fixed UTC offset is explicit; check DST for the selected date. Exports are resimulations rather than lossless recording copies.
+Local File API + DOMParser. Invalid coordinates, entity declarations, excessive size and malformed XML are rejected. For disjoint segments, the largest is imported with a visible notice. KML (LineString and gx:Track coordinates) and GeoJSON (LineString/MultiLineString) import through the same pipeline and share the largest-segment rule; GeoJSON carries no timestamps, so timing falls back to the activity settings. Exports: GPX 1.1, escaped XML, geodesically resampled coordinates, increasing UTC timestamps, real elevation when available, optional Garmin TrackPointExtension v1 HR (namespace compatibility, not device impersonation). Pace variation is smooth, seeded and normalized to target duration. The selected fixed UTC offset is explicit; check DST for the selected date. Exports are resimulations rather than lossless recording copies.
 
 ## Sites Requirements
 
