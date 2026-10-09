@@ -69,7 +69,7 @@ export class RouteMap {
   const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=message;
   this.actions.message(message);
  }
- setStyle(style:string):void{if(!this.map)return;this.ready=false;this.missingSince=Date.now();this.lastMapError='';this.showCoordinateCanvas();try{this.map.setStyle(style);}catch{this.useCoordinateCanvas('Basemap unavailable. Coordinate view remains usable.');}}
+ setStyle(style:string):void{if(!this.map)return;this.ready=false;this.missingSince=Date.now();this.lastMapError='';this.showCoordinateCanvas();try{this.map.setStyle(style,{diff:false});}catch{this.useCoordinateCanvas('Basemap unavailable. Coordinate view remains usable.');}}
  update(a:Activity,selected:number,drawing:boolean,plan?:PlanMarks):void {this.a=a;this.selected=selected;this.drawing=drawing;this.plan=plan??null;this.render();}
  private installLayers():void {
   if(!this.map||this.map.getSource('route'))return;
