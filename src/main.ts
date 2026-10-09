@@ -33,7 +33,7 @@ function mark(id:string,on:boolean):void{$(id).classList.toggle('active',on);$(i
 function validRoute():void{if(editor.activity.path.length<2)throw Error('Draw or import a route first.');if(editor.activity.source==='draft')throw Error(editor.pending?'Routing is still in progress.':'Resolve the route before saving or exporting. A dashed line is only a waypoint preview.');if(!sim)throw Error(simulationError||'Check activity settings before exporting.');}
 function updateSettings(p:Partial<Settings>):void {if(p.sport&&/^(Morning|Afternoon|Evening) (run|ride)$/.test(editor.activity.name))editor.activity.name=editor.activity.name.replace(/run|ride$/,p.sport);const s={...editor.activity.settings,...p};validateSettings(s);editor.changeSettings(p);}
 function render():void {
- const a=editor.activity,s=a.settings,key=JSON.stringify([s,a.loop]);
+ const a=editor.activity,s=a.settings,key=JSON.stringify([s,a.loop,a.pauses,a.workout]);
  if(lastPath!==a.path||lastSettings!==key){lastPath=a.path;lastSettings=key;sim=null;simulationError='';if(a.path.length>1)try{sim=simulate(a);}catch(e){simulationError=e instanceof Error?e.message:'Invalid simulation.';}}
  const plan=loopPlan(a),route=plan?plan.path:a.path;
  map.update(a,editor.selected,editor.drawing,plan?{start:route[0],end:route[route.length-1]}:undefined);charts.render(a,sim,preferences);
