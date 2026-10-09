@@ -3,7 +3,6 @@
 A local-first route editor and **explicitly simulated** GPX activity studio. Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, preview profiles, export simulated activities, and keep a browser-local library. No login, payments, cloud database, analytics, or secrets.
 
 **Canonical source:** https://github.com/exterminatorrat/simrun (private, `main`).
-**Sites agent:** read [CHATGPT-SITES-HANDOFF.md](CHATGPT-SITES-HANDOFF.md) first.
 
 ## Run from source
 
@@ -47,7 +46,7 @@ All application-specific assets are in `public/`. System fonts are used; there a
 
 ## External services and privacy
 
-OpenFreeMap supplies the Liberty basemap. The default routing/elevation endpoint is FOSSGIS's public Valhalla service, with `pedestrian` or `bicycle` costing, never automobile costing. These endpoints are replaceable in Settings. Map views, waypoint coordinates and requested elevation samples go to the providers. GPX file contents are not uploaded; converting an imported route to routed waypoints sends those chosen coordinates after confirmation.
+OpenFreeMap supplies the Liberty basemap. The default routing/elevation endpoint is FOSSGIS's public Valhalla service, with `pedestrian` or `bicycle` costing, never automobile costing. These endpoints are replaceable in Settings. FOSSGIS's public Valhalla caps a single route at 100 km (`pedestrian`) or 150 km (`bicycle`) and rejects longer requests with its own error; self-host Valhalla and raise `service_limits` to route farther, as described in [docs/SELF-HOST-VALHALLA.md](docs/SELF-HOST-VALHALLA.md). Map views, waypoint coordinates and requested elevation samples go to the providers. GPX file contents are not uploaded; converting an imported route to routed waypoints sends those chosen coordinates after confirmation.
 
 **MapLibre GL JS 5.6.1 is served locally.** The checked-in `public/vendor/` includes its CSP build, dedicated same-origin worker, CSS and upstream license. Runtime rendering no longer requests unpkg. To refresh the pinned bundle from upstream:
 
@@ -95,4 +94,4 @@ npm test
 npm run package
 ```
 
-Creates `simrun-sites-handoff.zip` with one `simrun/` root. The packager excludes dependencies, builds, caches, secrets and test outputs; includes a source hash manifest; and resolves Git metadata when available. It refuses a dirty Git checkout. For a connector-verified source copy without `.git`, use `node scripts/package.mjs --commit <verified-source-sha>`. `BUILD_INFO.json` is generated snapshot metadata: its Git SHA names the source commit, avoiding an impossible self-referential commit hash. `SOURCE_DATE_EPOCH` can fix archive creation time for repeatability. See the handoff for private-preview instructions.
+Creates `simrun-sites-handoff.zip` with one `simrun/` root. The packager excludes dependencies, builds, caches, secrets and test outputs; includes a source hash manifest; and resolves Git metadata when available. It refuses a dirty Git checkout. For a connector-verified source copy without `.git`, use `node scripts/package.mjs --commit <verified-source-sha>`. `BUILD_INFO.json` is generated snapshot metadata: its Git SHA names the source commit, avoiding an impossible self-referential commit hash. `SOURCE_DATE_EPOCH` can fix archive creation time for repeatability.
