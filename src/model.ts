@@ -1,4 +1,4 @@
-import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preferences,Split,Splits,WeatherPreset,WeatherSim,PowerSim,CadenceSim,FatigueSim,Workout,WorkoutStep,Pauses,RestStop} from './types.js';
+import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preferences,Split,Splits,WeatherPreset,WeatherSim,PowerSim,CadenceSim,FatigueSim,Workout,WorkoutStep,Pauses,RestStop,RouteData,RouteSurfaceEdge,StreetNameSpan} from './types.js';
 import {atDistance,clamp,cumulative,elevationStats,isClosedLoop,loopPath,lowerBound,rotatedLoop,validPoint,wrapLon} from './geometry.js';
 import {newId} from './id.js';
 import {expandWorkout,stepAt} from './workout.js';
@@ -17,7 +17,7 @@ export function weatherHeat(w:WeatherSim|undefined):number {
  return clamp(1+Math.max(0,w.tempC-20)*.03+Math.max(0,w.humidity-60)*.004,1,2);
 }
 export interface LoopResult {path:Point[];loopLength:number;distance:number;laps:number;capped:boolean}
-export const defaultPreferences:Preferences={units:'metric',theme:'light',mapStyle:'https://tiles.openfreemap.org/styles/liberty',mapStyleDark:'https://tiles.openfreemap.org/styles/dark',routingUrl:'https://valhalla1.openstreetmap.de/route',elevationUrl:'https://valhalla1.openstreetmap.de/height',geocodingUrl:'https://nominatim.openstreetmap.org/search',geocodingEnabled:false,hrMax:190,offlineRouting:false,corridorZoom:12,avoidHighways:false,avoidHills:false,alternates:false};
+export const defaultPreferences:Preferences={units:'metric',theme:'light',mapStyle:'https://tiles.openfreemap.org/styles/liberty',mapStyleDark:'https://tiles.openfreemap.org/styles/dark',routingUrl:'https://valhalla1.openstreetmap.de/route',elevationUrl:'https://valhalla1.openstreetmap.de/height',geocodingUrl:'https://nominatim.openstreetmap.org/search',geocodingEnabled:false,overpassUrl:'https://overpass-api.de/api/interpreter',poiEnabled:false,surfaceDataEnabled:false,hrMax:190,offlineRouting:false,corridorZoom:12,avoidHighways:false,avoidHills:false,alternates:false};
 export function localInput(date=new Date()):string{return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 /** The map style that matches the chosen appearance; each theme has its own endpoint. */
 export const mapStyleFor=(p:Preferences):string=>p.theme==='dark'?p.mapStyleDark:p.mapStyle;
@@ -111,6 +111,21 @@ export function validateActivity(value:unknown):Activity {
   if(out.length>8)throw Error('Use at most eight tags.');
   return out.length?out:undefined;
  };
+ const cleanRouteData=(v:RouteData|undefined,total:number):RouteData|undefined=>{
+  if(v===undefined||v===null)return undefined;
+  if(typeof v!=='object'||Array.isArray(v))throw Error('Invalid route data.');
+  const cleanLabel=(label:unknown):string=>{if(typeof label!=='string'||!/^[a-zA-Z0-9 _-]{1,64}$/.test(label.trim()))throw Error('Invalid route data label.');return label.trim();};
+  let streetNames:StreetNameSpan[]|undefined,surfaceEdges:RouteSurfaceEdge[]|undefined;
+  if(v.streetNames!==undefined){
+   if(!Array.isArray(v.streetNames)||v.streetNames.length>20000)throw Error('Invalid route street names.');
+   streetNames=v.streetNames.map(span=>{if(!span||!Number.isFinite(span.start)||!Number.isFinite(span.end)||span.start<0||span.end<span.start||span.end>total+1||typeof span.name!=='string'||!span.name.trim()||span.name.length>160)throw Error('Invalid route street name.');return {start:span.start,end:span.end,name:span.name.trim()};});
+  }
+  if(v.surfaceEdges!==undefined){
+   if(!Array.isArray(v.surfaceEdges)||v.surfaceEdges.length>20000)throw Error('Invalid route surface data.');
+   surfaceEdges=v.surfaceEdges.map(edge=>{if(!edge||!Number.isFinite(edge.distance)||edge.distance<=0||edge.distance>5000000)throw Error('Invalid route surface distance.');const clean:RouteSurfaceEdge={distance:edge.distance};if(edge.surface!==undefined)clean.surface=cleanLabel(edge.surface);if(edge.roadClass!==undefined)clean.roadClass=cleanLabel(edge.roadClass);if(!clean.surface&&!clean.roadClass)throw Error('Route surface edge has no classification.');return clean;});
+  }
+  return streetNames?.length||surfaceEdges?.length?{...(streetNames?.length?{streetNames}:{}),...(surfaceEdges?.length?{surfaceEdges}:{})}:undefined;
+ };
  const cleanWorkout=(v:Workout|undefined):Workout|undefined=>{
   if(v===undefined||v===null)return undefined;
   if(typeof v!=='object'||!Array.isArray(v.steps)||!v.steps.length||v.steps.length>200)throw Error('Invalid workout.');
@@ -122,8 +137,9 @@ export function validateActivity(value:unknown):Activity {
   return {rests:v.rests.map(r=>{if(typeof r!=='object'||!Number.isFinite(r.distance)||r.distance<0||!Number.isFinite(r.seconds)||r.seconds<=0||r.seconds>86400)throw Error('Invalid rest stop.');return {distance:r.distance,seconds:r.seconds};})};
  };
  const power=cleanPower(s.power)||undefined,cadence=cleanCadence(s.cadence)||undefined,fatigue=cleanFatigue(s.fatigue)||undefined,weather=cleanWeather(s.weather)||undefined,workout=cleanWorkout(a.workout),pauses=cleanPauses(a.pauses),tags=cleanTags(a.tags);
+ const path=a.path.map(clean),routeData=cleanRouteData(a.routeData,cumulative(path).at(-1)??0);
  // Explicitly select fields; never merge untrusted objects into app state.
- return {id:a.id,version:1,name:a.name,createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path:a.path.map(clean),waypoints:a.waypoints.map(clean),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{}),...(power?{power}:{}),...(cadence?{cadence}:{}),...(fatigue?{fatigue}:{}),...(weather?{weather}:{})},...(loop?{loop}:{}),...(splits?{splits}:{}),...(workout?{workout}:{}),...(pauses?{pauses}:{}),...(tags?{tags}:{})};
+ return {id:a.id,version:1,name:a.name,createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path,waypoints:a.waypoints.map(clean),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{}),...(power?{power}:{}),...(cadence?{cadence}:{}),...(fatigue?{fatigue}:{}),...(weather?{weather}:{})},...(loop?{loop}:{}),...(splits?{splits}:{}),...(routeData?{routeData}:{}),...(workout?{workout}:{}),...(pauses?{pauses}:{}),...(tags?{tags}:{})};
 }
 /** Resolves a lap plan against the current closed route, or null when it cannot apply. */
 export function loopPlan(a:Activity):LoopResult|null {
