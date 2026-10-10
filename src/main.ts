@@ -1,6 +1,6 @@
 import type {Activity,Point,Preferences,RouteProfile,Settings,Simulation,WeatherPreset} from './types.js';
 import {defaults,simulate,clock,parseClock,validateSettings,loopPlan,plannedPath,mapStyleFor,computeSplits,WEATHER_PRESETS,importedActivity} from './model.js';
-import {cumulative,elevationStats,isClosedLoop,resample} from './geometry.js';
+import {atDistance,cumulative,elevationStats,isClosedLoop,resample} from './geometry.js';
 import {download,downloadActivity,safeFilename} from './gpx.js';
 import {exportTCX} from './tcx.js';
 import {decodeShare,shareUrl,shareWarning} from './share.js';
@@ -24,7 +24,7 @@ const store=new LocalStore(),editor=new Editor(new ValhallaProvider(()=>preferen
 let initialized=false,saveTimer:ReturnType<typeof setTimeout>|undefined,sim:Simulation|null=null,lastPath:Point[]|null=null,lastSettings='',simulationError='';
 let searchController:AbortController|null=null,searchId=0;
 let emptyDismissed=false;
-const map=new RouteMap($('map'),{add:p=>{if(editor.activity.source==='imported'){toast('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}editor.add(p);},move:(i,p)=>editor.move(i,p),insert:(i,p)=>editor.insert(i,p),select:i=>{editor.selected=i;render();$('waypoint-details').setAttribute('open','');},message:toast,loopStart:f=>editor.setLoop({start:f})});
+const map=new RouteMap($('map'),{add:p=>{if(editor.activity.source==='imported'){toast('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}editor.add(p);},move:(i,p)=>editor.move(i,p),insert:(i,p)=>editor.insert(i,p),select:i=>{editor.selected=i;render();$('waypoint-details').setAttribute('open','');},message:toast,loopStart:f=>editor.setLoop({start:f}),freehand:points=>editor.drawFreehand(points)});
 const charts=new Charts($('chart'),p=>map.hover(p),p=>map.scrub(p));
 editor.alternatesEnabled=preferences.alternates;
 function guarded(fn:()=>void|Promise<void>):()=>void{return ()=>{try{Promise.resolve(fn()).catch(e=>toast(e instanceof Error?e.message:'The action could not be completed.'));}catch(e){toast(e instanceof Error?e.message:'The action could not be completed.');}};}
@@ -37,6 +37,14 @@ function stat(id:string,value:string,unit=''):void{const e=$(id);e.replaceChildr
 function mark(id:string,on:boolean):void{$(id).classList.toggle('active',on);$(id).setAttribute('aria-pressed',String(on));}
 function validRoute():void{if(editor.activity.path.length<2)throw Error('Draw or import a route first.');if(editor.activity.source==='draft')throw Error(editor.pending?'Routing is still in progress.':'Resolve the route before saving or exporting. A dashed line is only a waypoint preview.');if(!sim)throw Error(simulationError||'Check activity settings before exporting.');}
 function updateSettings(p:Partial<Settings>):void {if(p.sport&&/^(Morning|Afternoon|Evening) (run|ride)$/.test(editor.activity.name))editor.activity.name=editor.activity.name.replace(/run|ride$/,p.sport);const s={...editor.activity.settings,...p};validateSettings(s);editor.changeSettings(p);}
+let freehandEnabled=false;
+editor.onSplitOutputsChange=(outputs,previous,committed)=>{
+ if(committed)return;
+ const next=new Map(outputs.map(a=>[a.id,a]));
+ for(const activity of previous)if(!next.has(activity.id))void store.remove(activity.id).then(refreshStorageUsage).catch(e=>toast(e instanceof Error?e.message:'Split activity could not be removed from local history.'));
+ const prior=new Set(previous.map(a=>a.id));
+ for(const activity of outputs)if(!prior.has(activity.id))void store.save(activity).then(refreshStorageUsage).catch(e=>toast(e instanceof Error?e.message:'Split activity could not be saved to local history.'));
+};
 function render():void {
  const a=editor.activity,s=a.settings,key=JSON.stringify([s,a.loop,a.pauses,a.workout]);
  if(lastPath!==a.path||lastSettings!==key){lastPath=a.path;lastSettings=key;sim=null;simulationError='';if(a.path.length>1)try{sim=simulate(a);}catch(e){simulationError=e instanceof Error?e.message:'Invalid simulation.';}}
@@ -50,7 +58,7 @@ function render():void {
  setInput('activity-name',a.name);setInput('start',s.start);setInput('offset',s.utcOffset);setInput('target',s.sport==='run'?clock(pace):speed.toFixed(2));setInput('duration',sim?clock(sim.duration):'0:00');setInput('sample',s.sample);$<HTMLSelectElement>('profile').value=resolveProfile(s.sport,s.profile);setInput('variation',s.variation*100);setInput('hr-average',s.hrAverage);setInput('hr-variation',s.hrVariation);setInput('gps-noise',s.gps?.noise??0);setInput('gps-dropout',Math.round((s.gps?.dropout??0)*100));
  $<HTMLInputElement>('hr-enabled').checked=s.hrEnabled;$('hr-fields').hidden=!s.hrEnabled;$('variation-wrap').hidden=s.mode!=='natural';setText('variation-value',`${Math.round(s.variation*100)}%`);
  $<HTMLSelectElement>('weather').value=s.weather?.preset??'';$('weather-fields').hidden=!s.weather;$('weather-wind-wrap').hidden=!s.weather;setInput('weather-temp',s.weather?.tempC??15);setInput('weather-humidity',s.weather?.humidity??50);setInput('weather-wind',s.weather?.headwindKph??0);$<HTMLInputElement>('power-enabled').checked=!!s.power?.enabled;$('power-fields').hidden=!s.power?.enabled;setInput('power-weight',s.power?.weightKg??70);$<HTMLInputElement>('cadence-enabled').checked=!!s.cadence?.enabled;setInput('fatigue',s.fatigue?.percent??0);setText('fatigue-value',`${Math.round(s.fatigue?.percent??0)}%`);
- mark('run',s.sport==='run');mark('ride',s.sport==='ride');mark('constant',s.mode==='constant');mark('natural',s.mode==='natural');mark('draw',editor.drawing);mark('pan',!editor.drawing);
+ mark('run',s.sport==='run');mark('ride',s.sport==='ride');mark('constant',s.mode==='constant');mark('natural',s.mode==='natural');mark('draw',editor.drawing&&!freehandEnabled);mark('pan',!editor.drawing&&!freehandEnabled);mark('freehand',freehandEnabled);
  $<HTMLButtonElement>('undo').disabled=!editor.canUndo;$<HTMLButtonElement>('redo').disabled=!editor.canRedo;
  setText('source-label',a.source==='imported'?'Imported geometry':a.source==='draft'&&a.path.length?'Last route · changes pending':'Route planning');
  setText('sample-count',sim?`${sim.points.length.toLocaleString()} points${sim.interval!==s.sample?' · capped':''}`:'0 points');
@@ -100,7 +108,35 @@ editor.onChange=render;editor.onMessage=toast;
 // Fixed UTC offsets are explicit, so serialized UTC never silently shifts with the machine's timezone.
 for(let offset=-720;offset<=840;offset+=15){const option=el('option');option.value=String(offset);option.textContent=`UTC${offset<0?'−':'+'}${String(Math.floor(Math.abs(offset)/60)).padStart(2,'0')}:${String(Math.abs(offset)%60).padStart(2,'0')}`;$('offset').append(option);}
 for(const [value,preset] of Object.entries(WEATHER_PRESETS)){const option=el('option');option.value=value;option.textContent=preset.label;$('weather').append(option);}
-on('run',()=>updateSettings({sport:'run'}));on('ride',()=>updateSettings({sport:'ride'}));on('draw',()=>{editor.drawing=true;render();});on('pan',()=>{editor.drawing=false;render();});
+on('run',()=>updateSettings({sport:'run'}));on('ride',()=>updateSettings({sport:'ride'}));
+function disableFreehand():void {freehandEnabled=false;map.setFreehand(false);}
+function openRangeDialog(action:'trim'|'split'):void {
+ if(editor.activity.source==='draft'||editor.activity.path.length<2)throw Error('Resolve a route before trimming or splitting it.');
+ const total=cumulative(editor.activity.path).at(-1)??0,scale=preferences.units==='imperial'?1609.344:1000;
+ setText('range-unit',distanceUnit());$('range-end-field').hidden=action==='split';$('range-description').textContent=action==='trim'?'Choose the distance range to keep.':'Choose the distance from the route start where it should split. The second part is saved in your local activity library.';
+ setText('range-start-label',action==='trim'?'Start distance':'Split at distance');setText('range-end-label','End distance');setText('range-apply',action==='trim'?'Trim route':'Split route');
+ setInput('range-start',action==='trim'?'0':(total/scale/2).toFixed(3));setInput('range-end',(total/scale).toFixed(3));$('route-range-dialog').dataset.action=action;$<HTMLDialogElement>('route-range-dialog').showModal();
+}
+function applyRangeAction():void {
+ const action=$('route-range-dialog').dataset.action,scale=preferences.units==='imperial'?1609.344:1000,start=Number($<HTMLInputElement>('range-start').value)*scale,end=Number($<HTMLInputElement>('range-end').value)*scale;
+ if(!Number.isFinite(start)||!Number.isFinite(end))throw Error('Enter valid route distances.');
+ if(action==='trim')editor.trim(start,end);
+ else if(action==='split'){if(!initialized)throw Error('The local activity library is still opening. Try again in a moment.');const path=editor.activity.path,point=atDistance(path,cumulative(path),start);editor.split(point,newId());}
+ else throw Error('Choose a route operation.');
+ $<HTMLDialogElement>('route-range-dialog').close();map.fit();
+}
+async function openMergeDialog():Promise<void> {
+ const activities=(await store.list()).filter(a=>a.id!==editor.activity.id&&a.source!=='draft'&&a.path.length>1),select=$<HTMLSelectElement>('merge-source');select.replaceChildren(new Option('Choose a saved activity',''));
+ for(const a of activities){const meters=cumulative(a.path).at(-1)??0;select.append(new Option(`${a.name} · ${distanceValue(meters)} ${distanceUnit()} · ${a.settings.start.replace('T',' ')}`,a.id));}
+ if(!activities.length)throw Error('Save another activity with a route before merging.');$<HTMLDialogElement>('merge-dialog').showModal();
+}
+async function applyMerge():Promise<void> {
+ const id=$<HTMLSelectElement>('merge-source').value;if(!id)throw Error('Choose a saved activity to merge.');
+ const other=(await store.list()).find(a=>a.id===id);if(!other)throw Error('That saved activity is no longer available.');
+ await editor.merge(other);$<HTMLDialogElement>('merge-dialog').close();map.fit();toast('Routes merged.');
+}
+on('draw',()=>{disableFreehand();editor.drawing=true;render();});on('pan',()=>{disableFreehand();editor.drawing=false;render();});
+on('freehand',()=>{freehandEnabled=!freehandEnabled;map.setFreehand(freehandEnabled);editor.drawing=false;render();});on('trim',()=>openRangeDialog('trim'));on('split',()=>openRangeDialog('split'));on('range-apply',applyRangeAction);on('merge',openMergeDialog);on('merge-apply',applyMerge);
 for(const [id,fn] of Object.entries({undo:()=>editor.undo(),redo:()=>editor.redo(),reverse:()=>editor.reverse(),'out-back':()=>editor.outAndBack(),loop:()=>editor.closeLoop(),clear:()=>editor.clear(),fit:()=>map.fit(),retry:()=>editor.recalculate(),'zoom-in':()=>map.zoom(1),'zoom-out':()=>map.zoom(-1)}))on(id,fn);
 on('new',async()=>{const previous=editor.activity;if(previous.path.length>1||previous.waypoints.length){await store.save(previous);}editor.load(defaults());toast(store.available?'New activity. The previous project remains in local history.':'New activity. History lasts for this session only.');});
 on('constant',()=>updateSettings({mode:'constant'}));on('natural',()=>updateSettings({mode:'natural'}));
@@ -204,7 +240,7 @@ async function tileTemplates():Promise<string[]>{
 $('preferences-form').addEventListener('submit',e=>{e.preventDefault();guarded(()=>{const before=mapStyleFor(preferences);const next=validatePreferences({units:$<HTMLSelectElement>('units').value,theme:$<HTMLSelectElement>('theme').value,geocodingEnabled:$<HTMLInputElement>('geocoding-enabled').checked,mapStyle:$<HTMLInputElement>('map-style').value,mapStyleDark:$<HTMLInputElement>('map-style-dark').value,routingUrl:$<HTMLInputElement>('routing-url').value,elevationUrl:$<HTMLInputElement>('elevation-url').value,geocodingUrl:$<HTMLInputElement>('geocoding-url').value,hrMax:Number($<HTMLInputElement>('hr-max').value),offlineRouting:$<HTMLInputElement>('offline-routing').checked,corridorZoom:Number($<HTMLInputElement>('corridor-zoom').value),avoidHighways:$<HTMLInputElement>('avoid-highways').checked,avoidHills:$<HTMLInputElement>('avoid-hills').checked,alternates:$<HTMLInputElement>('alternates-enabled').checked});preferences=next;editor.alternatesEnabled=next.alternates;try{writePreferences(next);}catch{toast('Preferences apply to this session only; local storage is unavailable.');}document.documentElement.dataset.theme=next.theme;if(mapStyleFor(next)!==before)map.setStyle(mapStyleFor(next));$<HTMLDialogElement>('settings-dialog').close();render();})();});
 $('search-form').addEventListener('submit',e=>{e.preventDefault();guarded(async()=>{const query=$<HTMLInputElement>('search').value.trim();if(!query)return;searchController?.abort();const controller=new AbortController();searchController=controller;const id=++searchId;const submit=$<HTMLButtonElement>('search-submit');submit.disabled=true;const list=$('search-results');list.hidden=true;try{const places=await searchPlaces(query,preferences,controller.signal);if(id!==searchId)return;list.replaceChildren();if(!places.length){toast('No places found. Try coordinates or another search.');return;}places.forEach(place=>list.append(button(place.name,()=>{map.focus(place);list.hidden=true;},undefined,'')));list.hidden=false;}catch(error){if(!controller.signal.aborted)throw error;}finally{if(id===searchId)submit.disabled=false;}})();});
 document.addEventListener('pointerdown',e=>{if(!(e.target as Element).closest('.search-wrap'))$('search-results').hidden=true;});
-document.addEventListener('keydown',e=>{const target=e.target as Element;if(target.closest('input,textarea,select,[contenteditable=true]')||document.querySelector('dialog[open]'))return;if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?editor.redo():editor.undo();}else if(e.key==='Escape'){editor.drawing=false;$('inspector').classList.remove('open');$('search-results').hidden=true;render();}else if((e.key==='Backspace'||e.key==='Delete')&&editor.selected>=0){e.preventDefault();editor.remove(editor.selected);}else if(e.key.toLowerCase()==='f'){e.preventDefault();map.fit();}});
+document.addEventListener('keydown',e=>{const target=e.target as Element;if(target.closest('input,textarea,select,[contenteditable=true]')||document.querySelector('dialog[open]'))return;if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?editor.redo():editor.undo();}else if(e.key==='Escape'){disableFreehand();editor.drawing=false;$('inspector').classList.remove('open');$('search-results').hidden=true;render();}else if((e.key==='Backspace'||e.key==='Delete')&&editor.selected>=0){e.preventDefault();editor.remove(editor.selected);}else if(e.key.toLowerCase()==='f'){e.preventDefault();map.fit();}});
 let resizeFrame=0;window.addEventListener('resize',()=>{cancelAnimationFrame(resizeFrame);resizeFrame=requestAnimationFrame(()=>{render();map.fit();});});
 window.addEventListener('pagehide',()=>{if(initialized)void store.saveDraft(editor.activity).catch(()=>{});});
 render();void map.init(mapStyleFor(preferences));registerOfflineCache();

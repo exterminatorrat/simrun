@@ -2,21 +2,74 @@ import type {Activity,LoopPlan,Point,RouteSource,Settings,Splits,Pauses,Workout}
 import {defaults} from './model.js';
 import {closeLoop,cumulative,distance,isClosedLoop,nearestOnPath,outAndBack,validPoint} from './geometry.js';
 import {resolveProfile,routeCapWarning,type RoutingProvider} from './providers.js';
-type Snapshot={path:Point[];waypoints:Point[];source:RouteSource};
+import {MAX_ROUTE_WAYPOINTS,mergeRoutes,simplifyFreehand,splitRouteAtPoint,trimRouteByDistance,waypointsInRange} from './routeops.js';
+type Snapshot={path:Point[];waypoints:Point[];source:RouteSource;loop?:LoopPlan;splits?:Splits;splitOutputs:Activity[]};
 export class Editor {
  activity:Activity=defaults();selected=-1;drawing=true;pending=false;status='Click the map to begin.';
  alternatesEnabled=false;alternatePaths:Point[][]=[];
- private past:Snapshot[]=[];private future:Snapshot[]=[];private controller:AbortController|null=null;private sequence=0;private timer:ReturnType<typeof setTimeout>|undefined;
+ private past:Snapshot[]=[];private future:Snapshot[]=[];private controller:AbortController|null=null;private sequence=0;private timer:ReturnType<typeof setTimeout>|undefined;private splitOutputs:Activity[]=[];
  onChange:()=>void=()=>{};onMessage:(s:string)=>void=()=>{};
+ onSplitOutputsChange:(outputs:Activity[],previous:Activity[],committed:boolean)=>void=()=>{};
  constructor(private provider:RoutingProvider){}
  get canUndo(){return this.past.length>0;}get canRedo(){return this.future.length>0;}
- private snapshot():Snapshot {const {path,waypoints,source}=this.activity;return {path,waypoints,source};}
+ private snapshot():Snapshot {const {path,waypoints,source,loop,splits}=this.activity;return {path,waypoints,source,loop,splits,splitOutputs:[...this.splitOutputs]};}
  private invalidate(){this.sequence++;this.controller?.abort();clearTimeout(this.timer);this.pending=false;}
  private notify(){this.activity.updatedAt=Date.now();this.onChange();}
  private checkpoint(){this.past.push(this.snapshot());if(this.past.length>35)this.past.shift();this.future=[];}
- load(a:Activity){this.invalidate();this.activity=a;this.past=[];this.future=[];this.selected=-1;this.status=a.source==='imported'?'Imported geometry · exports are simulated':a.path.length?'Route restored':'Click the map to begin.';this.notify();if(a.source==='draft'&&a.waypoints.length>=2)this.recalculate();}
+ load(a:Activity){this.invalidate();const previous=this.splitOutputs;this.splitOutputs=[];if(previous.length)this.onSplitOutputsChange([],previous,true);this.alternatePaths=[];this.activity=a;this.past=[];this.future=[];this.selected=-1;this.status=a.source==='imported'?'Imported geometry · exports are simulated':a.path.length?'Route restored':'Click the map to begin.';this.notify();if(a.source==='draft'&&a.waypoints.length>=2)this.recalculate();}
  changeSettings(s:Partial<Settings>){const old=this.activity.settings.sport,oldProfile=this.activity.settings.profile;this.activity.settings={...this.activity.settings,...s};if(old!==this.activity.settings.sport&&s.profile===undefined)delete this.activity.settings.profile;this.notify();if((old!==this.activity.settings.sport||oldProfile!==this.activity.settings.profile)&&this.activity.source!=='imported'&&this.activity.waypoints.length>=2){this.activity.source='draft';this.recalculate();}}
- edit(points:Point[]){if(points.length>50){this.onMessage('Use at most 50 routing waypoints.');return;}if(!points.every(validPoint)){this.onMessage('Invalid waypoint.');return;}this.checkpoint();this.invalidate();this.activity.waypoints=points.map(({lat,lon})=>({lat,lon}));this.activity.source='draft';if(points.length<2)this.activity.path=[];this.selected=Math.min(this.selected,points.length-1);this.notify();this.recalculate();}
+ edit(points:Point[]){if(points.length>MAX_ROUTE_WAYPOINTS){this.onMessage(`Use at most ${MAX_ROUTE_WAYPOINTS} routing waypoints.`);return;}if(!points.every(validPoint)){this.onMessage('Invalid waypoint.');return;}this.checkpoint();this.invalidate();this.alternatePaths=[];this.activity.waypoints=points.map(({lat,lon})=>({lat,lon}));this.activity.source='draft';if(points.length<2)this.activity.path=[];this.selected=Math.min(this.selected,points.length-1);this.notify();this.recalculate();}
+ drawFreehand(points:Point[]):void {try{this.edit(simplifyFreehand(points));}catch(error){this.onMessage(error instanceof Error?error.message:'Freehand route could not be simplified.');}}
+ trim(start:number,end:number):void {
+  if(this.activity.source==='draft'||this.activity.path.length<2)throw Error('Resolve a route before trimming it.');
+  const next=trimRouteByDistance(this.activity.path,start,end);
+  let waypoints=waypointsInRange(this.activity.path,this.activity.waypoints,start,end);
+  if(this.activity.source==='routed'){
+   const bounds=[next[0],next.at(-1)!];
+   for(const p of waypoints)if(bounds.length<MAX_ROUTE_WAYPOINTS)bounds.splice(bounds.length-1,0,p);
+   waypoints=bounds;
+  }
+  this.checkpoint();this.invalidate();this.alternatePaths=[];this.activity.path=next;this.activity.waypoints=waypoints;delete this.activity.loop;delete this.activity.splits;this.selected=-1;this.status='Route trimmed';this.notify();
+ }
+ split(point:Point,id:string):Activity {
+  if(this.activity.source==='draft'||this.activity.path.length<2)throw Error('Resolve a route before splitting it.');
+  if(!id||id===this.activity.id)throw Error('A new activity ID is required for the split route.');
+  const original=this.activity,c=cumulative(original.path),splitDistance=nearestOnPath(original.path,point,c);
+  const [left,right]=splitRouteAtPoint(original.path,point);
+  const leftWaypoints=waypointsInRange(original.path,original.waypoints,0,splitDistance),rightWaypoints=waypointsInRange(original.path,original.waypoints,splitDistance,c.at(-1)!);
+  const makeWaypoints=(path:Point[],points:Point[])=>{
+   if(original.source!=='routed')return points;
+   const output=[path[0],...points,path.at(-1)!].filter((p,i,a)=>i===0||distance(a[i-1],p)>0.01);
+   return output.length<=MAX_ROUTE_WAYPOINTS?output:[output[0],...output.slice(1,MAX_ROUTE_WAYPOINTS-1),output.at(-1)!];
+  };
+  const now=Date.now(),sibling:Activity={...original,id,name:`${original.name} · split`,createdAt:now,updatedAt:now,path:right,waypoints:makeWaypoints(right,rightWaypoints),settings:{...original.settings}};
+  delete sibling.loop;delete sibling.splits;
+  this.checkpoint();this.invalidate();this.alternatePaths=[];this.activity.path=left;this.activity.waypoints=makeWaypoints(left,leftWaypoints);delete this.activity.loop;delete this.activity.splits;this.selected=-1;this.status='Route split';
+  const previous=this.splitOutputs;this.splitOutputs=[...previous,sibling];this.onSplitOutputsChange(this.splitOutputs,previous,false);this.notify();
+  return sibling;
+ }
+ async merge(other:Activity,maxGapMeters=100_000):Promise<void> {
+  if(this.activity.source==='draft'||this.activity.path.length<2)throw Error('Resolve a route before merging it.');
+  if(other.id===this.activity.id)throw Error('Choose a different saved activity to merge.');
+  if(other.source==='draft')throw Error('Resolve the saved activity route before merging it.');
+  const first=[...this.activity.path],second=[...other.path],firstC=cumulative(first),secondC=cumulative(second);
+  if(firstC.at(-1)!<1||secondC.at(-1)!<1)throw Error('Both activities need a route before merging.');
+  const gap=distance(first.at(-1)!,second[0]);
+  if(gap>maxGapMeters)throw Error(`Routes must be within ${Math.round(maxGapMeters/1000)} km to merge.`);
+  this.invalidate();this.alternatePaths=[];const n=this.sequence;let connector:Point[]|undefined;
+  if(gap>1){
+   const profile=resolveProfile(this.activity.settings.sport,this.activity.settings.profile),controller=new AbortController();this.controller=controller;this.pending=true;this.status='Routing the gap between activities…';this.notify();
+   try{connector=await this.provider.route([first.at(-1)!,second[0]],profile,controller.signal);if(n!==this.sequence)return;}
+   catch(error){if(n!==this.sequence)return;this.pending=false;this.status='Merge unavailable · the current route was kept';this.notify();throw error;}
+  }
+  if(n!==this.sequence)return;
+  let merged:Point[];
+  try{merged=mergeRoutes(first,second,{maxGapMeters,endpointToleranceMeters:1,snapToleranceMeters:50,connector});}
+  catch(error){this.pending=false;this.status='Merge unavailable · the current route was kept';this.notify();throw error;}
+  this.checkpoint();this.pending=false;this.alternatePaths=[];this.activity.path=merged;this.activity.waypoints=this.activity.source==='imported'||other.source==='imported'?[]:[merged[0],merged.at(-1)!];
+  if(this.activity.source==='imported'||other.source==='imported')this.activity.source='imported';else this.activity.source='routed';
+  delete this.activity.loop;delete this.activity.splits;this.selected=-1;this.status='Routes merged';this.notify();
+ }
  add(p:Point){this.edit([...this.activity.waypoints,p]);}
  move(i:number,p:Point){this.edit(this.activity.waypoints.map((v,j)=>i===j?p:v));this.selected=i;}
  insert(i:number,p:Point){const pts=[...this.activity.waypoints];pts.splice(i+1,0,p);this.edit(pts);this.selected=i+1;}
@@ -61,9 +114,9 @@ export class Editor {
  }
  undo(){const s=this.past.pop();if(!s)return;this.future.push(this.snapshot());this.restore(s);}
  redo(){const s=this.future.pop();if(!s)return;this.past.push(this.snapshot());this.restore(s);}
- private restore(s:Snapshot){this.invalidate();Object.assign(this.activity,s);this.selected=-1;this.status=s.source==='draft'?'Restoring waypoints…':'Route restored';this.notify();if(s.source==='draft')this.recalculate();}
+ private restore(s:Snapshot){this.invalidate();this.alternatePaths=[];const previous=this.splitOutputs;Object.assign(this.activity,{path:s.path,waypoints:s.waypoints,source:s.source});if(s.loop)this.activity.loop=s.loop;else delete this.activity.loop;if(s.splits)this.activity.splits=s.splits;else delete this.activity.splits;this.splitOutputs=[...s.splitOutputs];if(previous!==this.splitOutputs)this.onSplitOutputsChange(this.splitOutputs,previous,false);this.selected=-1;this.status=s.source==='draft'?'Restoring waypoints…':'Route restored';this.notify();if(s.source==='draft')this.recalculate();}
  async recalculate(){
-  this.invalidate();if(this.activity.waypoints.length<2){this.status=this.activity.waypoints.length?'Add another point to route.':'Click the map to begin.';this.notify();return;}
+  this.invalidate();this.alternatePaths=[];if(this.activity.waypoints.length<2){this.status=this.activity.waypoints.length?'Add another point to route.':'Click the map to begin.';this.notify();return;}
   const profile=resolveProfile(this.activity.settings.sport,this.activity.settings.profile);const advisory=routeCapWarning(profile,cumulative(this.activity.waypoints).at(-1)??0);if(advisory)this.onMessage(advisory);
   this.activity.source='draft';this.pending=true;this.status='Finding accessible paths…';this.notify();const n=this.sequence;
   this.timer=setTimeout(async()=>{

@@ -4,8 +4,9 @@ import {el} from './ui.js';
 // The only untyped boundary is MapLibre's optional browser UMD bundle.
 // Application geometry and all provider contracts remain strictly typed.
 declare global {interface Window {maplibregl?:any}}
-type Actions={add:(p:Point)=>void;move:(i:number,p:Point)=>void;insert:(i:number,p:Point)=>void;select:(i:number)=>void;message:(s:string)=>void;loopStart:(fraction:number)=>void};
+type Actions={add:(p:Point)=>void;move:(i:number,p:Point)=>void;insert:(i:number,p:Point)=>void;select:(i:number)=>void;message:(s:string)=>void;loopStart:(fraction:number)=>void;freehand:(points:Point[])=>void};
 type PlanMarks={start:Point;end:Point};
+type MapClickEvent={originalEvent:{target:EventTarget|null};lngLat:{lat:number;lng:number}};
 const NS='http://www.w3.org/2000/svg';
 const world=(p:Point):[number,number]=>{const lat=Math.max(-85.0511,Math.min(85.0511,p.lat))*Math.PI/180;return [(p.lon+180)/360,(1-Math.log(Math.tan(Math.PI/4+lat/2))/Math.PI)/2];};
 const unworld=(x:number,y:number):Point=>({lon:wrapLon(x*360-180),lat:Math.atan(Math.sinh(Math.PI*(1-2*Math.max(0,Math.min(1,y)))))*180/Math.PI});
@@ -14,11 +15,12 @@ const gradeColor=(g:number):string=>g<-.02?'#2f7fd0':g>.02?'#d94f2b':'#8fa66a';
 const GRADE_STOPS:unknown[]=[-.15,'#2f7fd0',0,'#8fa66a',.15,'#d94f2b'];
 export class RouteMap {
  private map:any=null;private markers:any[]=[];private hoverMarker:any=null;private a:Activity|null=null;private plan:PlanMarks|null=null;private selected=-1;private drawing=true;private svg:SVGSVGElement;private view={x:0,y:0,zoom:13};private ready=false;private everReady=false;private missingSince=Date.now();private healthTimer:ReturnType<typeof setInterval>|null=null;private lastMapError='';private disposed=false;private resized:ResizeObserver;private moveCleanup:(()=>void)|null=null;private hoverPoint:Point|null=null;
+ private freehand=false;private freehandCleanup:(()=>void)|null=null;private suppressClick=false;
  private scrubberMarker:any=null;
  constructor(private host:HTMLElement,private actions:Actions){
   const [x,y]=world({lat:31.2304,lon:121.4737});this.view={x,y,zoom:13};
   this.svg=document.createElementNS(NS,'svg');this.svg.classList.add('coordinate-map');this.svg.setAttribute('aria-label','Coordinate canvas: basemap unavailable');this.host.append(this.svg);
-  this.resized=new ResizeObserver(()=>{this.map?.resize();this.drawFallback();});this.resized.observe(host);this.bindFallback();this.drawFallback();
+  this.resized=new ResizeObserver(()=>{this.map?.resize();this.drawFallback();});this.resized.observe(host);this.bindFallback();this.bindFreehand();this.drawFallback();
  }
  async init(style:string):Promise<void>{
   try{
@@ -37,7 +39,7 @@ export class RouteMap {
    this.missingSince=Date.now();this.healthTimer=setInterval(()=>this.checkBasemap(),1200);
    this.map.on('load',()=>this.markBasemapReady());
    this.map.on('style.load',()=>{this.markBasemapReady();this.installLayers();this.render();});
-   this.map.on('click',(e:any)=>{if(this.drawing&&e.originalEvent.target.tagName==='CANVAS')this.actions.add({lat:e.lngLat.lat,lon:wrapLon(e.lngLat.lng)});});
+   this.map.on('click',(e:MapClickEvent)=>{if(!this.suppressClick&&!this.freehand&&this.drawing&&e.originalEvent.target instanceof HTMLCanvasElement)this.actions.add({lat:e.lngLat.lat,lon:wrapLon(e.lngLat.lng)});});
    // A single missing tile or glyph does not take the map down. The health check
    // falls back only when the whole basemap has no rendered vector features.
    this.map.on('error',(event:any)=>{this.lastMapError=String(event?.error?.message||'Map resources unavailable.');if(this.ready){const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent='Some map data is unavailable. Route editing still works.';}});
@@ -75,6 +77,7 @@ export class RouteMap {
  }
  setStyle(style:string):void{if(!this.map)return;this.ready=false;this.missingSince=Date.now();this.lastMapError='';this.showCoordinateCanvas();try{this.map.setStyle(style,{diff:false});}catch{this.useCoordinateCanvas('Basemap unavailable. Coordinate view remains usable.');}}
  update(a:Activity,selected:number,drawing:boolean,plan?:PlanMarks):void {this.a=a;this.selected=selected;this.drawing=drawing;this.plan=plan??null;this.render();}
+ setFreehand(enabled:boolean):void {this.freehand=enabled;if(!enabled)this.freehandCleanup?.();this.svg.style.cursor=enabled||this.drawing?'crosshair':'grab';}
  private installLayers():void {
   if(!this.map||this.map.getSource('route'))return;
   this.map.addSource('route',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
@@ -95,7 +98,7 @@ export class RouteMap {
   const shaded=grade.features.length>0;
   this.map.setLayoutProperty('route-line','visibility',shaded?'none':'visible');
   this.map.setLayoutProperty('route-gradient','visibility',shaded?'visible':'none');
-  this.map.getCanvas().style.cursor=this.drawing?'crosshair':'grab';this.markers.forEach(m=>m.remove());this.markers=[];
+  this.map.getCanvas().style.cursor=this.freehand||this.drawing?'crosshair':'grab';this.markers.forEach(m=>m.remove());this.markers=[];
   const gl=window.maplibregl,pts=this.a.waypoints;
   const add=(p:Point,i:number,mid=false)=>{const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));b.type='button';b.title=mid?'Drag to insert waypoint':`Waypoint ${i+1}: drag to move`;b.setAttribute('aria-label',b.title);b.onclick=e=>{e.stopPropagation();if(mid)this.actions.insert(i,p);else this.actions.select(i);};const m=new gl.Marker({element:b,draggable:true}).setLngLat([p.lon,p.lat]).addTo(this.map);m.on('dragend',()=>{const ll=m.getLngLat(),q={lat:ll.lat,lon:wrapLon(ll.lng)};if(mid)this.actions.insert(i,q);else this.actions.move(i,q);});this.markers.push(m);};
   pts.forEach((p,i)=>{add(p,i);if(i<pts.length-1)add(this.middle(i),i,true);});
@@ -136,7 +139,31 @@ export class RouteMap {
    else path(this.a.path,'fallback-route');if(this.a.source==='draft')path(this.a.waypoints,'fallback-draft');this.a.waypoints.forEach((p,i)=>{const [x,y]=this.xy(p);make('circle',{cx:String(x),cy:String(y),r:'12',class:`fallback-point ${i===this.selected?'selected':''}`,'data-index':String(i)});const t=make('text',{x:String(x),y:String(y+4),class:'fallback-number','data-index':String(i)});t.textContent=String(i+1);if(i<this.a!.waypoints.length-1){const [mx,my]=this.xy(this.middle(i));make('circle',{cx:String(mx),cy:String(my),r:'6',class:'fallback-mid','data-mid':String(i)});}});}
   if(this.plan)this.planMarks().forEach(m=>{const [x,y]=this.xy(m.p),flag:Record<string,string>=m.draggable?{'data-loop-start':'1'}:{};make('circle',{cx:String(x),cy:String(y),r:'10',class:`fallback-${m.cls}`,'data-loop':'1',...flag});const t=make('text',{x:String(x),y:String(y+3.5),class:'fallback-plan-label','data-loop':'1',...flag});t.textContent=m.text;});
   if(this.hoverPoint){const [x,y]=this.xy(this.hoverPoint);make('circle',{cx:String(x),cy:String(y),r:'6',class:'chart-map-marker'});}
-  this.svg.style.cursor=this.drawing?'crosshair':'grab';
+  this.svg.style.cursor=this.freehand||this.drawing?'crosshair':'grab';
+ }
+ private bindFreehand():void {
+  this.host.addEventListener('pointerdown',event=>{
+   if(!this.freehand||event.button!==0)return;
+   const target=event.target;
+   if(target instanceof Element&&target.closest('[data-index],[data-mid],[data-loop]'))return;
+   event.preventDefault();event.stopPropagation();this.startFreehand(event);
+  },true);
+ }
+ private mapPoint(event:PointerEvent):Point {
+  if(this.map&&this.ready){const rect=this.host.getBoundingClientRect(),p=this.map.unproject([event.clientX-rect.left,event.clientY-rect.top]);return {lat:p.lat,lon:wrapLon(p.lng)};}
+  return this.point(event);
+ }
+ private startFreehand(event:PointerEvent):void {
+  const rect=this.host.getBoundingClientRect(),points=[this.mapPoint(event)],line=document.createElementNS(NS,'polyline'),preview=document.createElementNS(NS,'svg');
+  preview.classList.add('freehand-preview');preview.setAttribute('viewBox',`0 0 ${rect.width} ${rect.height}`);line.classList.add('freehand-stroke');preview.append(line);this.host.append(preview);this.suppressClick=true;
+  let lastX=event.clientX,lastY=event.clientY;
+  const update=()=>{line.setAttribute('points',points.map(p=>{const q=this.map&&this.ready?this.map.project([p.lon,p.lat]):{x:this.xy(p)[0],y:this.xy(p)[1]};return `${q.x},${q.y}`;}).join(' '));};
+  const cleanup=()=>{window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',cancel,true);preview.remove();this.freehandCleanup=null;setTimeout(()=>{this.suppressClick=false;},0);};
+  const move=(e:PointerEvent)=>{if(e.pointerId!==event.pointerId)return;if(Math.hypot(e.clientX-lastX,e.clientY-lastY)<3)return;const r=this.host.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)return;lastX=e.clientX;lastY=e.clientY;if(points.length<5000)points.push(this.mapPoint(e));update();};
+  const up=(e:PointerEvent)=>{if(e.pointerId!==event.pointerId)return;cleanup();if(points.length>1)this.actions.freehand(points);};
+  const cancel=(e:PointerEvent)=>{if(e.pointerId===event.pointerId)cleanup();};
+  this.freehandCleanup=()=>cleanup();window.addEventListener('pointermove',move,true);window.addEventListener('pointerup',up,true);window.addEventListener('pointercancel',cancel,true);
+  update();
  }
  private bindFallback():void {
   this.svg.addEventListener('wheel',e=>{e.preventDefault();this.zoom(e.deltaY<0?.5:-.5);},{passive:false});
@@ -167,5 +194,5 @@ export class RouteMap {
   if(this.map&&this.ready){this.scrubberMarker?.remove();this.scrubberMarker=null;if(p){const b=el('span','scrub-marker');this.scrubberMarker=new window.maplibregl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map);}return;}
   this.drawFallback();
  }
- dispose():void {this.disposed=true;if(this.healthTimer)clearInterval(this.healthTimer);this.resized.disconnect();this.moveCleanup?.();this.markers.forEach(m=>m.remove());this.hoverMarker?.remove();this.scrubberMarker?.remove();this.map?.remove();}
+ dispose():void {this.disposed=true;if(this.healthTimer)clearInterval(this.healthTimer);this.resized.disconnect();this.moveCleanup?.();this.freehandCleanup?.();this.markers.forEach(m=>m.remove());this.hoverMarker?.remove();this.scrubberMarker?.remove();this.map?.remove();}
 }
