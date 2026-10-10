@@ -4,6 +4,14 @@ import {exportFIT, importFIT, crc16} from '../dist/src/fit.js';
 import {defaults, simulate} from '../dist/src/model.js';
 import {cumulative} from '../dist/src/geometry.js';
 
+// The first byte after the 14-byte header must be a definition message: bit 6 set, bit 7 clear.
+test('the file opens with a spec-correct definition message header',()=>{
+ const bytes=exportFIT(activity(),simulate(activity()));
+ const h=bytes[14];
+ assert.equal(h&0x80,0,'bit 7 must be clear (0x80 would be a compressed-timestamp data message)');
+ assert.equal(h&0x40,0x40,'bit 6 must mark a definition message');
+});
+
 const activity=(settings={})=>{const a=defaults();a.path=[{lat:0,lon:0,ele:10},{lat:0,lon:0.01,ele:20},{lat:0,lon:0.02,ele:15}];a.source='routed';Object.assign(a.settings,settings);return a;};
 const u16=(bytes,i)=>bytes[i]|bytes[i+1]<<8;
 const u32=(bytes,i)=>(bytes[i]|bytes[i+1]<<8|bytes[i+2]<<16|(bytes[i+3]<<24>>>0))>>>0;
@@ -13,7 +21,8 @@ const walk=bytes=>{
  let recordFields=null,o=0;
  while(o<body.length){
   const h=body[o++];
-  if(h&0x80){
+  // FIT definition messages set bit 6 (0x40); bit 7 (0x80) is a compressed-timestamp data header.
+  if(h&0x40){
    const mesg=body[o+2]|body[o+3]<<8,n=body[o+4],fields=[];
    o+=5;
    for(let i=0;i<n;i++){fields.push([body[o],body[o+1],body[o+2]]);o+=3;}

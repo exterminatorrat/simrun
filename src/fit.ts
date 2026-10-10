@@ -15,7 +15,9 @@ class Buf {b:number[]=[];
  s32(v:number){this.u32(v<0?v>>>0:v);}
  raw(bytes:number[]|Uint8Array){for(let i=0;i<bytes.length;i++)this.u8(bytes[i]);}
  str(s:string,n:number){const u=new TextEncoder().encode(s).subarray(0,n);this.raw(u);for(let i=u.length;i<n;i++)this.u8(0);}
- def(local:number,mesg:number,fields:number[][]){this.u8(0x80|local);this.u8(0);this.u8(0);this.u16(mesg);this.u8(fields.length);for(const f of fields){this.u8(f[0]);this.u8(f[1]);this.u8(f[2]);}}
+ // FIT definition-message header: bit 6 (0x40) marks a definition; 0x80 would be a
+ // compressed-timestamp data message.
+ def(local:number,mesg:number,fields:number[][]){this.u8(0x40|local);this.u8(0);this.u8(0);this.u16(mesg);this.u8(fields.length);for(const f of fields){this.u8(f[0]);this.u8(f[1]);this.u8(f[2]);}}
 }
 
 function fitFile(body:Buf):Uint8Array {
@@ -40,7 +42,8 @@ export function exportFIT(a:Activity,s:Simulation):Uint8Array {
  const avgSpeed=s.distance/Math.max(1,elapsed),maxSpeed=Math.max(...points.map(p=>p.speed));
  const b=new Buf();
  b.def(0,0,[[0,1,0x00],[1,2,0x84],[2,2,0x84],[3,4,0x86],[4,4,0x86],[8,16,0x07]]);
- b.u8(0);b.u8(4);b.u16(0);b.u16(0);b.u32(0);b.u32(start);b.str(a.name||PRODUCT,16);
+ // local type 0 header, then type 4 = activity, manufacturer 255 = development (no real device claimed).
+ b.u8(0);b.u8(4);b.u16(255);b.u16(0);b.u32(0);b.u32(start);b.str(a.name||PRODUCT,16);
  const recFields=[[253,4,0x86],[0,4,0x85],[1,4,0x85],[2,2,0x84],[6,2,0x84]];
  if(hr)recFields.push([3,1,0x02]);
  if(cad)recFields.push([4,1,0x02]);
@@ -93,18 +96,22 @@ export function importFIT(data:Uint8Array):{activity:Activity;notice:string} {
  let o=0,last=-1,unknown=0,laps=0,sport=0,name='';
  while(o<body.length){
   const head=body[o++];
-  if(head&0x80){
+  // Bit 6 (0x40) marks a definition message; bit 5 (0x20) on a definition means developer data.
+  if(head&0x40){
+   const dev=(head&0x20)!==0;
    if(o+4>body.length){skipped.push('truncated definition');break;}
    const big=body[o+1]===1,mesg=big?body[o+2]<<8|body[o+3]:body[o+2]|body[o+3]<<8,count=body[o+4];o+=5;
    const fields:number[][]=[];
    for(let i=0;i<count&&o+3<=body.length;i++){fields.push([body[o],body[o+1],body[o+2]]);o+=3;}
-   if(fields.length<count||head&0x40){skipped.push(head&0x40?'developer data':'truncated definition');break;}
+   if(fields.length<count){skipped.push('truncated definition');break;}
+   if(dev){skipped.push('developer data');break;}
    defs.set(head&0x0f,{mesg,big,fields});continue;
   }
   const def=defs.get(head&0x0f);
   if(!def){skipped.push(`data for undefined local type ${head&0x0f}`);break;}
   let stamp:number|undefined;
-  if(head&0x40){const off=body[o++];stamp=(last&~255)|off;if(stamp<=last)stamp+=256;}
+  // Bit 7 (0x80) marks a compressed-timestamp data message.
+  if(head&0x80){const off=body[o++];stamp=(last&~255)|off;if(stamp<=last)stamp+=256;}
   const vals=new Map<number,number|string|undefined>();let truncated=false;
   for(const f of def.fields){
    if(o+f[1]>body.length){truncated=true;break;}
