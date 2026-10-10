@@ -1,4 +1,4 @@
-import type {Activity, Sample, Simulation, Sport} from './types.js';
+import type {Activity, Sample, Simulation, Sport,RouteSurfaceEdge} from './types.js';
 import {elevationStats} from './geometry.js';
 import {plannedPath} from './model.js';
 
@@ -8,6 +8,15 @@ type HrZone = {index:number;min:number;max:number;seconds:number;percent:number}
 type Histogram = {bins:{min:number;max:number;seconds:number}[];binSize:number;unit:string};
 type UnitSplit = {start:number;end:number;distance:number;duration:number;pace:number;speed:number};
 export type ActivityStats = {name:string;sport:Sport;distance:number;duration:number;avgSpeed:number;avgPace:number|null;elevationGain:number|null;avgHr:number|null;calories:number|null};
+export interface RouteCategoryDistance {name:string;distance:number}
+
+function routeCategory(edges:RouteSurfaceEdge[],key:'surface'|'roadClass'):RouteCategoryDistance[] {
+ const totals=new Map<string,number>();
+ for(const edge of edges){const name=edge[key];if(name)totals.set(name,(totals.get(name)||0)+edge.distance);}
+ return [...totals].map(([name,distance])=>({name,distance})).sort((a,b)=>b.distance-a.distance||a.name.localeCompare(b.name));
+}
+export const surfaceBreakdown=(edges:RouteSurfaceEdge[]=[]):RouteCategoryDistance[]=>routeCategory(edges,'surface');
+export const roadClassBreakdown=(edges:RouteSurfaceEdge[]=[]):RouteCategoryDistance[]=>routeCategory(edges,'roadClass');
 
 const round1=(v:number):number=>Math.round(v*10)/10;
 
