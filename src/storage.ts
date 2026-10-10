@@ -35,6 +35,12 @@ export class LocalStore {
   await new Promise<void>((resolve,reject)=>{const tx=this.db!.transaction('activities','readwrite');const store=tx.objectStore('activities');clean.forEach(a=>store.put(a));tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
  }
 }
+export function createBackup(activities:Activity[],preferences:Preferences):string {
+ if(activities.length>500)throw Error('Backup can contain at most 500 activities.');
+ const backup=JSON.stringify({product:'SimRun',version:1,createdAt:new Date().toISOString(),activities:activities.map(validateActivity),preferences:validatePreferences(preferences)},null,2);
+ if(backup.length>50000000)throw Error('Backup must be smaller than 50 MB.');
+ return backup;
+}
 export function parseBackup(text:string):{activities:Activity[];preferences:Preferences}{
  if(text.length>50000000)throw Error('Backup must be smaller than 50 MB.');const b=JSON.parse(text);
  if(b?.product!=='SimRun'||b.version!==1||!Array.isArray(b.activities)||b.activities.length>500)throw Error('Unsupported SimRun backup.');
@@ -51,6 +57,16 @@ export function sanitizeTags(value:unknown):string[]|undefined{
   if(out.length>=8)break;
  }
  return out.length?out:undefined;
+}
+export function collectionNames(rows:Activity[]):string[]{return [...new Set(rows.map(a=>a.collection).filter((name):name is string=>Boolean(name)))].sort((a,b)=>a.localeCompare(b));}
+export function filterActivitiesByCollection(rows:Activity[],collection:string|null|undefined):Activity[]{
+ if(collection===undefined)return rows;
+ return rows.filter(a=>collection===null?!a.collection:a.collection===collection);
+}
+export async function removeActivities(store:LocalStore,ids:string[]):Promise<number>{
+ const existing=new Set((await store.list()).map(a=>a.id)),selected=[...new Set(ids)].filter(id=>existing.has(id));
+ await Promise.all(selected.map(id=>store.remove(id)));
+ return selected.length;
 }
 export function searchActivities(rows:Activity[],query:string):Activity[]{
  const tokens=query.toLowerCase().split(/\s+/).filter(Boolean);
