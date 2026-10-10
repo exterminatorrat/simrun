@@ -2,6 +2,7 @@ import type {Activity,Point,Simulation,RouteData} from './types.js';
 import {atDistance,cumulative} from './geometry.js';
 import {clock,plannedPath} from './model.js';
 import {download,safeFilename} from './gpx.js';
+import {sportLabel} from './sports.js';
 export interface Cue {distance:number;turn:string;heading:number;lat:number;lon:number;streetName?:string}
 const rad=Math.PI/180;
 /** Initial great-circle bearing in degrees clockwise from north. */
@@ -67,7 +68,7 @@ export function cueSheetCSV(a:Activity,sim:Simulation,units:'metric'|'imperial')
  return [
   'SimRun cue sheet',
   row('Activity',a.name),
-  row('Sport',a.settings.sport==='run'?'Run':'Ride'),
+  row('Sport',sportLabel(a.settings.sport)),
   row('Distance',`${(sim.distance/factor).toFixed(2)} ${label}`),
   row('Simulated elapsed',clock(sim.duration)),
   row('Turns','Derived from route geometry. Street names are included only when provided by the routing service; landmarks are not included.'),

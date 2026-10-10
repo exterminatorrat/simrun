@@ -1,11 +1,12 @@
 import type {Point,Preferences,RouteProfile,Sport,RouteData,RouteSurfaceEdge,StreetNameSpan} from './types.js';
+import {profileForSport} from './sports.js';
 import {atDistance,cumulative,decodePolyline,lowerBound,resample,validPoint} from './geometry.js';
 export interface RoutingProvider {route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>;elevation(path:Point[],signal:AbortSignal):Promise<Point[]>;alternates?(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[][]>;routeDetails?(path:Point[],profile:RouteProfile,signal:AbortSignal):Promise<RouteData>;lastCached?:boolean}
 export class ProviderError extends Error {constructor(message:string,public status=0,public code=0){super(message);}}
 /** Valhalla costing per profile; bicycle_type aliases are case-insensitive. */
 export const PROFILE_OPTIONS:Record<RouteProfile,{costing:'pedestrian'|'bicycle';options:Record<string,unknown>}>={walk:{costing:'pedestrian',options:{}},hike:{costing:'pedestrian',options:{max_hiking_difficulty:6}},road:{costing:'bicycle',options:{bicycle_type:'Hybrid'}},mtb:{costing:'bicycle',options:{bicycle_type:'Mountain',use_roads:.1}}};
 /** Per-activity profile, defaulting a run to walk and a ride to road. */
-export const resolveProfile=(sport:Sport,profile?:RouteProfile):RouteProfile=>profile??(sport==='run'?'walk':'road');
+export const resolveProfile=(sport:Sport,profile?:RouteProfile):RouteProfile=>profile??profileForSport(sport);
 /** Public Valhalla distance caps: about 100 km on foot and 150 km by bicycle. */
 export const PUBLIC_CAP_METERS:Record<RouteProfile,number>={walk:100000,hike:100000,road:150000,mtb:150000};
 type ValhallaManeuver={begin_shape_index?:number;end_shape_index?:number;street_names?:unknown};

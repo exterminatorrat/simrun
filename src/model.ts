@@ -2,6 +2,8 @@ import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preference
 import {atDistance,clamp,cumulative,elevationStats,isClosedLoop,loopPath,lowerBound,rotatedLoop,validPoint,wrapLon} from './geometry.js';
 import {newId} from './id.js';
 import {expandWorkout,stepAt} from './workout.js';
+import {usesPace,sportFromText} from './sports.js';
+import {averageGapPace,gradeAdjustedPace} from './gap.js';
 export const PRODUCT='SimRun';
 export const MAX_LOOP_LAPS=20000,MAX_LOOP_DISTANCE=5000000,MAX_LOOP_POINTS=100000;
 export const WEATHER_PRESETS:Record<WeatherPreset,{label:string;tempC:number;humidity:number;headwindKph:number}>={ideal:{label:'Ideal',tempC:15,humidity:50,headwindKph:0},cool:{label:'Cool',tempC:6,humidity:60,headwindKph:3},mild:{label:'Mild',tempC:18,humidity:55,headwindKph:5},warm:{label:'Warm',tempC:26,humidity:50,headwindKph:5},hot:{label:'Hot',tempC:34,humidity:30,headwindKph:4},humid:{label:'Humid',tempC:28,humidity:85,headwindKph:3},windy:{label:'Windy',tempC:16,humidity:55,headwindKph:22}};
@@ -22,13 +24,13 @@ export function localInput(date=new Date()):string{return new Date(date.getTime(
 /** The map style that matches the chosen appearance; each theme has its own endpoint. */
 export const mapStyleFor=(p:Preferences):string=>p.theme==='dark'?p.mapStyleDark:p.mapStyle;
 export function defaults():Activity {
- const now=Date.now();return {id:newId(),version:1,name:`${new Date().getHours()<12?'Morning':new Date().getHours()<18?'Afternoon':'Evening'} run`,createdAt:now,updatedAt:now,waypoints:[],path:[],source:'draft',settings:{sport:'run',start:localInput(),utcOffset:-new Date().getTimezoneOffset(),pace:300,speed:24,mode:'constant',variation:.06,sample:2,hrEnabled:false,hrAverage:150,hrVariation:5,seed:Math.floor(Math.random()*1000000),gps:{noise:0,dropout:0}}};
+ const now=Date.now();return {id:newId(),version:1,name:`${new Date().getHours()<12?'Morning':new Date().getHours()<18?'Afternoon':'Evening'} run`,createdAt:now,updatedAt:now,waypoints:[],path:[],source:'draft',settings:{sport:'run',start:localInput(),utcOffset:-new Date().getTimezoneOffset(),pace:300,speed:24,mode:'constant',variation:.06,sample:2,paceStrategy:'even',hrEnabled:false,hrAverage:150,hrVariation:5,seed:Math.floor(Math.random()*1000000),gps:{noise:0,dropout:0}}};
 }
 /** Builds an imported activity from retained geometry. Missing or non-increasing timestamps never fabricate timing. */
 export function importedActivity(points:Point[],name:string,typeText:string,label='Imported'):{activity:Activity;notices:string[]} {
  const a=defaults();a.path=points;a.source='imported';a.waypoints=[];
  a.name=((name||'').trim()||'Imported activity').slice(0,160);
- if(/cycl|bik|ride/i.test(typeText))a.settings.sport='ride';
+ a.settings.sport=sportFromText(typeText);
  const c=cumulative(points),d=c[c.length-1];if(d<1)throw Error(`${label} route is shorter than one meter.`);
  const notices:string[]=[];
  const timed=points.every((p,i)=>p.time!==undefined&&(i===0||p.time>points[i-1].time!));
@@ -55,7 +57,7 @@ export function detectStops(points:Point[],minSeconds=30,maxSpeed=0.7):RestStop[
  flush();
  return out;
 }
-export function durationFor(meters:number,sport:Sport,pace:number,speed:number):number{return sport==='run'?meters/1000*pace:meters/1000/speed*3600;}
+export function durationFor(meters:number,sport:Sport,pace:number,speed:number):number{return usesPace(sport)?meters/1000*pace:meters/1000/speed*3600;}
 export function clock(value:number):string {const n=Math.max(0,Math.round(value)),h=Math.floor(n/3600),m=Math.floor(n%3600/60),s=n%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;}
 export function parseClock(s:string):number {
  if(!/^\d{1,3}:\d{2}(:\d{2})?$/.test(s.trim()))throw Error('Use m:ss or h:mm:ss.');const n=s.trim().split(':').map(Number);if(n.slice(1).some(v=>v>=60))throw Error('Seconds and minutes must be below 60.');return n.reduce((v,n)=>v*60+n,0);
@@ -65,7 +67,10 @@ export function startTime(s:Settings):number {
  const time=Date.parse(s.start+':00Z');if(!Number.isFinite(time)||new Date(time).toISOString().slice(0,16)!==s.start)throw Error('Invalid calendar date.');return time-s.utcOffset*60000;
 }
 export function validateSettings(s:Settings):void {
- if(!s||!['run','ride'].includes(s.sport)||!['constant','natural'].includes(s.mode)||![1,2,5].includes(s.sample))throw Error('Activity settings are invalid.');
+ if(!s||!['run','ride','walk','hike','trail-run','mtb'].includes(s.sport)||!['constant','natural'].includes(s.mode)||![1,2,5].includes(s.sample))throw Error('Activity settings are invalid.');
+ if(s.paceStrategy!==undefined&&!['even','negative-split','positive-split','segments'].includes(s.paceStrategy))throw Error('Invalid pace strategy.');
+ if(s.paceSegments!==undefined){const min=usesPace(s.sport)?60:1,max=usesPace(s.sport)?3600:150;if(!Array.isArray(s.paceSegments)||s.paceSegments.length<2||s.paceSegments.length>50||s.paceSegments.some(v=>!Number.isFinite(v)||v<min||v>max)||s.paceStrategy!=='segments')throw Error('Invalid segment pace targets.');}
+ if(s.paceStrategy==='segments'&&!s.paceSegments)throw Error('Segment pace targets are required.');
  if(s.profile!==undefined&&!['walk','hike','road','mtb'].includes(s.profile))throw Error('Invalid routing profile.');
  for(const [value,min,max] of [[s.pace,60,3600],[s.speed,1,150],[s.variation,0,.25],[s.utcOffset,-720,840],[s.hrAverage,30,240],[s.hrVariation,0,30],[s.seed,0,2147483647]])if(!Number.isFinite(value)||value<min||value>max)throw Error('Activity settings are outside supported limits.');
  if(typeof s.hrEnabled!=='boolean')throw Error('Invalid heart-rate setting.');startTime(s);
@@ -79,6 +84,7 @@ export function validateSettings(s:Settings):void {
 export function validateActivity(value:unknown):Activity {
  if(!value||typeof value!=='object')throw Error('Not a SimRun activity.');const a=value as Activity;
  if(a.version!==1||typeof a.id!=='string'||!a.id||a.id.length>100||typeof a.name!=='string'||a.name.length>160)throw Error('Invalid activity version, ID or name.');
+ if(a.description!==undefined&&typeof a.description!=='string')throw Error('Invalid activity description.');
  if(!['draft','routed','imported'].includes(a.source)||!Number.isFinite(a.createdAt)||!Number.isFinite(a.updatedAt))throw Error('Activity metadata is invalid.');
  if(!Array.isArray(a.path)||a.path.length>100000||!Array.isArray(a.waypoints)||a.waypoints.length>200)throw Error('Route exceeds supported size.');
  const clean=(p:Point):Point=>{if(!validPoint(p))throw Error('Invalid route coordinate.');const q:Point={lat:p.lat,lon:p.lon};if(p.ele!==undefined){if(!Number.isFinite(p.ele)||Math.abs(p.ele)>12000)throw Error('Invalid elevation.');q.ele=p.ele;}if(Number.isFinite(p.time))q.time=p.time;if(Number.isFinite(p.hr)&&p.hr!>=0&&p.hr!<=255)q.hr=p.hr;return q;};
@@ -139,7 +145,7 @@ export function validateActivity(value:unknown):Activity {
  const power=cleanPower(s.power)||undefined,cadence=cleanCadence(s.cadence)||undefined,fatigue=cleanFatigue(s.fatigue)||undefined,weather=cleanWeather(s.weather)||undefined,workout=cleanWorkout(a.workout),pauses=cleanPauses(a.pauses),tags=cleanTags(a.tags);
  const path=a.path.map(clean),routeData=cleanRouteData(a.routeData,cumulative(path).at(-1)??0);
  // Explicitly select fields; never merge untrusted objects into app state.
- return {id:a.id,version:1,name:a.name,createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path,waypoints:a.waypoints.map(clean),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{}),...(power?{power}:{}),...(cadence?{cadence}:{}),...(fatigue?{fatigue}:{}),...(weather?{weather}:{})},...(loop?{loop}:{}),...(splits?{splits}:{}),...(routeData?{routeData}:{}),...(workout?{workout}:{}),...(pauses?{pauses}:{}),...(tags?{tags}:{})};
+ return {id:a.id,version:1,name:a.name,...(a.description!==undefined?{description:a.description.slice(0,2000)}:{}),createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path,waypoints:a.waypoints.map(clean),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,paceStrategy:s.paceStrategy??'even',...(s.paceSegments?{paceSegments:[...s.paceSegments]}:{}),hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{}),...(power?{power}:{}),...(cadence?{cadence}:{}),...(fatigue?{fatigue}:{}),...(weather?{weather}:{})},...(loop?{loop}:{}),...(splits?{splits}:{}),...(routeData?{routeData}:{}),...(workout?{workout}:{}),...(pauses?{pauses}:{}),...(tags?{tags}:{})};
 }
 /** Resolves a lap plan against the current closed route, or null when it cannot apply. */
 export function loopPlan(a:Activity):LoopResult|null {
@@ -177,9 +183,12 @@ export function simulate(a:Activity):Simulation {
   const grade=gradeAt(d),terrain=grade>0?grade*2:grade*1.1;
   const fatigue=s.fatigue?1+s.fatigue.percent/100*(i/n):1;
   const step=steps?stepAt(steps,d):null;
-  const paceFactor=s.sport==='run'?(step&&step.step.pace&&s.pace>0?step.step.pace/s.pace:1):(step&&step.step.speed&&step.step.speed>0?s.speed/step.step.speed:1);
+  const paceFactor=usesPace(s.sport)?(step&&step.step.pace&&s.pace>0?step.step.pace/s.pace:1):(step&&step.step.speed&&step.step.speed>0?s.speed/step.step.speed:1);
   const w=s.mode==='natural'?clamp((1+s.variation*waveAt(d)+terrain)*fatigue*paceFactor*(1+turnAt(d)*.08),.65,1.4):paceFactor;
-  weights.push(w);times.push(times[i]+w*ds);
+  const strategy=s.paceStrategy??'even',progress=d/total;
+  const strategyFactor=strategy==='negative-split'?1+.4*(.5-progress):strategy==='positive-split'?1-.4*(.5-progress):strategy==='segments'?(()=>{const targets=s.paceSegments!,target=targets[Math.min(targets.length-1,Math.floor(progress*targets.length))],mean=targets.reduce((sum,value)=>sum+value,0)/targets.length;return usesPace(s.sport)?target/mean:mean/target;})():1;
+  const adjustedWeight=strategy==='even'?w:w*strategyFactor;
+  weights.push(adjustedWeight);times.push(times[i]+adjustedWeight*ds);
  }
  const raw=times[n];for(let i=1;i<times.length;i++)times[i]=times[i]/raw*durationMs;
  // Bound memory on long activities and show the effective interval in the UI.
@@ -188,8 +197,8 @@ export function simulate(a:Activity):Simulation {
  for(let k=0;k<=samples;k++){
   const ms=Math.min(durationMs,k*intervalMs),i=Math.min(n,Math.max(1,lowerBound(times,ms)));
   const t=(ms-times[i-1])/(times[i]-times[i-1]),d=clamp((i-1+t)*ds,0,total);
-  const point=atDistance(route,c,d);delete point.hr;const speed=ds/((times[i]-times[i-1])/1000);
-  points.push({...point,time:start+ms,distance:d,speed});
+  const point=atDistance(route,c,d);delete point.hr;const speed=ds/((times[i]-times[i-1])/1000),grade=gradeAt(d);
+  points.push({...point,time:start+ms,distance:d,speed,...(usesPace(s.sport)?{gapPace:gradeAdjustedPace(1000/speed,grade)}:{})});
  }
  if(s.hrEnabled){
   const avgSpeed=total/(durationMs/1000),next=gpsRandom(s.seed^0x27d4eb2f),step=intervalMs/1000;
@@ -213,8 +222,8 @@ export function simulate(a:Activity):Simulation {
   const mass=s.power?.weightKg??70,cda=s.profile==='mtb'?.45:.34;
   points.forEach(p=>{
    const v=Math.max(0,p.speed),grade=gradeAt(p.distance);
-   if(s.power?.enabled){const watts=s.sport==='run'?mass*v*(.98+5*Math.max(0,grade)):v*(.005*mass*9.81+mass*9.81*grade+.5*1.225*cda*v*v)/.97;p.power=Math.round(clamp(watts,0,2000));}
-   if(s.cadence?.enabled)p.cad=s.sport==='run'?Math.round(clamp(168+6*waveAt(p.distance),150,190)):Math.round(clamp(60+v*3.6*1.2+4*waveAt(p.distance),50,110));
+   if(s.power?.enabled){const watts=usesPace(s.sport)?mass*v*(.98+5*Math.max(0,grade)):v*(.005*mass*9.81+mass*9.81*grade+.5*1.225*cda*v*v)/.97;p.power=Math.round(clamp(watts,0,2000));}
+   if(s.cadence?.enabled)p.cad=usesPace(s.sport)?Math.round(clamp(168+6*waveAt(p.distance),150,190)):Math.round(clamp(60+v*3.6*1.2+4*waveAt(p.distance),50,110));
   });
  }
  // Distance-anchored rest stops add elapsed time while moving pace excludes them.
@@ -241,7 +250,7 @@ export function simulate(a:Activity):Simulation {
  const gps=s.gps;
  // Estimated energy: a well-known distance formula for running, a speed-based MET estimate for riding.
  const mass=s.power?.weightKg??70,vKph=total/(durationMs/1000)*3.6;
- const calories=Math.round(s.sport==='run'?1.036*mass*(total/1000):Math.max(0,(vKph*.28+2)*mass*1.05*(durationMs/3600000)));
+ const calories=Math.round(usesPace(s.sport)?1.036*mass*(total/1000):Math.max(0,(vKph*.28+2)*mass*1.05*(durationMs/3600000)));
  return {points:applyDropout(applyGpsNoise(points,gps?.noise??0,s.seed),gps?.dropout??0,s.seed),duration:(durationMs+stoppedMs)/1000,distance:total,interval:intervalMs/1000,calories};
 }
 function gpsRandom(seed:number):()=>number {let t=seed>>>0;return ()=>{t=(t+0x6d2b79f5)>>>0;let r=Math.imul(t^(t>>>15),1|t);r=(r+Math.imul(r^(r>>>7),61|r))^r;return ((r^(r>>>14))>>>0)/4294967296;};}
@@ -293,7 +302,8 @@ export function computeSplits(a:Activity,s:Simulation):Split[] {
   const start=bounds[i-1],end=bounds[i],duration=(timeAtDistance(s.points,end)-timeAtDistance(s.points,start))/1000;
   const slice=s.points.filter(p=>p.distance>=start-1e-6&&p.distance<=end+1e-6);
   const stopped=(a.pauses?.rests??[]).some(r=>r.distance>start&&r.distance<=end);
-  out.push({start,end,distance:end-start,duration,speed:duration>0?(end-start)/duration:0,gain:elevationStats(slice).gain,...(stopped?{stopped:true}:{})});
+  const gapPace=usesPace(a.settings.sport)?averageGapPace(s.points,start,end):null;
+   out.push({start,end,distance:end-start,duration,speed:duration>0?(end-start)/duration:0,gain:elevationStats(slice).gain,...(gapPace!==null?{gapPace}:{}),...(stopped?{stopped:true}:{})});
  }
  return out;
 }
