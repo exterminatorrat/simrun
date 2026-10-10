@@ -5,7 +5,7 @@ import {matchShortcut,shortcuts} from '../dist/src/shortcuts.js';
 const event=(key,values={})=>({key,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,...values});
 
 test('the documented shortcut array is the handler source for every supported action',()=>{
- assert.deepEqual(shortcuts.map(shortcut=>shortcut.id),['undo','redo','delete-waypoint','fit','escape','help']);
+ assert.deepEqual(shortcuts.map(shortcut=>shortcut.id),['undo','redo','delete-waypoint','add-waypoint-center','move-waypoint','fit','escape','help']);
  for(const shortcut of shortcuts)assert.ok(shortcut.keys&&shortcut.description);
 });
 

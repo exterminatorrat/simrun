@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 import type {Activity,Point,Simulation,RouteData} from './types.js';
 import {atDistance,cumulative} from './geometry.js';
 import {clock,plannedPath} from './model.js';
@@ -79,6 +80,6 @@ export function cueSheetCSV(a:Activity,sim:Simulation,units:'metric'|'imperial')
  ].join('\r\n')+'\r\n';
 }
 export function downloadCues(a:Activity,sim:Simulation,units:'metric'|'imperial'):void {
- if(a.source==='draft')throw Error('Resolve the route before exporting. A waypoint preview is not a routed path.');
+ if(a.source==='draft')throw Error(t('Resolve the route before exporting. A waypoint preview is not a routed path.'));
  download(cueSheetCSV(a,sim,units),`${a.settings.start.slice(0,10)}-${safeFilename(a.name)}-cue-sheet.csv`,'text/csv;charset=utf-8');
 }
