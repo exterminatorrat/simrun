@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Editor} from '../dist/src/editor.js';
 import {defaults} from '../dist/src/model.js';
-import {cumulative, isClosedLoop} from '../dist/src/geometry.js';
+import {cumulative, isClosedLoop, resample} from '../dist/src/geometry.js';
 import {loopPlan} from '../dist/src/model.js';
 const a={lat:0,lon:0},b={lat:0,lon:.045},c={lat:.01,lon:.045};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -26,7 +26,7 @@ test('loop plan sets laps, converts to distance, pins the start and survives an 
  e.dispose();
 });
 test('stale routing response cannot overwrite a newer edit',async()=>{const pending=[];const e=new Editor({route:(p,s,signal)=>new Promise(resolve=>pending.push({resolve,p,signal})),elevation:async p=>p});e.edit([a,b]);await sleep(480);assert.equal(pending.length,1);e.move(1,c);assert.equal(pending[0].signal.aborted,true);await sleep(480);assert.equal(pending.length,2);pending[1].resolve([a,c]);await sleep(10);pending[0].resolve([a,b]);await sleep(10);assert.deepEqual(e.activity.path,[a,c]);assert.equal(e.pending,false);assert.equal(e.activity.source,'routed');e.dispose();});
-test('route failure leaves editable waypoints and never blesses straight lines as roads',async()=>{const e=new Editor({route:async()=>{throw Error('Unavailable');},elevation:async p=>p});let message='';e.onMessage=m=>message=m;e.edit([a,b]);await sleep(480);assert.equal(e.pending,false);assert.equal(e.activity.source,'draft');assert.equal(e.activity.path.length,0);assert.equal(e.activity.waypoints.length,2);assert.match(message,/Unavailable/);e.dispose();});
+test('route failure leaves editable waypoints and never blesses straight lines as roads',async()=>{const e=new Editor({route:async()=>{throw Error('Unavailable');},elevation:async p=>p});let message='';e.onMessage=m=>message=m;e.edit([a,b]);await sleep(480);assert.equal(e.pending,false);assert.equal(e.activity.source,'draft');assert.equal(e.activity.path.length,0);assert.equal(e.activity.waypoints.length,2);assert.match(message,/Network unavailable — check your connection and retry/);e.dispose();});
 test('a routed loop stays a loop when the router returns an open seam',async()=>{
  const s={lat:0,lon:0},n={lat:0,lon:.01},east={lat:.01,lon:.01},south={lat:.01,lon:0};
  const seam={lat:0,lon:.0015};
@@ -87,4 +87,60 @@ test('freehand simplification limit reports a message without starting a route r
 
 test('new route edits discard alternate geometry from an earlier route',()=>{
  const e=new Editor(provider);e.alternatePaths=[[a,b]];e.edit([a,c]);assert.deepEqual(e.alternatePaths,[]);e.dispose();
+});
+
+
+const routeActivity=points=>{const x=defaults();x.path=structuredClone(points);x.waypoints=structuredClone(points);x.source='routed';return x;};
+const verifyGeometryHistory=async(e,edit)=>{
+ const before=structuredClone(e.activity.path);
+ edit(e);
+ await sleep(480);
+ const after=structuredClone(e.activity.path);
+ assert.notDeepEqual(after,before);
+ e.undo();
+ assert.deepEqual(e.activity.path,before);
+ e.redo();
+ await sleep(480);
+ assert.deepEqual(e.activity.path,after);
+};
+
+test('add, move, insert, delete, and reorder round-trip route geometry',async()=>{
+ const edits=[
+  e=>e.add({lat:.02,lon:.03}),
+  e=>e.move(1,{lat:.02,lon:.01}),
+  e=>e.insert(1,{lat:.02,lon:.03}),
+  e=>e.remove(1),
+  e=>e.reorder(1,-1)
+ ];
+ for(const edit of edits){const e=new Editor(provider);e.load(routeActivity([a,b,c]));await verifyGeometryHistory(e,edit);e.dispose();}
+});
+
+test('clear, reverse, and out-and-back round-trip imported geometry',()=>{
+ for(const edit of [e=>e.clear(),e=>e.reverse(),e=>e.outAndBack()]){
+  const e=new Editor(provider),activity=defaults();activity.path=[a,b,c];activity.source='imported';e.load(activity);
+  const before=structuredClone(e.activity.path);edit(e);const after=structuredClone(e.activity.path);
+  assert.notDeepEqual(after,before);e.undo();assert.deepEqual(e.activity.path,before);e.redo();assert.deepEqual(e.activity.path,after);e.dispose();
+ }
+});
+
+test('loop closure, freehand edits, and imported conversion round-trip route geometry',async()=>{
+ const loopEditor=new Editor(provider);loopEditor.load(routeActivity([a,b,c]));await verifyGeometryHistory(loopEditor,e=>e.closeLoop());loopEditor.dispose();
+ const freehandEditor=new Editor(provider);freehandEditor.load(routeActivity([a,b,c]));await verifyGeometryHistory(freehandEditor,e=>e.drawFreehand(Array.from({length:40},(_,i)=>({lat:i*.0001,lon:i*.001}))));freehandEditor.dispose();
+ const imported=defaults();imported.source='imported';imported.path=[a,{lat:.003,lon:.01},b,c,{lat:.02,lon:.05}];
+ const convertEditor=new Editor({route:async points=>points.map(point=>({lat:point.lat+.001,lon:point.lon})),elevation:async points=>points});convertEditor.load(imported);
+ await verifyGeometryHistory(convertEditor,e=>e.edit(resample(imported.path,Math.min(8,imported.path.length))));convertEditor.dispose();
+});
+
+test('loop plans are undoable and redoable without changing route geometry',()=>{
+ const e=new Editor(provider),activity=routeActivity(square);e.load(activity);const geometry=structuredClone(e.activity.path);
+ e.setLoop({mode:'laps',value:2});const plan=structuredClone(e.activity.loop);assert.deepEqual(e.activity.path,geometry);
+ e.undo();assert.equal(e.activity.loop,undefined);assert.deepEqual(e.activity.path,geometry);
+ e.redo();assert.deepEqual(e.activity.loop,plan);assert.deepEqual(e.activity.path,geometry);
+ e.setLoop(null);assert.equal(e.activity.loop,undefined);e.undo();assert.deepEqual(e.activity.loop,plan);assert.deepEqual(e.activity.path,geometry);e.redo();assert.equal(e.activity.loop,undefined);assert.deepEqual(e.activity.path,geometry);e.dispose();
+});
+
+test('round-trip installation and alternate selection round-trip route geometry',async()=>{
+ const e=new Editor(provider);e.load(routeActivity([a,b,c]));const original=structuredClone(e.activity.path),installed=[a,{lat:.02,lon:.02},c];
+ e.installRoute([a,c],installed);assert.deepEqual(e.activity.path,installed);e.undo();assert.deepEqual(e.activity.path,original);e.redo();assert.deepEqual(e.activity.path,installed);
+ e.undo();e.alternatePaths=[[a,b,c],[a,{lat:.03,lon:.04},c]];const alternate=structuredClone(e.alternatePaths[1]);await e.selectAlternate(1);assert.deepEqual(e.activity.path,alternate);e.undo();assert.deepEqual(e.activity.path,original);e.redo();assert.deepEqual(e.activity.path,alternate);e.dispose();
 });
