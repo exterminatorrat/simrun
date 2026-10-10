@@ -18,3 +18,5 @@ export const clearCachedMap=async():Promise<boolean>=>{
  const result=await ask<{cleared:boolean}>({type:'simrun-clear-map'});
  return result?.cleared===true;
 };
+/** Downloads bounded route-corridor tiles into the dedicated corridor cache. */
+export const downloadCorridor=(urls:string[]):Promise<{stored:number;failed:number}|null>=>ask<{stored:number;failed:number}>({type:'simrun-corridor-download',urls});

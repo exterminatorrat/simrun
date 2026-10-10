@@ -1,10 +1,13 @@
-import type {Sample, Simulation, Sport} from './types.js';
+import type {Activity, Sample, Simulation, Sport} from './types.js';
+import {elevationStats} from './geometry.js';
+import {plannedPath} from './model.js';
 
 // Analysis helpers produce simulated estimates derived from the activity model, not measured values.
 
 type HrZone = {index:number;min:number;max:number;seconds:number;percent:number};
 type Histogram = {bins:{min:number;max:number;seconds:number}[];binSize:number;unit:string};
 type UnitSplit = {start:number;end:number;distance:number;duration:number;pace:number;speed:number};
+export type ActivityStats = {name:string;sport:Sport;distance:number;duration:number;avgSpeed:number;avgPace:number|null;elevationGain:number|null;avgHr:number|null;calories:number|null};
 
 const round1=(v:number):number=>Math.round(v*10)/10;
 
@@ -98,4 +101,59 @@ export function perUnitSplits(sim:Simulation,unitMeters:number):UnitSplit[] {
     out.push({start,end,distance,duration,pace:distance>0&&duration>0?duration/(distance/1000):0,speed:duration>0?distance/duration:0});
   }
   return out;
+}
+
+function timeWeightedHr(points:Sample[]):number|null {
+  let weighted=0,seconds=0;
+  for(let i=1;i<points.length;i++){
+    const a=points[i-1],b=points[i];
+    if(!Number.isFinite(a.hr)||!Number.isFinite(b.hr))continue;
+    const dt=(b.time-a.time)/1000;
+    if(!(dt>0))continue;
+    weighted+=(a.hr!+b.hr!)/2*dt;
+    seconds+=dt;
+  }
+  return seconds>0?weighted/seconds:null;
+}
+
+function caloriesFor(sport:Sport,speed:number,duration:number):number|null {
+  if(!(duration>0))return null;
+  const met=sport==='run'?1.03*speed*speed+3.5:8*Math.pow(speed*3.6/25,2.5);
+  return Math.round(met*70*duration/3600);
+}
+
+function statsFor(entry:{activity:Activity;sim:Simulation}):ActivityStats {
+  const {activity,sim}=entry;
+  const distance=sim.distance,duration=sim.duration;
+  const avgSpeed=duration>0?distance/duration:0;
+  return {
+    name:activity.name,
+    sport:activity.settings.sport,
+    distance,
+    duration,
+    avgSpeed,
+    avgPace:activity.settings.sport==='run'&&distance>0?duration/(distance/1000):null,
+    elevationGain:elevationStats(plannedPath(activity)).gain,
+    avgHr:timeWeightedHr(sim.points),
+    calories:caloriesFor(activity.settings.sport,avgSpeed,duration),
+  };
+}
+
+export function compareActivities(left:{activity:Activity;sim:Simulation},right:{activity:Activity;sim:Simulation}):{left:ActivityStats;right:ActivityStats;delta:ActivityStats} {
+  const a=statsFor(left),b=statsFor(right);
+  const diff=(x:number|null,y:number|null):number|null=>x===null||y===null?null:y-x;
+  return {
+    left:a,
+    right:b,
+    delta:{
+      name:'',sport:b.sport,
+      distance:diff(a.distance,b.distance) as number,
+      duration:diff(a.duration,b.duration) as number,
+      avgSpeed:diff(a.avgSpeed,b.avgSpeed) as number,
+      avgPace:diff(a.avgPace,b.avgPace),
+      elevationGain:diff(a.elevationGain,b.elevationGain),
+      avgHr:diff(a.avgHr,b.avgHr),
+      calories:diff(a.calories,b.calories),
+    },
+  };
 }

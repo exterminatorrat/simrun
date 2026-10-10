@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {hrZones,belowZoneSeconds,paceHistogram,perUnitSplits} from '../dist/src/analysis.js';
+import {hrZones,belowZoneSeconds,paceHistogram,perUnitSplits,compareActivities} from '../dist/src/analysis.js';
 
 const samples=rows=>rows.map(([time,distance,speed,hr])=>({lat:0,lon:0,time,distance,speed,...(hr===undefined?{}:{hr})}));
 
@@ -89,4 +89,70 @@ test('per-unit splits respect boundaries, sum to duration and shorten the final 
   assert.equal(even.length,2);
   assert.equal(even.at(-1).end,5000);
   assert.throws(()=>perUnitSplits(sim,0));
+});
+
+const activity=(sport,name,path)=>({id:'test',version:1,name,createdAt:0,updatedAt:0,waypoints:[],path,source:'draft',settings:{sport,start:'08:00',utcOffset:0,pace:300,speed:25,mode:'constant',variation:0,sample:1,hrEnabled:false,hrAverage:150,hrVariation:0,seed:1}});
+
+const sim=(points,duration,distance)=>({points,duration,distance,interval:1});
+
+const path=(count,step,ele)=>Array.from({length:count},(_,k)=>({lat:k*step/111320,lon:0,time:0,hr:0,...(ele===undefined?{}:{ele:ele(k)}),}));
+
+test('compareActivities reports known distance, duration and average speed for two simulations',()=>{
+  const run={activity:activity('run','Morning run',path(5,1000)),sim:sim(samples([[0,0,4],[1000000,1000,4],[2000000,2000,4],[3000000,3000,4],[4000000,4000,4]]),1200,4000)};
+  const ride={activity:activity('ride','Commute',path(5,2500)),sim:sim(samples([[0,0,10],[900000,2500,10],[1800000,5000,10],[2700000,7500,10],[3600000,10000,10]]),3600,10000)};
+  const {left,right}=compareActivities(run,ride);
+  assert.equal(left.name,'Morning run');
+  assert.equal(left.sport,'run');
+  assert.equal(right.name,'Commute');
+  assert.equal(right.sport,'ride');
+  assert.equal(left.distance,4000);
+  assert.equal(left.duration,1200);
+  assert.ok(Math.abs(left.avgSpeed-4000/1200)<1e-9);
+  assert.equal(right.distance,10000);
+  assert.equal(right.duration,3600);
+  assert.ok(Math.abs(right.avgSpeed-10000/3600)<1e-9);
+});
+
+test('delta is right minus left with positive signs when the right side is longer',()=>{
+  const mk=meters=>({activity:activity('run',`Run ${meters}`,path(5,meters/4)),sim:sim(samples([[0,0,5],[500000,meters*.25,5],[1000000,meters*.5,5],[1500000,meters*.75,5],[2000000,meters,5]]),1000,meters)});
+  const {delta}=compareActivities(mk(4000),mk(5000));
+  assert.ok(Math.abs(delta.distance-1000)<1e-9);
+  assert.equal(delta.duration,0);
+  assert.ok(delta.avgSpeed>0);
+  assert.ok(delta.avgPace<0);
+  assert.ok(delta.calories>0);
+});
+
+test('avgPace is seconds per km for runs and null for rides',()=>{
+  const run={activity:activity('run','Run',path(5,1000)),sim:sim(samples([[0,0,4],[1000000,1000,4],[2000000,2000,4],[3000000,3000,4],[4000000,4000,4]]),1200,4000)};
+  const ride={activity:activity('ride','Ride',path(5,2500)),sim:sim(samples([[0,0,10],[900000,2500,10],[1800000,5000,10],[2700000,7500,10],[3600000,10000,10]]),3600,10000)};
+  const {left,right}=compareActivities(run,ride);
+  assert.ok(Math.abs(left.avgPace-1200/4)<1e-9);
+  assert.equal(right.avgPace,null);
+});
+
+test('avgHr matches a constant HR series and is time weighted otherwise',()=>{
+  const constant={activity:activity('run','Run',path(5,1000)),sim:sim(samples([[0,0,3,150],[30000,1000,3,150],[60000,2000,3,150],[90000,3000,3,150],[120000,4000,3,150]]),120,4000)};
+  assert.ok(Math.abs(compareActivities(constant,constant).left.avgHr-150)<1e-9);
+  const mixed={activity:activity('run','Run',path(5,1000)),sim:sim(samples([[0,0,3,100],[10000,500,3,100],[20000,1000,3,200],[30000,1500,3,200]]),30,1500)};
+  assert.ok(Math.abs(compareActivities(mixed,mixed).left.avgHr-150)<1e-9);
+});
+
+test('calories is a positive integer and grows with distance at the same speed',()=>{
+  const mk=meters=>({activity:activity('run',`Run ${meters}`,path(5,meters/4)),sim:sim(samples([[0,0,4],[1000000,meters*.25,4],[2000000,meters*.5,4],[3000000,meters*.75,4],[4000000,meters,4]]),meters/4,meters)});
+  const short=compareActivities(mk(4000),mk(4000)).left;
+  assert.ok(Number.isInteger(short.calories));
+  assert.ok(short.calories>0);
+  const {left,right,delta}=compareActivities(mk(4000),mk(8000));
+  assert.ok(right.calories>left.calories);
+  assert.ok(delta.calories>0);
+});
+
+test('a ride without elevation data yields null elevationGain and a null delta',()=>{
+  const flat=activity('ride','Flat ride',path(5,2500));
+  const mk=meters=>({activity:flat,sim:sim(samples([[0,0,8],[500000,meters*.25,8],[1000000,meters*.5,8],[1500000,meters*.75,8],[2000000,meters,8]]),250,meters)});
+  const {left,right,delta}=compareActivities(mk(8000),mk(8000));
+  assert.equal(left.elevationGain,null);
+  assert.equal(right.elevationGain,null);
+  assert.equal(delta.elevationGain,null);
 });

@@ -4,6 +4,8 @@
    stored as they are viewed and served cache-first within a bounded entry count.
    Routing, elevation and search are never cached: they always use the network. */
 const MAP_CACHE='simrun-map-v1';
+// Route-corridor tiles live in their own cache and are never trimmed by ordinary browsing.
+const CORRIDOR_CACHE='simrun-corridor-v1';
 const MAP_HOST='tiles.openfreemap.org';
 const MAP_LIMIT=1500;
 // Only the worker script itself is left to the network; the application's own
@@ -53,6 +55,9 @@ async function shell(request){
  try{const response=await fetch(request);if(response.ok)await cache.put(request,response.clone());return response;}catch{return new Response('',{status:503});}
 }
 async function basemap(request){
+ const corridor=await caches.open(CORRIDOR_CACHE);
+ const stored=await corridor.match(request);
+ if(stored)return stored;
  const cache=await caches.open(MAP_CACHE);
  const cached=await cache.match(request);
  if(cached)return cached;
@@ -81,5 +86,14 @@ self.addEventListener('message',event=>{
   })());
  }else if(data.type==='simrun-clear-map'){
   event.waitUntil((async()=>{await caches.delete(MAP_CACHE);port.postMessage({cleared:true});})());
+ }else if(data.type==='simrun-corridor-download'){
+  event.waitUntil((async()=>{
+   const urls=Array.isArray(data.urls)?data.urls.slice(0,600):[],cache=await caches.open(CORRIDOR_CACHE);
+   let stored=0,failed=0;
+   for(const url of urls){
+    try{const response=await fetch(url,{mode:'cors'});if(response.ok){await cache.put(url,response);stored++;}else failed++;}catch{failed++;}
+   }
+   port.postMessage({stored,failed});
+  })());
  }
 });

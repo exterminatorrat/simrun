@@ -1,4 +1,4 @@
-import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preferences,Split,Splits,WeatherPreset,WeatherSim,PowerSim,CadenceSim,FatigueSim,Workout,WorkoutStep,Pauses} from './types.js';
+import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preferences,Split,Splits,WeatherPreset,WeatherSim,PowerSim,CadenceSim,FatigueSim,Workout,WorkoutStep,Pauses,RestStop} from './types.js';
 import {atDistance,clamp,cumulative,elevationStats,isClosedLoop,loopPath,lowerBound,rotatedLoop,validPoint,wrapLon} from './geometry.js';
 import {newId} from './id.js';
 import {expandWorkout,stepAt} from './workout.js';
@@ -17,7 +17,7 @@ export function weatherHeat(w:WeatherSim|undefined):number {
  return clamp(1+Math.max(0,w.tempC-20)*.03+Math.max(0,w.humidity-60)*.004,1,2);
 }
 export interface LoopResult {path:Point[];loopLength:number;distance:number;laps:number;capped:boolean}
-export const defaultPreferences:Preferences={units:'metric',theme:'light',mapStyle:'https://tiles.openfreemap.org/styles/liberty',mapStyleDark:'https://tiles.openfreemap.org/styles/dark',routingUrl:'https://valhalla1.openstreetmap.de/route',elevationUrl:'https://valhalla1.openstreetmap.de/height',geocodingUrl:'https://nominatim.openstreetmap.org/search',geocodingEnabled:false,hrMax:190,offlineRouting:false,corridorZoom:12,avoidHighways:false,avoidHills:false};
+export const defaultPreferences:Preferences={units:'metric',theme:'light',mapStyle:'https://tiles.openfreemap.org/styles/liberty',mapStyleDark:'https://tiles.openfreemap.org/styles/dark',routingUrl:'https://valhalla1.openstreetmap.de/route',elevationUrl:'https://valhalla1.openstreetmap.de/height',geocodingUrl:'https://nominatim.openstreetmap.org/search',geocodingEnabled:false,hrMax:190,offlineRouting:false,corridorZoom:12,avoidHighways:false,avoidHills:false,alternates:false};
 export function localInput(date=new Date()):string{return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 /** The map style that matches the chosen appearance; each theme has its own endpoint. */
 export const mapStyleFor=(p:Preferences):string=>p.theme==='dark'?p.mapStyleDark:p.mapStyle;
@@ -35,8 +35,25 @@ export function importedActivity(points:Point[],name:string,typeText:string,labe
  if(timed){const date=new Date(points[0].time!);a.settings.start=localInput(date);a.settings.utcOffset=-date.getTimezoneOffset();const duration=(points[points.length-1].time!-points[0].time!)/1000;const pace=duration/(d/1000),speed=d/1000/duration*3600;
   if(pace>=60&&pace<=3600)a.settings.pace=pace;if(speed>=1&&speed<=150)a.settings.speed=speed;
  }else notices.push('Original timestamps were missing or not increasing; new timing uses the activity settings.');
+ const detected=timed?detectStops(points):[];
+ if(detected.length)a.pauses={rests:detected};
  notices.push('Geometry retained. Exports are explicitly resimulated, not original recordings.');
+ if(detected.length)notices.push(`Detected ${detected.length} auto-pause ${detected.length===1?'stop':'stops'} of at least 30 seconds; they count as elapsed but not moving time.`);
  return {activity:a,notices};
+}
+/** Timestamped stalls of at least `minSeconds` below `maxSpeed` become rest stops. */
+export function detectStops(points:Point[],minSeconds=30,maxSpeed=0.7):RestStop[] {
+ const out:RestStop[]=[];let run=0,runStart=0,startDistance=0,total=0;
+ const c=cumulative(points);
+ const flush=()=>{if(run>0&&total>=minSeconds)out.push({distance:startDistance,seconds:Math.round(total)});run=0;total=0;};
+ for(let i=1;i<points.length&&out.length<200;i++){
+  const dt=(points[i].time!-points[i-1].time!)/1000,dd=c[i]-c[i-1];
+  const slow=dt>0&&dd/dt<maxSpeed;
+  if(slow){if(run===0){run=1;runStart=i-1;startDistance=c[i-1];total=0;}total+=dt;}
+  else flush();
+ }
+ flush();
+ return out;
 }
 export function durationFor(meters:number,sport:Sport,pace:number,speed:number):number{return sport==='run'?meters/1000*pace:meters/1000/speed*3600;}
 export function clock(value:number):string {const n=Math.max(0,Math.round(value)),h=Math.floor(n/3600),m=Math.floor(n%3600/60),s=n%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;}
@@ -133,6 +150,9 @@ export function simulate(a:Activity):Simulation {
  const waveAt=(d:number)=>.62*Math.sin(d/430+phase)+.27*Math.sin(d/180+phase*.7)+.11*Math.sin(d/70);
  // Centered 30 m smoothed grade; uphill costs more than downhill saves.
  const gradeAt=(d:number):number=>{const lo=Math.max(0,d-15),hi=Math.min(total,d+15);if(!(hi>lo))return 0;const p=atDistance(route,c,lo),q=atDistance(route,c,hi);return Number.isFinite(p.ele)&&Number.isFinite(q.ele)?clamp((q.ele!-p.ele!)/(hi-lo),-.15,.15):0;};
+ const bearing=(p:Point,q:Point)=>{const f1=p.lat*Math.PI/180,f2=q.lat*Math.PI/180,dl=(q.lon-p.lon)*Math.PI/180;return Math.atan2(Math.sin(dl)*Math.cos(f2),Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl));};
+ // Curvature: sharp turns cost a little speed, derived only from geometry.
+ const turnAt=(d:number):number=>{if(d<=0||d>=total)return 0;const p=atDistance(route,c,d-15),q=atDistance(route,c,d),r=atDistance(route,c,d+15);let t=bearing(p,q)-bearing(q,r);while(t>Math.PI)t-=2*Math.PI;while(t<-Math.PI)t+=2*Math.PI;return Math.abs(t);};
  const weights:number[]=[];
  for(let i=0;i<n;i++) {
   const d=(i+.5)*ds;
@@ -140,7 +160,7 @@ export function simulate(a:Activity):Simulation {
   const fatigue=s.fatigue?1+s.fatigue.percent/100*(i/n):1;
   const step=steps?stepAt(steps,d):null;
   const paceFactor=s.sport==='run'?(step&&step.step.pace&&s.pace>0?step.step.pace/s.pace:1):(step&&step.step.speed&&step.step.speed>0?s.speed/step.step.speed:1);
-  const w=s.mode==='natural'?clamp((1+s.variation*waveAt(d)+terrain)*fatigue*paceFactor,.65,1.4):paceFactor;
+  const w=s.mode==='natural'?clamp((1+s.variation*waveAt(d)+terrain)*fatigue*paceFactor*(1+turnAt(d)*.08),.65,1.4):paceFactor;
   weights.push(w);times.push(times[i]+w*ds);
  }
  const raw=times[n];for(let i=1;i<times.length;i++)times[i]=times[i]/raw*durationMs;
@@ -201,7 +221,10 @@ export function simulate(a:Activity):Simulation {
   points.length=0;points.push(...out);
  }
  const gps=s.gps;
- return {points:applyDropout(applyGpsNoise(points,gps?.noise??0,s.seed),gps?.dropout??0,s.seed),duration:(durationMs+stoppedMs)/1000,distance:total,interval:intervalMs/1000};
+ // Estimated energy: a well-known distance formula for running, a speed-based MET estimate for riding.
+ const mass=s.power?.weightKg??70,vKph=total/(durationMs/1000)*3.6;
+ const calories=Math.round(s.sport==='run'?1.036*mass*(total/1000):Math.max(0,(vKph*.28+2)*mass*1.05*(durationMs/3600000)));
+ return {points:applyDropout(applyGpsNoise(points,gps?.noise??0,s.seed),gps?.dropout??0,s.seed),duration:(durationMs+stoppedMs)/1000,distance:total,interval:intervalMs/1000,calories};
 }
 function gpsRandom(seed:number):()=>number {let t=seed>>>0;return ()=>{t=(t+0x6d2b79f5)>>>0;let r=Math.imul(t^(t>>>15),1|t);r=(r+Math.imul(r^(r>>>7),61|r))^r;return ((r^(r>>>14))>>>0)/4294967296;};}
 /** Deterministic horizontal GPS jitter; distance and timing keep their true route values. */

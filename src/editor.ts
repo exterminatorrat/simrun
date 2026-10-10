@@ -5,6 +5,7 @@ import {resolveProfile,routeCapWarning,type RoutingProvider} from './providers.j
 type Snapshot={path:Point[];waypoints:Point[];source:RouteSource};
 export class Editor {
  activity:Activity=defaults();selected=-1;drawing=true;pending=false;status='Click the map to begin.';
+ alternatesEnabled=false;alternatePaths:Point[][]=[];
  private past:Snapshot[]=[];private future:Snapshot[]=[];private controller:AbortController|null=null;private sequence=0;private timer:ReturnType<typeof setTimeout>|undefined;
  onChange:()=>void=()=>{};onMessage:(s:string)=>void=()=>{};
  constructor(private provider:RoutingProvider){}
@@ -68,12 +69,19 @@ export class Editor {
   this.timer=setTimeout(async()=>{
    const controller=new AbortController();this.controller=controller;
    try{
-    const path=await this.provider.route(this.activity.waypoints,profile,controller.signal);
-    if(n!==this.sequence)return;const routed=this.closeRoutedPath(path);this.activity.path=routed;this.activity.source='routed';this.pending=false;this.status='Route ready · loading elevation';this.notify();
+    const paths=this.alternatesEnabled&&this.provider.alternates?await this.provider.alternates(this.activity.waypoints,profile,controller.signal):[await this.provider.route(this.activity.waypoints,profile,controller.signal)];
+    if(n!==this.sequence)return;this.alternatePaths=paths.length>1?paths:[];
+    const routed=this.closeRoutedPath(paths[0]);this.activity.path=routed;this.activity.source='routed';this.pending=false;this.status=this.provider.lastCached?'Route ready · from offline cache':this.alternatePaths.length?'Route ready · alternate available':'Route ready · loading elevation';this.notify();
     try{const elevated=await this.provider.elevation(routed,controller.signal);if(n!==this.sequence)return;this.activity.path=elevated;this.status='Route ready';this.notify();}
     catch(error){if(n!==this.sequence)return;this.status='Route ready · elevation unavailable';this.notify();}
    }catch(error){if(n!==this.sequence)return;this.pending=false;this.status='Route unavailable · move a point or retry';this.onMessage(error instanceof Error?error.message:'Route unavailable.');this.notify();}
   },450);
+ }
+ /** Swaps in a previously fetched alternate route and reloads its elevation. */
+ async selectAlternate(index:number):Promise<void>{
+  const path=this.alternatePaths[index];if(!path)return;const n=this.sequence;this.activity.path=this.closeRoutedPath(path);this.notify();
+  const controller=new AbortController();this.controller=controller;
+  try{const elevated=await this.provider.elevation(this.activity.path,controller.signal);if(n!==this.sequence)return;this.activity.path=elevated;this.notify();}catch{}
  }
  dispose(){this.invalidate();}
 }

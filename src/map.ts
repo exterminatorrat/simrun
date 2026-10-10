@@ -9,8 +9,12 @@ type PlanMarks={start:Point;end:Point};
 const NS='http://www.w3.org/2000/svg';
 const world=(p:Point):[number,number]=>{const lat=Math.max(-85.0511,Math.min(85.0511,p.lat))*Math.PI/180;return [(p.lon+180)/360,(1-Math.log(Math.tan(Math.PI/4+lat/2))/Math.PI)/2];};
 const unworld=(x:number,y:number):Point=>({lon:wrapLon(x*360-180),lat:Math.atan(Math.sinh(Math.PI*(1-2*Math.max(0,Math.min(1,y)))))*180/Math.PI});
+/** Gradient legend: blue descending, green near-flat, red-orange climbing. */
+const gradeColor=(g:number):string=>g<-.02?'#2f7fd0':g>.02?'#d94f2b':'#8fa66a';
+const GRADE_STOPS:unknown[]=[-.15,'#2f7fd0',0,'#8fa66a',.15,'#d94f2b'];
 export class RouteMap {
  private map:any=null;private markers:any[]=[];private hoverMarker:any=null;private a:Activity|null=null;private plan:PlanMarks|null=null;private selected=-1;private drawing=true;private svg:SVGSVGElement;private view={x:0,y:0,zoom:13};private ready=false;private everReady=false;private missingSince=Date.now();private healthTimer:ReturnType<typeof setInterval>|null=null;private lastMapError='';private disposed=false;private resized:ResizeObserver;private moveCleanup:(()=>void)|null=null;private hoverPoint:Point|null=null;
+ private scrubberMarker:any=null;
  constructor(private host:HTMLElement,private actions:Actions){
   const [x,y]=world({lat:31.2304,lon:121.4737});this.view={x,y,zoom:13};
   this.svg=document.createElementNS(NS,'svg');this.svg.classList.add('coordinate-map');this.svg.setAttribute('aria-label','Coordinate canvas: basemap unavailable');this.host.append(this.svg);
@@ -78,12 +82,19 @@ export class RouteMap {
   this.map.addLayer({id:'route-line',type:'line',source:'route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#e4552b','line-width':4}});
   this.map.addSource('draft',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   this.map.addLayer({id:'draft-line',type:'line',source:'draft',paint:{'line-color':'#a66146','line-width':2,'line-dasharray':[2,3]}});
+  this.map.addSource('grade',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  this.map.addLayer({id:'route-gradient',type:'line',source:'grade',layout:{'line-cap':'round','line-join':'round','visibility':'none'},paint:{'line-color':['interpolate',['linear'],['get','g'],...GRADE_STOPS],'line-width':4}});
  }
  private render():void {
   if(!this.a)return;
   if(!this.map||!this.ready){this.drawFallback();return;}
   const data=(p:Point[])=>({type:'FeatureCollection',features:p.length>1?[{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:p.map(p=>[p.lon,p.lat])}}]:[]});
   this.map.getSource('route')?.setData(data(this.a.path));this.map.getSource('draft')?.setData(data(this.a.source==='draft'?this.a.waypoints:[]));
+  const grade=this.gradeSegments(this.a.path);
+  this.map.getSource('grade')?.setData(grade);
+  const shaded=grade.features.length>0;
+  this.map.setLayoutProperty('route-line','visibility',shaded?'none':'visible');
+  this.map.setLayoutProperty('route-gradient','visibility',shaded?'visible':'none');
   this.map.getCanvas().style.cursor=this.drawing?'crosshair':'grab';this.markers.forEach(m=>m.remove());this.markers=[];
   const gl=window.maplibregl,pts=this.a.waypoints;
   const add=(p:Point,i:number,mid=false)=>{const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));b.type='button';b.title=mid?'Drag to insert waypoint':`Waypoint ${i+1}: drag to move`;b.setAttribute('aria-label',b.title);b.onclick=e=>{e.stopPropagation();if(mid)this.actions.insert(i,p);else this.actions.select(i);};const m=new gl.Marker({element:b,draggable:true}).setLngLat([p.lon,p.lat]).addTo(this.map);m.on('dragend',()=>{const ll=m.getLngLat(),q={lat:ll.lat,lon:wrapLon(ll.lng)};if(mid)this.actions.insert(i,q);else this.actions.move(i,q);});this.markers.push(m);};
@@ -119,7 +130,9 @@ export class RouteMap {
   if(!this.svg.isConnected)return;const {w,h}=this.dimensions();this.svg.setAttribute('viewBox',`0 0 ${w} ${h}`);this.svg.replaceChildren();
   const make=(tag:string,attrs:Record<string,string>)=>{const n=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));this.svg.append(n);return n;};
   const path=(p:Point[],cls:string)=>{if(p.length<2)return;const step=Math.max(1,Math.ceil(p.length/5000));const v=p.filter((_,i)=>i%step===0||i===p.length-1);make('path',{d:v.map((p,i)=>`${i?'L':'M'}${this.xy(p).map(n=>n.toFixed(1)).join(',')}`).join(' '),class:cls});};
-  if(this.a){path(this.a.path,'fallback-route');if(this.a.source==='draft')path(this.a.waypoints,'fallback-draft');this.a.waypoints.forEach((p,i)=>{const [x,y]=this.xy(p);make('circle',{cx:String(x),cy:String(y),r:'12',class:`fallback-point ${i===this.selected?'selected':''}`,'data-index':String(i)});const t=make('text',{x:String(x),y:String(y+4),class:'fallback-number','data-index':String(i)});t.textContent=String(i+1);if(i<this.a!.waypoints.length-1){const [mx,my]=this.xy(this.middle(i));make('circle',{cx:String(mx),cy:String(my),r:'6',class:'fallback-mid','data-mid':String(i)});}});}
+  if(this.a){const grade=this.gradeSegments(this.a.path);
+   if(grade.features.length){for(const f of grade.features){const [x1,y1]=this.xy({lat:f.geometry.coordinates[0][1],lon:f.geometry.coordinates[0][0]}),[x2,y2]=this.xy({lat:f.geometry.coordinates[1][1],lon:f.geometry.coordinates[1][0]});make('line',{x1:x1.toFixed(1),y1:y1.toFixed(1),x2:x2.toFixed(1),y2:y2.toFixed(1),class:'fallback-route','stroke-width':'4',stroke:gradeColor(f.properties.g)});}}
+   else path(this.a.path,'fallback-route');if(this.a.source==='draft')path(this.a.waypoints,'fallback-draft');this.a.waypoints.forEach((p,i)=>{const [x,y]=this.xy(p);make('circle',{cx:String(x),cy:String(y),r:'12',class:`fallback-point ${i===this.selected?'selected':''}`,'data-index':String(i)});const t=make('text',{x:String(x),y:String(y+4),class:'fallback-number','data-index':String(i)});t.textContent=String(i+1);if(i<this.a!.waypoints.length-1){const [mx,my]=this.xy(this.middle(i));make('circle',{cx:String(mx),cy:String(my),r:'6',class:'fallback-mid','data-mid':String(i)});}});}
   if(this.plan)this.planMarks().forEach(m=>{const [x,y]=this.xy(m.p),flag:Record<string,string>=m.draggable?{'data-loop-start':'1'}:{};make('circle',{cx:String(x),cy:String(y),r:'10',class:`fallback-${m.cls}`,'data-loop':'1',...flag});const t=make('text',{x:String(x),y:String(y+3.5),class:'fallback-plan-label','data-loop':'1',...flag});t.textContent=m.text;});
   if(this.hoverPoint){const [x,y]=this.xy(this.hoverPoint);make('circle',{cx:String(x),cy:String(y),r:'6',class:'chart-map-marker'});}
   this.svg.style.cursor=this.drawing?'crosshair':'grab';
@@ -132,5 +145,26 @@ export class RouteMap {
    const cancel=()=>{this.svg.removeEventListener('pointermove',move);this.svg.removeEventListener('pointerup',up);this.svg.removeEventListener('pointercancel',cancel);};this.moveCleanup=cancel;this.svg.addEventListener('pointermove',move);this.svg.addEventListener('pointerup',up);this.svg.addEventListener('pointercancel',cancel);
   });
  }
- dispose():void {this.disposed=true;if(this.healthTimer)clearInterval(this.healthTimer);this.resized.disconnect();this.moveCleanup?.();this.markers.forEach(m=>m.remove());this.hoverMarker?.remove();this.map?.remove();}
+ /** Gradient segments capped at 400, or an empty collection when elevation is missing. */
+ private gradeSegments(path:Point[]):{type:'FeatureCollection';features:any[]} {
+  const empty:{type:'FeatureCollection';features:any[]}={type:'FeatureCollection',features:[]};
+  if(path.length<2)return empty;
+  if(path.filter(p=>Number.isFinite(p.ele)).length<2)return empty;
+  const c=cumulative(path),total=c.at(-1)||0;if(!(total>0))return empty;
+  const count=Math.min(400,Math.max(1,path.length-1)),step=total/count,features:any[]=[];
+  for(let i=0;i<count;i++){
+   const d0=i*step,d1=Math.min(total,(i+1)*step),p=atDistance(path,c,d0),q=atDistance(path,c,d1);
+   if(!Number.isFinite(p.ele)||!Number.isFinite(q.ele))continue;
+   const g=Math.max(-.15,Math.min(.15,(q.ele!-p.ele!)/Math.max(1e-6,d1-d0)));
+   features.push({type:'Feature',properties:{g},geometry:{type:'LineString',coordinates:[[p.lon,p.lat],[q.lon,q.lat]]}});
+  }
+  return {type:'FeatureCollection',features};
+ }
+ /** Persistent marker for the chart scrubber; cleared with null. */
+ scrub(p:Point|null):void {
+  this.hoverPoint=p;
+  if(this.map&&this.ready){this.scrubberMarker?.remove();this.scrubberMarker=null;if(p){const b=el('span','scrub-marker');this.scrubberMarker=new window.maplibregl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map);}return;}
+  this.drawFallback();
+ }
+ dispose():void {this.disposed=true;if(this.healthTimer)clearInterval(this.healthTimer);this.resized.disconnect();this.moveCleanup?.();this.markers.forEach(m=>m.remove());this.hoverMarker?.remove();this.scrubberMarker?.remove();this.map?.remove();}
 }

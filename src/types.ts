@@ -26,7 +26,7 @@ export interface Activity {
   workout?:Workout; pauses?:Pauses; tags?:string[];
 }
 export interface Sample extends Point { time:number; distance:number; speed:number; power?:number; cad?:number }
-export interface Simulation { points:Sample[]; duration:number; distance:number; interval:number }
+export interface Simulation { points:Sample[]; duration:number; distance:number; interval:number; calories?:number }
 export interface Split { start:number; end:number; distance:number; duration:number; speed:number; gain:number|null; stopped?:boolean }
-export interface Preferences {units:'metric'|'imperial'; theme:'light'|'dark'; mapStyle:string; mapStyleDark:string; routingUrl:string; elevationUrl:string; geocodingUrl:string; geocodingEnabled:boolean; hrMax:number; offlineRouting:boolean; corridorZoom:number; avoidHighways:boolean; avoidHills:boolean }
+export interface Preferences {units:'metric'|'imperial'; theme:'light'|'dark'; mapStyle:string; mapStyleDark:string; routingUrl:string; elevationUrl:string; geocodingUrl:string; geocodingEnabled:boolean; hrMax:number; offlineRouting:boolean; corridorZoom:number; avoidHighways:boolean; avoidHills:boolean; alternates:boolean }
 export interface ElevationStats {gain:number|null;loss:number|null;min:number|null;max:number|null}
