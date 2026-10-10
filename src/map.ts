@@ -18,7 +18,7 @@ const GRADE_STOPS:unknown[]=[-.15,'#2f7fd0',0,'#8fa66a',.15,'#d94f2b'];
 export class RouteMap {
  private map:any=null;private markers:any[]=[];private hoverMarker:any=null;private a:Activity|null=null;private plan:PlanMarks|null=null;private selected=-1;private drawing=true;private svg:SVGSVGElement;private view={x:0,y:0,zoom:13};private ready=false;private everReady=false;private missingSince=Date.now();private healthTimer:ReturnType<typeof setInterval>|null=null;private lastMapError='';private disposed=false;private resized:ResizeObserver;private moveCleanup:(()=>void)|null=null;private hoverPoint:Point|null=null;
  private freehand=false;private freehandCleanup:(()=>void)|null=null;private suppressClick=false;
- private scrubberMarker:any=null;private poiMarkers:MapMarker[]=[];private pois:PointOfInterest[]=[];
+ private scrubberMarker:any=null;private poiMarkers:MapMarker[]=[];private pois:PointOfInterest[]=[];private attributionControl:any=null;private baseLayer:'vector'|'topo'='vector';private cyclingOverlay=false;private hikingOverlay=false;
  constructor(private host:HTMLElement,private actions:Actions){
   const [x,y]=world({lat:31.2304,lon:121.4737});this.view={x,y,zoom:13};
   this.svg=document.createElementNS(NS,'svg');this.svg.classList.add('coordinate-map');this.svg.setAttribute('aria-label','Coordinate canvas: basemap unavailable');this.host.append(this.svg);
@@ -37,7 +37,7 @@ export class RouteMap {
    this.map=new gl.Map({container:this.host,style,center:[121.4737,31.2304],zoom:13,attributionControl:false});
    // Keep the honest coordinate canvas above MapLibre until real vector features render.
    this.showCoordinateCanvas();
-   this.map.addControl(new gl.AttributionControl({customAttribution:'<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>'}));
+   this.updateAttribution();
    this.missingSince=Date.now();this.healthTimer=setInterval(()=>this.checkBasemap(),1200);
    this.map.on('load',()=>this.markBasemapReady());
    this.map.on('style.load',()=>{this.markBasemapReady();this.installLayers();this.render();});
@@ -74,15 +74,18 @@ export class RouteMap {
   this.poiMarkers.forEach(marker=>marker.remove());this.poiMarkers=[];this.map=null;this.markers=[];this.hoverMarker=null;
   this.host.querySelectorAll('.maplibregl-canvas-container,.maplibregl-control-container').forEach(node=>node.remove());
   this.host.append(this.svg);this.host.classList.remove('map-pending');this.drawFallback();
-  const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=message;
+  const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=`${message} Basemap layers are unavailable in the coordinate view.`;
   this.actions.message(message);
  }
  setStyle(style:string):void{if(!this.map)return;this.ready=false;this.missingSince=Date.now();this.lastMapError='';this.showCoordinateCanvas();try{this.map.setStyle(style,{diff:false});}catch{this.useCoordinateCanvas('Basemap unavailable. Coordinate view remains usable.');}}
+ setBasemapLayers(base:'vector'|'topo',cycling:boolean,hiking:boolean):void{this.baseLayer=base;this.cyclingOverlay=cycling;this.hikingOverlay=hiking;if(this.map&&this.ready){this.installLayers();this.updateAttribution();this.render();}}
+ centerPoint():Point {if(this.map){const center=this.map.getCenter();return {lat:center.lat,lon:wrapLon(center.lng)};}return unworld(this.view.x,this.view.y);}
  update(a:Activity,selected:number,drawing:boolean,plan?:PlanMarks):void {this.a=a;this.selected=selected;this.drawing=drawing;this.plan=plan??null;this.render();}
  setFreehand(enabled:boolean):void {this.freehand=enabled;if(!enabled)this.freehandCleanup?.();this.svg.style.cursor=enabled||this.drawing?'crosshair':'grab';}
  setPois(places:PointOfInterest[]):void {this.pois=places.map(place=>({...place}));if(this.map&&this.ready)this.renderPois();else this.drawFallback();}
  private installLayers():void {
-  if(!this.map||this.map.getSource('route'))return;
+  if(!this.map)return;this.installRasterLayers();
+  if(this.map.getSource('route'))return;
   this.map.addSource('route',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   this.map.addLayer({id:'route-casing',type:'line',source:'route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#fff','line-width':8,'line-opacity':.9}});
   this.map.addLayer({id:'route-line',type:'line',source:'route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#e4552b','line-width':4}});
@@ -90,6 +93,31 @@ export class RouteMap {
   this.map.addLayer({id:'draft-line',type:'line',source:'draft',paint:{'line-color':'#a66146','line-width':2,'line-dasharray':[2,3]}});
   this.map.addSource('grade',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   this.map.addLayer({id:'route-gradient',type:'line',source:'grade',layout:{'line-cap':'round','line-join':'round','visibility':'none'},paint:{'line-color':['interpolate',['linear'],['get','g'],...GRADE_STOPS],'line-width':4}});
+ }
+ private installRasterLayers():void {
+  const sources=[
+   {id:'w5-topo-source',url:'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',scheme:'xyz',maxzoom:17},
+   {id:'w5-cycling-source',url:'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png',scheme:'tms',maxzoom:17},
+   {id:'w5-hiking-source',url:'https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png',scheme:'tms',maxzoom:17}
+  ];
+  for(const source of sources)if(!this.map.getSource(source.id))this.map.addSource(source.id,{type:'raster',tiles:[source.url],tileSize:256,scheme:source.scheme,maxzoom:source.maxzoom});
+  const layers=[
+   {id:'w5-topo-layer',source:'w5-topo-source',opacity:1,visible:this.baseLayer==='topo'},
+   {id:'w5-cycling-layer',source:'w5-cycling-source',opacity:.85,visible:this.cyclingOverlay},
+   {id:'w5-hiking-layer',source:'w5-hiking-source',opacity:.85,visible:this.hikingOverlay}
+  ];
+  for(const layer of layers){
+   if(!this.map.getLayer(layer.id))this.map.addLayer({id:layer.id,type:'raster',source:layer.source,paint:{'raster-opacity':layer.opacity}});
+   this.map.setLayoutProperty(layer.id,'visibility',layer.visible?'visible':'none');
+  }
+ }
+ private updateAttribution():void {
+  if(!this.map)return;
+  if(this.attributionControl)this.map.removeControl(this.attributionControl);
+  const credits=['<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>'];
+  if(this.baseLayer==='topo')credits.push('<a href="https://opentopomap.org/" target="_blank" rel="noopener">Map style: © OpenTopoMap (CC BY-SA)</a> · DEM: SRTM, Sonny');
+  if(this.cyclingOverlay||this.hikingOverlay)credits.push('<a href="https://waymarkedtrails.org/" target="_blank" rel="noopener">© waymarkedtrails.org</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>');
+  this.attributionControl=new window.maplibregl.AttributionControl({customAttribution:credits.join(' · ')});this.map.addControl(this.attributionControl);
  }
  private render():void {
   if(!this.a)return;

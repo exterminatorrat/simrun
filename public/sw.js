@@ -6,8 +6,12 @@
 const MAP_CACHE='simrun-map-v1';
 // Route-corridor tiles live in their own cache and are never trimmed by ordinary browsing.
 const CORRIDOR_CACHE='simrun-corridor-v1';
-const MAP_HOST='tiles.openfreemap.org';
+const MAP_HOSTS=new Set(['tiles.openfreemap.org','tile.waymarkedtrails.org']);
+const CORRIDOR_INDEX=new URL('__simrun-corridor-index__.json',self.location.href).href;
 const MAP_LIMIT=1500;
+const CORRIDOR_LIMIT=100;
+const CORRIDOR_TILE_LIMIT=600;
+const activeCorridorDownloads=new Map();
 // Only the worker script itself is left to the network; the application's own
 // compiled src/sw.js module is part of the shell and must be served from cache.
 const WORKER_PATH=new URL('sw.js',self.location.href).pathname;
@@ -32,7 +36,6 @@ self.addEventListener('install',event=>{
 self.addEventListener('activate',event=>{
  event.waitUntil((async()=>{
   const files=await manifestFiles();
-  // Only prune when the manifest is readable, so an offline update cannot drop a usable cache.
   if(files&&files.length){
    const keep=new Set([shellCacheName(files),MAP_CACHE]);
    for(const name of await caches.keys())if((name.startsWith('simrun-shell-')||name.startsWith('simrun-map-'))&&!keep.has(name))await caches.delete(name);
@@ -63,7 +66,28 @@ async function basemap(request){
  if(cached)return cached;
  try{const response=await fetch(request);if(response.ok){await cache.put(request,response.clone());await trim(cache);}return response;}catch{return Response.error();}
 }
-// Corridor tiles may live on a custom tile host, so serve them cache-first for any cross-origin GET.
+const mapTileHost=hostname=>MAP_HOSTS.has(hostname)||hostname.endsWith('.tile.opentopomap.org');
+const safePost=(port,data)=>{try{port.postMessage(data);}catch{}};
+async function readCorridors(cache){
+ const response=await cache.match(CORRIDOR_INDEX);
+ if(!response)return [];
+ try{const rows=await response.json();return Array.isArray(rows)?rows:[];}catch{return [];}
+}
+async function writeCorridors(cache,rows){await cache.put(CORRIDOR_INDEX,new Response(JSON.stringify(rows),{headers:{'Content-Type':'application/json'}}));}
+async function cacheBytes(cache,skipIndex=false){
+ let bytes=0;
+ for(const request of await cache.keys()){
+  if(skipIndex&&request.url===CORRIDOR_INDEX)continue;
+  const response=await cache.match(request);if(!response)continue;
+  const length=Number(response.headers.get('content-length'));
+  bytes+=Number.isFinite(length)&&length>0?length:(await response.clone().arrayBuffer()).byteLength;
+ }
+ return bytes;
+}
+async function corridorCacheStatus(cache){
+ const records=await readCorridors(cache);
+ return records.map(({id,name,bounds,tileCount,estimatedBytes,createdAt})=>({id,name,bounds,tileCount,estimatedBytes,createdAt}));
+}
 async function corridorOnly(request){
  const cache=await caches.open(CORRIDOR_CACHE);
  const cached=await cache.match(request);
@@ -80,7 +104,7 @@ self.addEventListener('fetch',event=>{
   event.respondWith(request.mode==='navigate'?navigation(request):shell(request));
   return;
  }
- if(url.hostname===MAP_HOST)event.respondWith(basemap(request));
+ if(mapTileHost(url.hostname))event.respondWith(basemap(request));
  else event.respondWith(corridorOnly(request));
 });
 self.addEventListener('message',event=>{
@@ -88,20 +112,53 @@ self.addEventListener('message',event=>{
  if(!port)return;
  if(data.type==='simrun-cache-status'){
   event.waitUntil((async()=>{
-   const name=await shellName();
-   const shellCount=name?(await (await caches.open(name)).keys()).length:0;
-   port.postMessage({shell:shellCount,map:(await (await caches.open(MAP_CACHE)).keys()).length,limit:MAP_LIMIT});
+   const name=await shellName(),mapCache=await caches.open(MAP_CACHE),corridorCache=await caches.open(CORRIDOR_CACHE);
+   const shellCount=name?(await (await caches.open(name)).keys()).length:0,mapCount=(await mapCache.keys()).length+(await corridorCache.keys()).filter(request=>request.url!==CORRIDOR_INDEX).length;
+   const bytes=await cacheBytes(mapCache)+await cacheBytes(corridorCache,true);
+   safePost(port,{shell:shellCount,map:mapCount,limit:MAP_LIMIT,bytes,corridors:await corridorCacheStatus(corridorCache)});
   })());
  }else if(data.type==='simrun-clear-map'){
-  event.waitUntil((async()=>{await caches.delete(MAP_CACHE);await caches.delete(CORRIDOR_CACHE);port.postMessage({cleared:true});})());
+  event.waitUntil((async()=>{await caches.delete(MAP_CACHE);await caches.delete(CORRIDOR_CACHE);safePost(port,{cleared:true});})());
+ }else if(data.type==='simrun-corridor-delete'){
+  event.waitUntil((async()=>{
+   const cache=await caches.open(CORRIDOR_CACHE),records=await readCorridors(cache),removed=records.filter(record=>record.id===data.id),remaining=records.filter(record=>record.id!==data.id),retained=new Set(remaining.flatMap(record=>Array.isArray(record.urls)?record.urls:[]));
+   for(const record of removed)for(const url of Array.isArray(record.urls)?record.urls:[])if(!retained.has(url))await cache.delete(url);
+   await writeCorridors(cache,remaining);safePost(port,{deleted:removed.length>0});
+  })());
+ }else if(data.type==='simrun-corridor-cancel'){
+  const controller=activeCorridorDownloads.get(data.id);
+  if(controller)controller.abort();safePost(port,{cancelled:!!controller});
  }else if(data.type==='simrun-corridor-download'){
   event.waitUntil((async()=>{
-   const urls=Array.isArray(data.urls)?data.urls.slice(0,600):[],cache=await caches.open(CORRIDOR_CACHE);
-   let stored=0,failed=0;
-   for(const url of urls){
-    try{const response=await fetch(url,{mode:'cors'});if(response.ok){await cache.put(url,response);stored++;}else failed++;}catch{failed++;}
+   const raw=Array.isArray(data.urls)?data.urls.slice(0,CORRIDOR_TILE_LIMIT):[],urls=[...new Set(raw.filter(url=>typeof url==='string'&&url.startsWith('https://')))],info=data.record;
+   if(!info||typeof info.id!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(info.id)||typeof info.name!=='string'||!info.bounds){safePost(port,{type:'complete',result:{stored:0,failed:raw.length,bytes:0,cancelled:false,quota:false}});return;}
+   const controller=new AbortController(),id=info.id;activeCorridorDownloads.set(id,controller);
+   const cache=await caches.open(CORRIDOR_CACHE),storedUrls=[];let stored=0,failed=0,bytes=0,quota=false,cancelled=false;
+   for(let index=0;index<urls.length;index++){
+    if(controller.signal.aborted){cancelled=true;break;}
+    const url=urls[index];
+    try{
+     const existing=await cache.match(url);
+     if(existing){bytes+=(await existing.clone().arrayBuffer()).byteLength;stored++;storedUrls.push(url);}
+     else {
+      const response=await fetch(url,{mode:'cors',signal:controller.signal});
+      if(response.ok){const size=(await response.clone().arrayBuffer()).byteLength;await cache.put(url,response);bytes+=size;stored++;storedUrls.push(url);}else failed++;
+     }
+    }catch(error){
+     failed++;
+     if(controller.signal.aborted){cancelled=true;}
+     else if(error&&typeof error==='object'&&'name' in error&&error.name==='QuotaExceededError')quota=true;
+    }
+    safePost(port,{type:'progress',progress:{done:index+1,total:urls.length,stored,failed,bytes,quota}});
+    if(cancelled||quota)break;
    }
-   port.postMessage({stored,failed});
+   if(storedUrls.length){
+    const records=await readCorridors(cache),record={id,name:info.name.slice(0,80),bounds:info.bounds,tileCount:storedUrls.length,estimatedBytes:bytes,createdAt:typeof info.createdAt==='number'?info.createdAt:Date.now(),urls:storedUrls};
+    const combined=[...records.filter(item=>item.id!==id),record],trimmed=combined.slice(-CORRIDOR_LIMIT),retained=new Set(trimmed.flatMap(item=>Array.isArray(item.urls)?item.urls:[]));
+    for(const item of combined.slice(0,-CORRIDOR_LIMIT))for(const url of Array.isArray(item.urls)?item.urls:[])if(!retained.has(url))await cache.delete(url);
+    await writeCorridors(cache,trimmed);
+   }
+   activeCorridorDownloads.delete(id);safePost(port,{type:'complete',result:{stored,failed,bytes,cancelled,quota}});
   })());
  }
 });
