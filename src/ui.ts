@@ -1,6 +1,7 @@
+import {t} from './i18n.js';
 /** Small DOM helpers; all user-controlled copy is assigned as text, never HTML. */
 export const $=<T extends HTMLElement=HTMLElement>(id:string):T=>{const e=document.getElementById(id);if(!e)throw Error(`Missing interface element: ${id}`);return e as T;};
-export const el=<K extends keyof HTMLElementTagNameMap>(tag:K,cls='',text=''):HTMLElementTagNameMap[K]=>{const e=document.createElement(tag);e.className=cls;e.textContent=text;return e;};
+export const el=<K extends keyof HTMLElementTagNameMap>(tag:K,cls='',text='',localized=true):HTMLElementTagNameMap[K]=>{const e=document.createElement(tag);e.className=cls;e.textContent=localized?t(text):text;return e;};
 const paths:Record<string,string>={
  route:'M4 17a3 3 0 1 0 6 0 3 3 0 0 0-6 0Zm10-10a3 3 0 1 0 6 0 3 3 0 0 0-6 0ZM7 14V7a3 3 0 0 1 3-3h1m6 6v7a3 3 0 0 1-3 3h-1',
  plus:'M12 5v14M5 12h14',minus:'M5 12h14',undo:'M9 5 4 10l5 5M4 10h9a6 6 0 0 1 6 6v3',redo:'m15 5 5 5-5 5m5-5h-9a6 6 0 0 0-6 6v3',
@@ -15,9 +16,9 @@ const paths:Record<string,string>={
  info:'M12 11v6m0-10v.1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',duplicate:'M9 9h12v12H9V9Zm-4 6H3V3h12v2',pin:'M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Zm-5 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0',list:'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01'
 };
 export function icon(name:string):SVGSVGElement {const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('viewBox','0 0 24 24');s.setAttribute('fill','none');s.setAttribute('stroke','currentColor');s.setAttribute('stroke-width','1.65');s.setAttribute('stroke-linecap','round');s.setAttribute('stroke-linejoin','round');s.setAttribute('aria-hidden','true');s.classList.add('icon');const p=document.createElementNS(s.namespaceURI,'path');p.setAttribute('d',paths[name]||paths.info);s.append(p);return s;}
-export function button(label:string,action:()=>void,ico?:string,cls=''):HTMLButtonElement {const b=el('button',cls);b.type='button';b.title=label;b.setAttribute('aria-label',label);if(ico)b.append(icon(ico));else b.textContent=label;b.onclick=action;return b;}
+export function button(label:string,action:()=>void,ico?:string,cls='',localized=true):HTMLButtonElement {const b=el('button',cls);b.type='button';const text=localized?t(label):label;b.title=text;b.setAttribute('aria-label',text);if(ico)b.append(icon(ico));else b.textContent=text;b.onclick=action;return b;}
 let toastTimer:ReturnType<typeof setTimeout>;
-export function toast(message:string):void {const e=$('toast');e.textContent=message;e.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.hidden=true,6500);}
+export function toast(message:string):void {const e=$('toast');e.textContent=t(message);e.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.hidden=true,6500);}
 export function installIcons():void {document.querySelectorAll<HTMLElement>('[data-icon]').forEach(e=>e.prepend(icon(e.dataset.icon!)));}
-export function setText(id:string,text:string):void {$(id).textContent=text;}
+export function setText(id:string,text:string):void {$(id).textContent=t(text);}
 export function setInput(id:string,value:string|number):void {const e=$<HTMLInputElement>(id);if(document.activeElement!==e)e.value=String(value);}

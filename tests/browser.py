@@ -45,6 +45,7 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   if args.chromium:opts['executable_path']=args.chromium
   browser=pw.chromium.launch(**opts)
   context=browser.new_context(viewport={'width':1440,'height':900},accept_downloads=True)
+  context.add_init_script("const nativeGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...rest){return /webgl/i.test(String(type))?null:nativeGetContext.call(this,type,...rest)}")
   page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   page.route('https://unpkg.com/**',lambda r:r.abort())
   if args.isolated:
@@ -96,6 +97,9 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   expect(page.locator('#inspector')).to_be_hidden();page.locator('#open-inspector').click();expect(page.locator('#inspector')).to_be_visible();expect(page.locator('#export')).to_be_visible();screenshot(page,'mobile-settings')
   page.locator('#close-inspector').click();screenshot(page,'mobile-map')
   passed('1440 desktop, 1280 laptop and 390 mobile layouts; accessible mobile settings')
+  worker=page.evaluate('''async()=>{const {simulate}=await import('/src/model.js'),{simulateInWorker}=await import('/src/simulation.js'),n=50000,path=Array.from({length:n},(_,i)=>({lat:0,lon:i*250/(111.195*(n-1)),ele:10+5*Math.sin(i*.001)})),activity={id:'browser-worker',version:1,name:'Worker fixture',createdAt:0,updatedAt:0,waypoints:[path[0],path.at(-1)],path,source:'imported',settings:{sport:'run',profile:'road',start:'2026-10-10T06:00',utcOffset:0,pace:300,speed:24,mode:'constant',variation:0,sample:1,hrEnabled:false,hrAverage:150,hrVariation:5,seed:1}};await new Promise(resolve=>setTimeout(resolve,100));const tasks=[],observer=new PerformanceObserver(list=>tasks.push(...list.getEntries()));observer.observe({entryTypes:['longtask']});const result=simulateInWorker(activity),usedWorker=result instanceof Promise,actual=await result;await new Promise(resolve=>setTimeout(resolve,100));observer.disconnect();const expected=simulate(activity);return usedWorker&&actual.points.length===49968&&tasks.every(task=>task.duration<=100)&&JSON.stringify(actual)===JSON.stringify(expected)}''')
+  assert worker
+  passed('50k-point module worker stays responsive and matches synchronous output')
   page.set_viewport_size({'width':1440,'height':900});page.wait_for_timeout(150)
   assert page.evaluate("(()=>{const m=document.getElementById('map').getBoundingClientRect();const s=(document.querySelector('.maplibregl-canvas')||document.querySelector('svg.coordinate-map')).getBoundingClientRect();return m.height>200&&s.height>200})()")
   passed('Map container keeps a full-height renderer surface')
@@ -127,7 +131,9 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   assert abs(page.evaluate('async()=>await window.testDownloads.at(-1)').count('<trkpt')/lap_pts-2.5)<.2
   page.locator('#loop-clear').click();assert abs(float(page.locator('#distance').inner_text().split()[0])-one)<.02
   passed('Loop plan walks 2.5 laps, derives the finish, drags the start along the loop, exports the laps and clears')
-  page.locator('#undo').click();expect(page.locator('#waypoint-count')).to_have_text('3')
+  page.locator('#undo').click();expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
+  for _ in range(4):page.locator('#undo').click()
+  expect(page.locator('#waypoint-count')).to_have_text('3')
   page.locator('#ride').click();expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
   assert page.evaluate('window.testRequests.some(r=>r.data.costing==="bicycle")')
   passed('Cycling mode requests bicycle routing, not automobile routing')

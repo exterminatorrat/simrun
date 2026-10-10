@@ -107,3 +107,39 @@ test('storageUsage calls estimate with the storage object as its receiver',async
  try{assert.deepEqual(await storageUsage(),{usage:5,quota:50});}
  finally{if(desc)Object.defineProperty(globalThis,'navigator',desc);else delete globalThis.navigator;}
 });
+
+test('collections are normalized, validated, listed and filtered',async()=>{
+ const {sanitizeCollection,validateActivity}=await import('../dist/src/model.js');
+ const {collectionNames,filterActivitiesByCollection}=await import('../dist/src/storage.js');
+ const grouped=act('Grouped',[],100,{collection:'  Weekend  '});
+ assert.equal(sanitizeCollection('  Weekend  '),'Weekend');
+ assert.equal(validateActivity(grouped).collection,'Weekend');
+ assert.equal(sanitizeCollection('   '),undefined);
+ assert.throws(()=>sanitizeCollection('x'.repeat(41)),/40 characters/);
+ assert.throws(()=>validateActivity({...grouped,collection:17}),/collection name/);
+ const rows=[validateActivity(grouped),validateActivity(act('Other',[],90)),validateActivity(act('Second',[],80,{collection:'Commute'}))];
+ assert.deepEqual(collectionNames(rows),['Commute','Weekend']);
+ assert.deepEqual(filterActivitiesByCollection(rows,'Weekend'),[rows[0]]);
+ assert.deepEqual(filterActivitiesByCollection(rows,null),[rows[1]]);
+ assert.deepEqual(filterActivitiesByCollection(rows,undefined),rows);
+});
+test('backup JSON includes preferences and collection and old backups remain compatible',async()=>{
+ const {createBackup,parseBackup}=await import('../dist/src/storage.js');
+ const {defaultPreferences}=await import('../dist/src/model.js');
+ const current=act('Grouped',['hills'],100,{collection:'Weekend'});
+ const backup=createBackup([current],defaultPreferences),parsed=parseBackup(backup);
+ assert.equal(parsed.activities[0].collection,'Weekend');
+ assert.deepEqual(parsed.preferences,defaultPreferences);
+ const old=parseBackup(JSON.stringify({product:'SimRun',version:1,activities:[act('Legacy',[],50)],preferences:defaultPreferences}));
+ assert.equal(old.activities[0].collection,undefined);
+ assert.deepEqual(old.preferences,defaultPreferences);
+ assert.throws(()=>parseBackup(JSON.stringify({product:'SimRun',version:1,activities:[{...current,collection:'x'.repeat(41)}],preferences:defaultPreferences})),/40 characters/);
+});
+test('bulk deletion removes only selected existing activities once',async()=>{
+ const {LocalStore,removeActivities}=await import('../dist/src/storage.js');
+ const store=new LocalStore(),one=act('One',[],100),two=act('Two',[],90);
+ await store.save(one);await store.save(two);
+ assert.equal(await removeActivities(store,[one.id,one.id,'missing',two.id]),2);
+ assert.deepEqual((await store.list()).map(row=>row.id),[]);
+ assert.equal(await removeActivities(store,[one.id]),0);
+});
