@@ -79,6 +79,7 @@ test('pseudo-locales generate accented expansion and RTL direction',async()=>{
  assert.equal(document.documentElement.lang,'en-XA');
  assert.equal(document.documentElement.dir,'ltr');
  assert.match(t('Run'),/^⟦.*⟧$/);
+ assert.equal(t(t('Run')),t('Run'));
  assert.match(t('lap',{count:2}),/^⟦2 .*⟧$/);
  assert.equal(t('untranslated-key'),'untranslated-key');
  assert.match(formatDuration(3661),/⟦/);
@@ -86,13 +87,14 @@ test('pseudo-locales generate accented expansion and RTL direction',async()=>{
  assert.equal(document.documentElement.lang,'ar-XB');
  assert.equal(document.documentElement.dir,'rtl');
  assert.match(t('Run'),/^‏.*‏$/);
+ assert.equal(t(t('Run')),t('Run'));
  assert.ok(!t('lap',{count:2}).includes('{count}'));
  await setLocale('en');
  assert.equal(document.documentElement.dir,'ltr');
 });
 
-test('service-worker precache includes the i18n runtime and locale source',async()=>{
+test('service-worker precache includes the i18n runtime and every locale source',async()=>{
  const manifest=JSON.parse(await readFile(join(root,'dist/sw-manifest.json'),'utf8'));
  assert.ok(manifest.files.includes('src/i18n.js'));
- assert.ok(manifest.files.includes('src/locales/en.js'));
+ for(const source of (await readdir(join(root,'src/locales'))).filter(file=>file.endsWith('.ts')))assert.ok(manifest.files.includes(`src/locales/${source.replace(/\.ts$/,'.js')}`),source);
 });

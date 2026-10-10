@@ -121,6 +121,8 @@ function lookup(key:string,params:Parameters):{value:Message;params:Parameters}|
 }
 
 export function t(key:string,params:Parameters={}):string {
+ if(activeLocale==='en-XA'&&key.startsWith('⟦')&&key.endsWith('⟧'))return key;
+ if(activeLocale==='ar-XB'&&key.startsWith('\u200f')&&key.endsWith('\u200f'))return key;
  const result=lookup(key,params);
  if(!result)return key;
  const count=result.params.count;

@@ -19,10 +19,18 @@ tags=['wcag2a','wcag2aa','wcag21aa','best-practice']
 dialogs=['history-dialog','send-dialog','settings-dialog','route-range-dialog','merge-dialog','share-dialog','compare-dialog','shortcuts-dialog']
 results=[]
 contrast_rows=[]
+incomplete_by_rule={}
 def scan(page,label):
- result=page.evaluate('''async tags=>{const r=await axe.run(document,{runOnly:{type:'tag',values:tags}});return {violations:r.violations.map(v=>({id:v.id,impact:v.impact,help:v.help,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))})),passes:r.passes.length,incomplete:r.incomplete.length}}''',tags)
+ result=page.evaluate('''async tags=>{const r=await axe.run(document,{runOnly:{type:'tag',values:tags}});return {violations:r.violations.map(v=>({id:v.id,impact:v.impact,help:v.help,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))})),passes:r.passes.length,incomplete:r.incomplete.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))}}''',tags)
+ for item in result['incomplete']:
+  state=incomplete_by_rule.setdefault(item['id'],{'scans':0,'nodes':0,'examples':[]})
+  state['scans']+=1;state['nodes']+=len(item['nodes'])
+  if len(state['examples'])<3:state['examples'].extend(item['nodes'][:3-len(state['examples'])])
  results.append((label,result))
  return result
+def assert_pseudo_marker(page,label):
+ missing=page.evaluate('''()=>{const out=[],skip='[hidden],script,style,svg,#map,.brand,.map-credit,.provider-guidance,.send-guidance',walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(walker.nextNode()){const n=walker.currentNode,text=n.textContent.trim(),e=n.parentElement;if(!text||!e||!e.getClientRects().length||e.closest(skip)||/^[0-9.,: %+/−–]+$/.test(text))continue;if(!text.startsWith('⟦')||!text.endsWith('⟧')||text.startsWith('⟦⟦')||text.endsWith('⟧⟧'))out.push({text:text.slice(0,100),tag:e.tagName,class:typeof e.className==='string'?e.className:''});}for(const e of document.querySelectorAll('input,select,textarea,button,a,[role]')){if(!e.getClientRects().length||e.closest(skip))continue;for(const attr of ['aria-label','aria-description','aria-valuetext','title','placeholder']){const value=e.getAttribute(attr)?.trim();if(value&&!/^[0-9.,: %+/−–]+$/.test(value)&&(!value.startsWith('⟦')||!value.endsWith('⟧')||value.startsWith('⟦⟦')||value.endsWith('⟧⟧')))out.push({attr,value:value.slice(0,100),tag:e.tagName,id:e.id});}}return out}''')
+ assert not missing,f'{label} has visible unmarked or multiply marked strings: {missing[:20]}'
 with sync_playwright() as p:
  browser=p.chromium.launch(executable_path=args.chromium or None,headless=True)
  errors=[]
@@ -33,14 +41,18 @@ with sync_playwright() as p:
    page.route('**/*',lambda route:route.continue_() if route.request.url.startswith(args.url) or route.request.url.startswith('data:') else route.abort())
    page.goto(args.url,wait_until='domcontentloaded');page.wait_for_timeout(500);page.add_script_tag(path=str(axe_path))
    page.evaluate('(theme)=>document.documentElement.dataset.theme=theme',theme)
-   contrast=page.evaluate(r'''()=>{const style=getComputedStyle(document.documentElement);const rgb=value=>{if(value.startsWith('#')){let h=value.slice(1);if(h.length===3)h=[...h].map(c=>c+c).join('');return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16));}const m=value.match(/[\d.]+/g);return m.slice(0,3).map(Number)};const lum=value=>{const c=rgb(value).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2]};const ratio=(a,b)=>{const [x,y]=[lum(a),lum(b)].sort((u,v)=>v-u);return (x+.05)/(y+.05)};const bg=style.getPropertyValue('--bg').trim(),soft=style.getPropertyValue('--soft').trim(),map=style.getPropertyValue('--map').trim(),text=style.getPropertyValue('--text').trim(),muted=style.getPropertyValue('--muted').trim(),line=style.getPropertyValue('--line').trim(),grid=style.getPropertyValue('--grid').trim(),accent=style.getPropertyValue('--accent').trim();return {text:ratio(text,bg),muted:ratio(muted,bg),controlBorder:ratio(line,soft),grid:ratio(grid,bg),focus:ratio(accent,bg),disabledOpacity:getComputedStyle(document.querySelector('#undo')).opacity,disabledText:ratio(getComputedStyle(document.querySelector('#undo')).color,bg),grade:[...document.querySelectorAll('.grade-legend i')].map(e=>{const color=getComputedStyle(e).backgroundColor;return [ratio(color,bg),ratio(color,map)]})}}''')
-   assert contrast['text']>=4.5 and contrast['muted']>=4.5,contrast
-   assert contrast['controlBorder']>=3 and contrast['grid']>=3 and contrast['focus']>=3,contrast
-   assert contrast['disabledOpacity']=='1' and contrast['disabledText']>=4.5,contrast
+   contrast=page.evaluate(r'''()=>{const style=getComputedStyle(document.documentElement);const rgb=value=>{if(value.startsWith('#')){let h=value.slice(1);if(h.length===3)h=[...h].map(c=>c+c).join('');return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16));}const m=value.match(/[\d.]+/g);return m.slice(0,3).map(Number)};const lum=value=>{const c=rgb(value).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2]};const ratio=(a,b)=>{const [x,y]=[lum(a),lum(b)].sort((u,v)=>v-u);return (x+.05)/(y+.05)};const bg=style.getPropertyValue('--bg').trim(),soft=style.getPropertyValue('--soft').trim(),map=style.getPropertyValue('--map').trim(),text=style.getPropertyValue('--text').trim(),muted=style.getPropertyValue('--muted').trim(),line=style.getPropertyValue('--line').trim(),grid=style.getPropertyValue('--grid').trim(),accent=style.getPropertyValue('--accent').trim();return {text:ratio(text,bg),muted:ratio(muted,bg),textOnMap:ratio(text,map),mutedOnMap:ratio(muted,map),controlBorder:ratio(line,soft),grid:ratio(grid,bg),focus:ratio(accent,bg),focusOnMap:ratio(accent,map),disabledOpacity:getComputedStyle(document.querySelector('#undo')).opacity,disabledText:ratio(getComputedStyle(document.querySelector('#undo')).color,bg),disabledFieldText:ratio(muted,soft),grade:[...document.querySelectorAll('.grade-legend i')].map(e=>{const color=getComputedStyle(e).backgroundColor;return [ratio(color,bg),ratio(color,map)]})}}''')
+   assert contrast['text']>=4.5 and contrast['muted']>=4.5 and contrast['textOnMap']>=4.5 and contrast['mutedOnMap']>=4.5,contrast
+   assert contrast['controlBorder']>=3 and contrast['grid']>=3 and contrast['focus']>=3 and contrast['focusOnMap']>=3,contrast
+   assert contrast['disabledOpacity']=='1' and contrast['disabledText']>=4.5 and contrast['disabledFieldText']>=4.5,contrast
    assert all(min(values)>=3 for values in contrast['grade']),contrast
    contrast_rows.append((theme,width,contrast))
    assert page.locator('#empty').is_visible()
+   assert 'underline' in page.locator('.map-credit a').evaluate('(e)=>getComputedStyle(e).textDecorationLine')
    assert page.locator('#route-status').get_attribute('role')=='status'
+   assert page.locator('#search').get_attribute('aria-controls')=='search-results'
+   assert page.locator('#search-results').get_attribute('role')=='listbox'
+   assert page.locator('#search').get_attribute('aria-activedescendant') is None
    assert page.locator('#toast').get_attribute('aria-live')=='polite'
    scan(page,f'empty-{theme}-{width}')
    page.locator('#gpx-file').set_input_files({'name':'accessibility.gpx','mimeType':'application/gpx+xml','buffer':fixture.encode()})
@@ -55,6 +67,20 @@ with sync_playwright() as p:
     for chart_mode in ['chart-elevation','chart-pace','chart-hr','chart-power','chart-cadence','chart-splits']:
      page.locator('#'+chart_mode).click()
      scan(page,f'{chart_mode}-{theme}')
+    if theme=='light':
+     for dialog_id in dialogs:
+      page.locator('#settings').focus()
+      page.evaluate('(id)=>document.getElementById(id).showModal()',dialog_id)
+      dialog=page.locator('#'+dialog_id)
+      assert dialog.evaluate('(d)=>d.contains(document.activeElement)'),f'{dialog_id} did not take focus'
+      focusable=dialog.evaluate('''d=>[...d.querySelectorAll('a[href],button:not(:disabled),input:not(:disabled):not([type=hidden]),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])')].filter(e=>e.getClientRects().length).length''')
+      for _ in range(focusable+1):page.keyboard.press('Tab')
+      assert dialog.evaluate('(d)=>d.contains(document.activeElement)'),f'{dialog_id} trapped focus outside its modal'
+      page.keyboard.press('Shift+Tab')
+      assert dialog.evaluate('(d)=>d.contains(document.activeElement)'),f'{dialog_id} reverse tab escaped its modal'
+      page.keyboard.press('Escape')
+      assert not dialog.evaluate('(d)=>d.open'),f'Escape did not close {dialog_id}'
+      assert page.evaluate("document.activeElement.id")=='settings',f'{dialog_id} did not restore focus'
    page.close()
  page=browser.new_page(viewport={'width':1440,'height':900},reduced_motion='reduce')
  page.on('pageerror',lambda error:errors.append(str(error)))
@@ -71,13 +97,15 @@ with sync_playwright() as p:
  assert not overflow,'200% zoom equivalent viewport has horizontal overflow'
  page.emulate_media(contrast='more',reduced_motion='reduce')
  page.evaluate("document.documentElement.dataset.theme='light'")
- contrast_vars=page.evaluate('''()=>{const s=getComputedStyle(document.documentElement);return ['--muted','--line','--grid','--accent'].map(k=>[k,s.getPropertyValue(k).trim()])}''')
- assert all(value for _,value in contrast_vars)
+ contrast_vars=page.evaluate('''()=>{const s=getComputedStyle(document.documentElement),rgb=value=>{let h=value.slice(1);if(h.length===3)h=[...h].map(c=>c+c).join('');return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16))},lum=value=>{const c=rgb(value).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2]},ratio=(a,b)=>{const [x,y]=[lum(a),lum(b)].sort((u,v)=>v-u);return (x+.05)/(y+.05)},vars=['--muted','--line','--grid','--accent'].map(k=>s.getPropertyValue(k).trim()),bg=s.getPropertyValue('--bg').trim(),soft=s.getPropertyValue('--soft').trim(),text=s.getPropertyValue('--text').trim(),muted=s.getPropertyValue('--muted').trim(),line=s.getPropertyValue('--line').trim(),grid=s.getPropertyValue('--grid').trim(),accent=s.getPropertyValue('--accent').trim();return {vars,ratios:[ratio(text,bg),ratio(muted,bg),ratio(line,soft),ratio(grid,bg),ratio(accent,bg),ratio(muted,soft)]}}''')
+ assert all(contrast_vars['vars'])
+ assert min(contrast_vars['ratios'][:2])>=4.5 and min(contrast_vars['ratios'][2:5])>=3 and contrast_vars['ratios'][5]>=4.5,contrast_vars
  page.set_viewport_size({'width':1440,'height':900})
  page.locator('#chart-elevation').focus();page.keyboard.press('ArrowRight')
  assert page.evaluate("document.activeElement.id")=='chart-pace','chart tabs did not support arrow navigation'
  assert page.locator('#chart-pace').get_attribute('aria-selected')=='true'
  page.locator('#settings').focus();page.keyboard.press('Enter');dialog=page.locator('#settings-dialog')
+ page.wait_for_function("document.getElementById('settings-dialog').open")
  assert dialog.evaluate('(d)=>d.open')
  assert dialog.evaluate('(d)=>d.contains(document.activeElement)'),'focus did not enter settings dialog'
  page.keyboard.press('Escape');assert not dialog.evaluate('(d)=>d.open')
@@ -95,11 +123,9 @@ with sync_playwright() as p:
  page.locator('#settings').click();page.locator('#locale').fill('en-XA');page.locator('#locale').dispatch_event('change')
  page.wait_for_function("document.documentElement.lang==='en-XA'",timeout=10000);page.wait_for_timeout(250)
  assert page.locator('html').get_attribute('lang')=='en-XA'
- unmarked=page.evaluate('''()=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){const n=w.currentNode,t=n.textContent.trim(),e=n.parentElement;if(!t||!e||!e.getClientRects().length||e.closest('[hidden],script,style,svg,#map,.brand,.map-credit,.provider-guidance,.send-guidance'))continue;if(/^[0-9.,: %+/−–]+$/.test(t))continue;if(!t.includes('⟦')||!t.includes('⟧'))out.push({text:t.slice(0,100),tag:e.tagName,class:e.className||''});}return out}''')
- assert not unmarked,f'en-XA has visible unextracted strings: {unmarked[:20]}'
+ assert_pseudo_marker(page,'routed en-XA')
  page.locator('#settings').click()
- settings_unmarked=page.evaluate('''()=>{const out=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(w.nextNode()){const n=w.currentNode,t=n.textContent.trim(),e=n.parentElement;if(!t||!e||!e.getClientRects().length||e.closest('[hidden],script,style,svg,#map,.brand,.map-credit,.provider-guidance,.send-guidance'))continue;if(/^[0-9.,: %+/−–]+$/.test(t))continue;if(!t.includes('⟦')||!t.includes('⟧'))out.push({text:t.slice(0,100),tag:e.tagName,class:e.className||''});}return out}''')
- assert not settings_unmarked,f'en-XA settings have visible unextracted strings: {settings_unmarked[:20]}'
+ assert_pseudo_marker(page,'settings en-XA')
  page.locator('#settings-dialog [data-close]').click();page.locator('#settings').click();page.locator('#locale').fill('ar-XB');page.locator('#locale').dispatch_event('change')
  page.wait_for_function("document.documentElement.lang==='ar-XB'",timeout=10000);page.wait_for_timeout(250)
  assert page.locator('html').get_attribute('lang')=='ar-XB'
@@ -118,8 +144,9 @@ with sync_playwright() as p:
    if violation['impact'] in ('serious','critical'):
     serious.append((label,violation))
  print('contrast ratios by theme and viewport:',[(theme,width,{key:round(value,2) if isinstance(value,float) else value for key,value in values.items() if key!='grade'},[[round(x,2) for x in grade] for grade in values['grade']]) for theme,width,values in contrast_rows])
- print(f'axe states: {len(results)}; passes: {sum(result["passes"] for _,result in results)}; incomplete checks: {sum(result["incomplete"] for _,result in results)}')
+ print(f'axe states: {len(results)}; passes: {sum(result["passes"] for _,result in results)}; incomplete checks: {sum(len(result["incomplete"]) for _,result in results)}')
  print('axe remaining by impact/rule:',sorted((impact,rule,count) for (impact,rule),count in other.items()))
+ print('axe incomplete checks by rule:',sorted((rule,value['scans'],value['nodes'],value['examples']) for rule,value in incomplete_by_rule.items()))
  assert not serious,'serious/critical axe violations: '+repr(serious[:12])
  assert not errors,'uncaught browser errors: '+repr(errors)
  print('PASS axe WCAG 2.0/2.1 AA and best-practice states with measured contrast checks')
