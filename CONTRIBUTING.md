@@ -56,3 +56,7 @@ Commit messages should be short and imperative (for example `Fix loop planner cl
 ## Reporting issues
 
 Use GitHub Issues for bugs and feature requests, and include browser, OS and steps to reproduce. For security problems, follow [SECURITY.md](SECURITY.md) instead.
+
+## Versioning and releases
+
+Record user-visible changes under `[Unreleased]` in `CHANGELOG.md`. Before a release, move those entries into a dated version section and update `package.json`. Before 1.0.0, use `0.MINOR.PATCH`: increment PATCH for compatible fixes and MINOR for new features or breaking changes. After 1.0.0, follow Semantic Versioning for breaking changes, compatible features, and fixes. Keep the package version unchanged during ordinary feature work.
