@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright
 parser=argparse.ArgumentParser()
 parser.add_argument('--url',default='http://127.0.0.1:5190')
 parser.add_argument('--chromium',default=os.environ.get('CHROMIUM_PATH',''))
-parser.add_argument('--axe',default=os.environ.get('AXE_PATH','/tmp/hoplite/axe/node_modules/axe-core/axe.min.js'))
+parser.add_argument('--axe',default=os.environ.get('AXE_PATH',str(Path(__file__).resolve().parent.parent/'node_modules'/'axe-core'/'axe.min.js')))
 args=parser.parse_args()
 axe_path=Path(args.axe)
 assert axe_path.is_file(),f'axe-core is missing: {axe_path}'

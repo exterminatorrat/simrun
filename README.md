@@ -43,6 +43,7 @@ Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, pr
 - **Send and library:** Web Share with files, save to a folder, ZIP export, per-platform guidance with official import pages (FIT for Strava and TrainingPeaks, GPX for Garmin Connect, intervals.icu and Ride with GPS; COROS imports GPX routes only), library collections, bulk export and delete, and a full-library ZIP that includes the JSON backup. Nothing is uploaded by the app and no credentials are stored: Strava needs a registered application and OAuth, Garmin Connect's developer program is enterprise-only and the COROS Partner API is for established platforms.
 - **Maps, search and offline:** opt-in Photon place suggestions as you type (Nominatim stays submit-only because its policy forbids autocomplete), a one-shot locate-me button, OpenTopoMap and Waymarked Trails cycling and hiking layers with attribution, named saved places that search fully offline (there is no worldwide offline gazetteer), and an offline corridor manager with sizes, progress, cancel and delete.
 - **Guidance and status:** a dismissible first-run tip, keyboard-shortcut help on `?`, a draft and storage status with a quota warning, grouped settings with a live summary of what is sent to third parties, and touch-friendly waypoint editing.
+- **Accessibility and languages:** an automated axe-core pass (WCAG 2.0/2.1 AA and best practice) across the empty, routed and dialog states in both themes at desktop and phone sizes reports no violations; dialogs contain and return focus, waypoints can be added at the map centre and moved or deleted from the keyboard, charts have text alternatives, and reduced-motion and high-contrast preferences are honoured. All interface text goes through a small `t()` layer with Intl number, date and duration formatting and a language setting; only English ships, with accented and right-to-left pseudo-locales used to catch unextracted strings. Adding a language is one file in `src/locales/`. No real screen reader has been run.
 - **Release tooling:** CI on pull requests with coverage, ESLint, Dependabot, security headers and a CSP, a [privacy page](public/privacy.html) and a [changelog](CHANGELOG.md).
 
 There is **no seeded activity, artificial road network, or fake successful routing**. Browser tests use their own synthetic fixtures and mocked providers. Failed road routing never promotes a straight waypoint preview into an exportable route.
@@ -174,7 +175,7 @@ python tests/browser.py --url http://127.0.0.1:5173
 python tests/browser.py --url http://127.0.0.1:5173 --chromium /usr/bin/google-chrome
 ```
 
-Other checks: `npm run lint`, `npm run typecheck` and `npm run test:coverage`.
+Other checks: `python tests/a11y.py --url http://127.0.0.1:5173` (axe-core, keyboard and pseudo-locale checks), `npm run lint`, `npm run typecheck` and `npm run test:coverage`.
 
 This uses mocked providers and intentionally unavailable CDN to exercise the coordinate fallback; it never hits public routing services. On a normal HTTP origin it also checks native IndexedDB restoration. `--isolated` compiles an AMD test harness into a temporary directory and runs without navigation; it explicitly does not test HTTP/ESM, MapLibre or persistent storage. `--screenshots <directory>` is optional; keep screenshots outside the source archive.
 

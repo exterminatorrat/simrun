@@ -1,6 +1,6 @@
 # Verification summary
 
-- Build and strict TypeScript checks passed; the current Node suite is **147 tests, all passing** (Node 24.21.0).
+- Build and strict TypeScript checks passed; the Node suite is **248 tests, all passing** (Node 24.21.0); this figure was 147 before the polish work and is re-measured in the final section below.
 - New pure modules are covered by Node tests: `src/analysis.ts` (HR zones, histogram, per-unit splits), `src/share.ts` (1e5 polyline codec, share URLs, size warnings), `src/workout.ts` (±0.5% matching and scale-to-route repair), `src/tcx.ts` (TCX activity/course structure) and the library helpers (tags/search/sort).
 - Simulation depth is covered by `tests/depth.test.mjs`: neutral weather is exactly neutral; weather scales duration without changing geometry; heat deepens drift while the HR-average contract holds; the smoothed grade is asymmetric; power/cadence are bounded and deterministic; fatigue reshapes timing without changing duration.
 - Rest stops are covered by `tests/pauses.test.mjs`: elapsed grows by the dwell, moving time excludes it, co-located zero-speed brackets keep strictly increasing timestamps, splits report stopped time and GPX notes simulated rests. Workout timing is covered by `tests/workout-sim.test.mjs`, and avoid-highways/hills request bodies by `tests/avoid.test.mjs`.
@@ -104,3 +104,23 @@ Total: **1,791,653 raw bytes; 548,051 bytes summed after gzip**. MapLibre's vend
 - Live WebGL basemap and offline vector-tile rendering remain unverified. The original-commit browser harness did not continue beyond its first failure.
 - Screenshots were captured under `/tmp/hoplite/shots/merged-final` and `/tmp/hoplite/shots/baseline-final`; image inspection was unavailable because the image tool rejects paths outside `/tmp/hoplite/workspace`, which this task was instructed not to touch.
 - No new owner decision is required by this workstream. Provider selection, public deployment, and live third-party verification remain owner-gated decisions from the release plan.
+
+## Final integration (all polish workstreams merged)
+
+Date: 2026-10-10. Branch `hoplite/kos-04c6f62d`, after W1 to W9a were merged.
+
+- `npm test` (type check, build, Node suite): **248 passed, 0 failed**. `npm run lint`: **0 errors, 47 warnings** (existing `no-explicit-any`, unused variables and empty blocks that were tuned to warnings).
+- `python tests/browser.py` in headless Chrome with mocked providers: **26 of 26 checks pass** on three of four runs of the final tree. One run stopped at the 50k-point worker check, which bounds main-thread long tasks at 100 ms; it passed on the two following runs, so treat it as an intermittent timing flake on a cold page.
+- `python tests/a11y.py`: axe-core 4.14.0 (WCAG 2.0 and 2.1 A and AA, best practice) over 52 states (empty, routed, every dialog and settings section, light and dark, 1440x900 and 390x844) reports **no violations**; 60 checks stay "incomplete" (translucent map and glass contrast and a collapsed combobox) and were checked by hand. It also covers 320 px reflow, reduced-motion and high-contrast preferences, dialog focus entry, containment and return, keyboard waypoint add, move and delete, chart arrow scrubbing, and the accented and right-to-left pseudo-locales.
+- A browser baseline against the original commit showed the 390 px horizontal overflow already failing there; it passes in the merged UI.
+- Integration fixes made while merging: the left toolbar no longer runs underneath the chart panel on desktop; the offline cache status again shows its 1,500-entry cap; the loop-plan undo expectation in the harness reflects that each plan change is now its own undo step; two error rethrows keep their cause.
+- Large simulations (50,000 points, 1 s samples) took 124 to 524 ms in Node and 244 to 828 ms in the browser on the main thread; they now run in a module worker with a synchronous fallback and byte-identical output.
+
+### Still not verified
+
+- Live WebGL basemap rendering, the topo, cycling and hiking overlays on the map, and offline vector tiles (the test browser fell back to the coordinate canvas).
+- Real behaviour of the live providers under normal use: FOSSGIS Valhalla (including `trace_attributes`), Photon, Overpass, OpenFreeMap and the overlay tile hosts. Only a handful of response shapes were confirmed with single requests.
+- Web Share and folder-save on real devices, and imports of the exported GPX, TCX and FIT files into real Strava, Garmin Connect, COROS, TrainingPeaks, intervals.icu and Ride with GPS accounts.
+- Firefox and Safari; Lighthouse; a real screen reader; native IndexedDB persistence across real reloads on the deployed origin; the deployed security headers.
+- The acceptance scenarios 17 to 25 added to `docs/ACCEPTANCE.md` and the original 1 to 16 on the real deployment.
+

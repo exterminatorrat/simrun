@@ -552,6 +552,7 @@ export const en={
  "Profile type":"Profile type",
  "Provider is busy — wait a moment and retry.":"Provider is busy — wait a moment and retry.",
  "Provider URL must be HTTPS, without credentials, a query or a fragment.":"Provider URL must be HTTPS, without credentials, a query or a fragment.",
+ "Privacy policy":"Privacy policy",
  "Providers and privacy":"Providers and privacy",
  "Read the public usage policy":"Read the public usage policy",
  "Recently updated":"Recently updated",

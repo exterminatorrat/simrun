@@ -17,6 +17,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - name: Unit tests with coverage
         run: npm run test:coverage
       - uses: actions/setup-python@v5
@@ -34,6 +35,7 @@ jobs:
             sleep 1
           done
           python tests/browser.py --url http://127.0.0.1:5173
+          python tests/a11y.py --url http://127.0.0.1:5173
       - run: npm run package
       - uses: actions/upload-artifact@v4
         with:
