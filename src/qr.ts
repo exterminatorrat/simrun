@@ -60,8 +60,7 @@ function buildCodewords(bytes:Uint8Array,version:number,ecc:Ecc):number[]{
  push(bytes.length,countBits);
  for(const b of bytes)push(b,8);
  push(0,Math.min(4,capacity-bits.length));
- bits.length-=bits.length%8;
- bits.length+=8-(bits.length%8);
+ while(bits.length%8!==0)bits.push(false);
  const pads=[0xec,0x11];
  for(let p=0;bits.length<capacity;p++)push(pads[p%2],8);
  const codewords:number[]=[];
@@ -115,7 +114,7 @@ function buildFunctionGrid(version:number,size:number):{func:boolean[][];mod:boo
   for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++)
    set(pos[a]+dr,pos[b]+dc,Math.max(Math.abs(dr),Math.abs(dc))!==1);
  }
- set(size-8,8,true);
+ set(size-8,8,false);
  const reserve=(row:number,col:number)=>{
   if(!func[row][col]){func[row][col]=true;mod[row][col]=false;}
  };
@@ -141,7 +140,7 @@ function placeData(mod:boolean[][],func:boolean[][],size:number,codewords:number
   const r=right<=6?right-1:right;
   for(let vert=0;vert<size;vert++)for(let z=0;z<2;z++){
    const col=r-z;
-   const upwards=(((r+1)&2)===0)!==(col<6);
+   const upwards=((r&2)===0)!==(col<6);
    const row=upwards?size-1-vert:vert;
    if(!func[row][col]){
     mod[row][col]=bitIdx<totalBits?((codewords[bitIdx>>3]>>>(7-(bitIdx&7)))&1)!==0:false;
@@ -157,8 +156,8 @@ function penalty(m:boolean[][]):number{
  for(let i=0;i<n;i++){
   let rowRun=1,colRun=1;
   for(let j=1;j<n;j++){
-   if(m[i][j]===m[i][j-1]){rowRun++;if(rowRun>=5)score++;}else rowRun=1;
-   if(m[j][i]===m[j-1][i]){colRun++;if(colRun>=5)score++;}else colRun=1;
+   if(m[i][j]===m[i][j-1]){rowRun++;if(rowRun>=5)score+=rowRun===5?3:1;}else rowRun=1;
+   if(m[j][i]===m[j-1][i]){colRun++;if(colRun>=5)score+=colRun===5?3:1;}else colRun=1;
   }
  }
  for(let i=1;i<n;i++)for(let j=1;j<n;j++)
@@ -242,28 +241,6 @@ export function qrMatrix(text:string,ecc:Ecc='M'):boolean[][]{
    return assemble(version,ecc,interleave(version,ecc,buildCodewords(bytes,version,ecc)));
  }
  throw new Error(`Text of ${bytes.length} bytes does not fit QR version 10 at ECC level ${ecc} (byte mode).`);
-}
-
-export function __debug(text:string,ecc:Ecc):{version:number;mask:number;codewords:number[];mod:boolean[][];func:boolean[][];scores:number[]}{
- const bytes=new TextEncoder().encode(text);
- let version=1;
- for(;version<=10;version++){
-  const countBits=version<10?8:16;
-  if(4+countBits+bytes.length*8<=dataCodewordCount(version,ecc)*8)break;
- }
- const codewords=interleave(version,ecc,buildCodewords(bytes,version,ecc));
- const size=21+4*(version-1);
- const{func,mod}=buildFunctionGrid(version,size);
- placeData(mod,func,size,codewords);
- const scores:number[]=[];
- for(let mask=0;mask<8;mask++){
-  const candidate=mod.map(row=>row.slice());
-  const fn=MASKS[mask];
-  for(let r=0;r<size;r++)for(let c=0;c<size;c++)
-   if(!func[r][c]&&fn(r,c))candidate[r][c]=!candidate[r][c];
-  scores.push(penalty(candidate));
- }
- return{version,mask:-1,codewords,mod,func,scores};
 }
 
 export interface QrSvgOptions{size?:number;margin?:number;ecc?:Ecc}
