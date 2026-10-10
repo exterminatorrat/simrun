@@ -45,6 +45,7 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   if args.chromium:opts['executable_path']=args.chromium
   browser=pw.chromium.launch(**opts)
   context=browser.new_context(viewport={'width':1440,'height':900},accept_downloads=True)
+  context.add_init_script("const nativeGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...rest){return /webgl/i.test(String(type))?null:nativeGetContext.call(this,type,...rest)}")
   page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   page.route('https://unpkg.com/**',lambda r:r.abort())
   if args.isolated:
