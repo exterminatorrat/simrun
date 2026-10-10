@@ -27,7 +27,7 @@ export interface Settings {
 export interface Activity {
   id:string; version:1; name:string; description?:string; createdAt:number; updatedAt:number;
   waypoints:Point[]; path:Point[]; source:RouteSource; settings:Settings; loop?:LoopPlan; splits?:Splits; routeData?:RouteData;
-  workout?:Workout; pauses?:Pauses; tags?:string[];
+  workout?:Workout; pauses?:Pauses; tags?:string[]; collection?:string;
 }
 export interface Sample extends Point { time:number; distance:number; speed:number; gapPace?:number; power?:number; cad?:number }
 export interface Simulation { points:Sample[]; duration:number; distance:number; interval:number; calories?:number }

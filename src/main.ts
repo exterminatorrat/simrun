@@ -1,5 +1,5 @@
 import type {Activity,Point,Preferences,RouteProfile,Settings,Simulation,WeatherPreset,Sport,PaceStrategy} from './types.js';
-import {defaults,simulate,clock,parseClock,validateSettings,loopPlan,plannedPath,mapStyleFor,computeSplits,WEATHER_PRESETS,importedActivity} from './model.js';
+import {defaults,simulate,clock,parseClock,validateSettings,loopPlan,plannedPath,mapStyleFor,computeSplits,WEATHER_PRESETS,importedActivity,sanitizeCollection} from './model.js';
 import {atDistance,cumulative,elevationStats,isClosedLoop,resample} from './geometry.js';
 import {download,downloadActivity,safeFilename} from './gpx.js';
 import {exportTCX} from './tcx.js';
@@ -7,7 +7,7 @@ import {decodeShare,shareUrl,shareWarning} from './share.js';
 import {importRouteFile} from './import.js';
 import {downloadCues} from './cues.js';
 import {clearCachedMap,offlineSupported,offlineStatus,registerOfflineCache} from './sw.js';
-import {readPreferences,writePreferences,validatePreferences,LocalStore,parseBackup,sanitizeTags,searchActivities,sortActivities,storageUsage} from './storage.js';
+import {readPreferences,writePreferences,validatePreferences,LocalStore,parseBackup,createBackup,sanitizeTags,searchActivities,sortActivities,storageUsage,collectionNames,filterActivitiesByCollection,removeActivities} from './storage.js';
 import {ValhallaProvider,resolveProfile,searchPlaces} from './providers.js';
 import {generateRoundTrip} from './roundtrip.js';
 import {fetchPois,poiRouteHash,type PointOfInterest} from './poi.js';
@@ -25,6 +25,7 @@ import {exportFIT} from './fit.js';
 import {qrSvg} from './qr.js';
 import {$,el,button,installIcons,setText,setInput,toast} from './ui.js';
 import {newId} from './id.js';
+import {createActivityFiles,selectPlatformFile,zipActivities,downloadFiles,shareFiles,saveFilesToFolder,type SendFile,type PlatformId} from './send.js';
 let preferences=readPreferences();document.documentElement.dataset.theme=preferences.theme;installIcons();
 const routing=new ValhallaProvider(()=>preferences),store=new LocalStore(),editor=new Editor(routing);
 let initialized=false,saveTimer:ReturnType<typeof setTimeout>|undefined,sim:Simulation|null=null,lastPath:Point[]|null=null,lastSettings='',simulationError='';
@@ -32,6 +33,7 @@ let searchController:AbortController|null=null,searchId=0;
 let roundtripController:AbortController|null=null,roundtripActivityId='',roundtripActivityUpdatedAt=0;
 let poiController:AbortController|null=null,poiRequestId=0,poiPathKey='',poiPlaces:PointOfInterest[]=[],poiStatus='Enable optional water and toilet lookup in Settings to begin.';
 let emptyDismissed=false;
+let visibleHistory:Activity[]=[],selectedHistory=new Set<string>(),sendFiles:SendFile[]=[];
 const map=new RouteMap($('map'),{add:p=>{if(editor.activity.source==='imported'){toast('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}editor.add(p);},move:(i,p)=>editor.move(i,p),insert:(i,p)=>editor.insert(i,p),select:i=>{editor.selected=i;render();$('waypoint-details').setAttribute('open','');},message:toast,loopStart:f=>editor.setLoop({start:f}),freehand:points=>editor.drawFreehand(points)});
 const charts=new Charts($('chart'),p=>map.hover(p),p=>map.scrub(p));
 editor.alternatesEnabled=preferences.alternates;
@@ -90,7 +92,7 @@ function render():void {
  const alts=$('alternates');alts.replaceChildren();
  if(editor.alternatePaths.length>1){alts.hidden=false;editor.alternatePaths.forEach((_,i)=>alts.append(button(i===0?'Route A':`Route ${String.fromCharCode(65+i)}`,()=>{void editor.selectAlternate(i);},undefined,'text-button')));}
  else alts.hidden=true;setText('workout-unit',unit);setInput('workout-steps',wsteps.map(st=>`${distanceValue(st.distance)}:${usesPace(s.sport)?(st.pace!==undefined?clock(st.pace):''):(st.speed!==undefined?st.speed:'')}`).join(', '));$('workout-clear').hidden=!wsteps.length;
- setInput('tags',(a.tags??[]).join(', '));
+ setInput('tags',(a.tags??[]).join(', '));setInput('collection',a.collection??'');
  const routeEdges=a.routeData?.surfaceEdges??[],surfaceRows=surfaceBreakdown(routeEdges),roadRows=roadClassBreakdown(routeEdges),surfaceList=$('surface-summary');surfaceList.replaceChildren();
  for(const [title,rows] of [['Surface',surfaceRows],['Road type',roadRows]] as const){if(!rows.length)continue;surfaceList.append(el('strong','route-data-heading',`By ${title.toLowerCase()}`));rows.forEach(row=>{const item=el('div','route-data-row');item.append(el('span','',row.name),el('span','',`${distanceValue(row.distance)} ${unit}`));surfaceList.append(item);});}
  setText('surface-note',surfaceRows.length||roadRows.length?'Classified edge distances supplied by the routing service; unclassified edges are omitted.':a.path.length<2||a.source==='draft'?'Resolve a road route before requesting surface or road-type details.':preferences.surfaceDataEnabled?'This routing service did not return surface or road-type details for this route.':'Optional and off by default. Enable surface and road-type details in Settings to request them from the routing service.');
@@ -210,9 +212,15 @@ change('workout-steps',e=>{const raw=e.value.trim();if(!raw){editor.setWorkout(n
 on('workout-clear',()=>editor.setWorkout(null));
 on('batch-save',async()=>{validRoute();const count=Number($<HTMLInputElement>('batch-count').value),variants=generateBatch(editor.activity,count);await Promise.all(variants.map(variant=>store.save(variant)));toast(`Saved ${variants.length} simulated variants to the local activity library.`);});
 change('tags',e=>editor.setTags(sanitizeTags(e.value.split(','))));
+change('collection',e=>{editor.activity.collection=sanitizeCollection(e.value);editor.activity.updatedAt=Date.now();render();});
 on('export-tcx',()=>{validRoute();if(!sim)throw Error('Create a route before exporting.');download(exportTCX(editor.activity,sim),`${editor.activity.settings.start.slice(0,10)}-${safeFilename(editor.activity.name)}.tcx`,'application/vnd.garmin.tcx+xml');toast('TCX downloaded. Exports are simulated, not recorded.');});
 on('export-fit',()=>{validRoute();if(!sim)throw Error('Create a route before exporting.');downloadBytes(exportFIT(editor.activity,sim),`${editor.activity.settings.start.slice(0,10)}-${safeFilename(editor.activity.name)}.fit`,'application/vnd.ant.fit');toast('FIT downloaded. Exports are simulated, not recorded.');});
 function downloadBytes(bytes:Uint8Array,filename:string,type:string):void{const url=URL.createObjectURL(new Blob([bytes as BlobPart],{type}));const a=el('a');a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
+on('send',()=>{validRoute();sendFiles=createActivityFiles(editor.activity);setText('send-status','');const dialog=$<HTMLDialogElement>('send-dialog');if(!dialog.open)dialog.showModal();$<HTMLButtonElement>('send-share-files').focus();});
+on('send-share-files',async()=>{const result=await shareFiles(sendFiles);if(result==='shared')setText('send-status','Files shared.');else if(result==='downloaded')setText('send-status','File sharing is unavailable here; downloads were started.');});
+on('send-save-folder',async()=>{const result=await saveFilesToFolder(sendFiles);if(result==='saved')setText('send-status','Files saved to the selected folder.');else if(result==='downloaded')setText('send-status','Folder access is unavailable; downloads were started.');});
+on('send-zip',()=>{const bytes=zipActivities([editor.activity]);downloadFiles([{name:`${editor.activity.settings.start.slice(0,10)}-${editor.activity.name.replace(/[^a-zA-Z0-9_-]+/g,'-')}-simulated-formats.zip`,type:'application/zip',data:bytes}]);setText('send-status','ZIP download started.');});
+document.querySelectorAll<HTMLButtonElement>('[data-platform-download]').forEach(button=>button.addEventListener('click',guarded(()=>{const platform=button.dataset.platformDownload as PlatformId,file=selectPlatformFile(sendFiles,platform);if(!file)throw Error('No recommended file is available for this platform.');downloadFiles([file]);setText('send-status',`${file.name} download started.`);})));
 on('share',()=>{if(editor.activity.path.length<2)throw Error('Draw or import a route before sharing.');const url=shareUrl(location.origin+location.pathname,editor.activity);$<HTMLInputElement>('share-url').value=url;const warning=shareWarning(url);setText('share-warning',warning??'');$('share-warning').hidden=!warning;const qr=$('share-qr');qr.replaceChildren();if(url.length<=2000)qr.innerHTML=qrSvg(url,{size:4,margin:2});else qr.append(el('p','fine-print','This link is too long for a QR code; export GPX instead.'));$<HTMLDialogElement>('share-dialog').showModal();});
 on('share-copy',guarded(async()=>{const value=$<HTMLInputElement>('share-url').value;if(!value)throw Error('Open Share again to build a link.');try{await navigator.clipboard.writeText(value);toast('Share link copied.');}catch{$<HTMLInputElement>('share-url').select();document.execCommand('copy');toast('Share link copied.');}}));
 on('share-print',()=>{if(editor.activity.path.length<2)throw Error('Draw or import a route before printing.');buildPrintSheet();window.print();});
@@ -243,12 +251,33 @@ for(const mode of ['elevation','pace','hr','power','cadence','splits'] as ChartM
 on('toggle-chart',()=>{const collapsed=$('chart-panel').classList.toggle('collapsed');$('toggle-chart').setAttribute('aria-expanded',String(!collapsed));$('toggle-chart').setAttribute('aria-label',collapsed?'Expand chart':'Collapse chart');});
 on('open-inspector',()=>{$('inspector').classList.add('open');$('activity-name').focus();});on('close-inspector',()=>$('inspector').classList.remove('open'));
 document.querySelectorAll<HTMLButtonElement>('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog')!.close());
-for(const id of ['history-dialog','settings-dialog'])$(id).addEventListener('click',e=>{if(e.target===$(id)){const r=$(id).getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)($<HTMLDialogElement>(id)).close();}});
+for(const id of ['history-dialog','settings-dialog','send-dialog'])$(id).addEventListener('click',e=>{if(e.target===$(id)){const r=$(id).getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)($<HTMLDialogElement>(id)).close();}});
+function updateHistorySelection():void {
+ const count=visibleHistory.filter(activity=>selectedHistory.has(activity.id)).length;
+ setText('history-selected-count',`${count} selected`);
+ $<HTMLButtonElement>('history-export-selected').disabled=count===0;
+ $<HTMLButtonElement>('history-delete-selected').disabled=count===0;
+ const all=$<HTMLInputElement>('history-select-all');all.checked=visibleHistory.length>0&&count===visibleHistory.length;all.indeterminate=count>0&&count<visibleHistory.length;all.disabled=visibleHistory.length===0;
+}
 async function showHistory():Promise<void>{
- const list=$('history-list');list.replaceChildren();const query=$<HTMLInputElement>('history-search').value.trim(),sortKey=$<HTMLSelectElement>('history-sort').value as 'updated'|'name'|'distance'|'duration';const rows=sortActivities(searchActivities(await store.list(),query),sortKey);if(!rows.length)list.append(el('p','history-empty',query?'No saved routes match that search.':'No saved routes yet. Draw or import a route, then save it here.'));
- for(const a of rows){const row=el('article','history-row'),open=button('Open activity',guarded(async()=>{if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(a);$('inspector').querySelector('.inspector-scroll')!.scrollTop=0;map.fit();$<HTMLDialogElement>('history-dialog').close();}),undefined,'history-main');const planned=plannedPath(a),c=cumulative(planned),m=c.at(-1)||0;let duration='—';try{duration=clock(simulate(a).duration);}catch{}const h=elevationStats(planned);open.replaceChildren(el('strong','',a.name),el('span','',`${a.source==='draft'?'Draft · ':''}${sportLabel(a.settings.sport)} · ${a.settings.start.replace('T',' ')} · ${distanceValue(m)} ${distanceUnit()} · ${duration} · ↑ ${heightValue(h.gain)} ${preferences.units==='imperial'?'ft':'m'}`));
-  const actions=el('div','history-actions');actions.append(button('Duplicate activity',guarded(async()=>{const copy=structuredClone(a);copy.id=newId();copy.name=`${a.name.slice(0,150)} copy`;copy.createdAt=copy.updatedAt=Date.now();await store.save(copy);await showHistory();}),'duplicate','icon-button'),button('Export saved GPX',guarded(()=>downloadActivity(a)),'download','icon-button'),button('Compare activities',()=>{void openCompare();},'duplicate','icon-button'),button('Delete activity',guarded(async()=>{if(confirm(`Delete “${a.name}” from this browser?`)){await store.remove(a.id);await showHistory();}}),'trash','icon-button'));row.append(open,actions);list.append(row);
+ const list=$('history-list');list.replaceChildren();const allRows=await store.list(),collectionSelect=$<HTMLSelectElement>('history-collection'),previousCollection=collectionSelect.value||'*';
+ collectionSelect.replaceChildren(new Option('All collections','*'),new Option('Unassigned','-'),...collectionNames(allRows).map(name=>new Option(name,`collection:${name}`)));
+ if([...collectionSelect.options].some(option=>option.value===previousCollection))collectionSelect.value=previousCollection;
+ const selectedCollection=collectionSelect.value==='*'?undefined:collectionSelect.value==='-'?null:collectionSelect.value.slice(11);
+ const query=$<HTMLInputElement>('history-search').value.trim(),sortKey=$<HTMLSelectElement>('history-sort').value as 'updated'|'name'|'distance'|'duration';
+ const rows=sortActivities(searchActivities(filterActivitiesByCollection(allRows,selectedCollection),query),sortKey);visibleHistory=rows;
+ const visibleIds=new Set(rows.map(activity=>activity.id));selectedHistory=new Set([...selectedHistory].filter(id=>visibleIds.has(id)));
+ if(!rows.length)list.append(el('p','history-empty',query?'No saved routes match that search.':'No saved routes yet. Draw or import a route, then save it here.'));
+ for(const a of rows){
+  const row=el('article','history-row'),selector=el('input');selector.type='checkbox';selector.checked=selectedHistory.has(a.id);selector.setAttribute('aria-label',`Select ${a.name}`);selector.addEventListener('change',()=>{if(selector.checked)selectedHistory.add(a.id);else selectedHistory.delete(a.id);updateHistorySelection();});
+  const selectLabel=el('label','history-select');selectLabel.append(selector);
+  const open=button('Open activity',guarded(async()=>{if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(a);$('inspector').querySelector('.inspector-scroll')!.scrollTop=0;map.fit();$<HTMLDialogElement>('history-dialog').close();}),undefined,'history-main');
+  const planned=plannedPath(a),c=cumulative(planned),m=c.at(-1)||0;let duration='—';try{duration=clock(simulate(a).duration);}catch{}const h=elevationStats(planned);
+  open.replaceChildren(el('strong','',a.name),el('span','',`${a.collection?`${a.collection} · `:''}${a.source==='draft'?'Draft · ':''}${sportLabel(a.settings.sport)} · ${a.settings.start.replace('T',' ')} · ${distanceValue(m)} ${distanceUnit()} · ${duration} · ↑ ${heightValue(h.gain)} ${preferences.units==='imperial'?'ft':'m'}`));
+  const actions=el('div','history-actions');actions.append(button('Duplicate activity',guarded(async()=>{const copy=structuredClone(a);copy.id=newId();copy.name=`${a.name.slice(0,150)} copy`;copy.createdAt=copy.updatedAt=Date.now();await store.save(copy);await showHistory();}),'duplicate','icon-button'),button('Export saved GPX',guarded(()=>downloadActivity(a)),'download','icon-button'),button('Compare activities',()=>{void openCompare();},'duplicate','icon-button'),button('Delete activity',guarded(async()=>{if(confirm(`Delete “${a.name}” from this browser?`)){await store.remove(a.id);selectedHistory.delete(a.id);await showHistory();}}),'trash','icon-button'));
+  row.append(selectLabel,open,actions);list.append(row);
  }
+ updateHistorySelection();
  if(!$<HTMLDialogElement>('history-dialog').open)$<HTMLDialogElement>('history-dialog').showModal();
 }
 on('history',showHistory);
@@ -265,7 +294,12 @@ async function openCompare():Promise<void>{
 }
 $('history-search').addEventListener('input',guarded(()=>{void showHistory();}));
 $('history-sort').addEventListener('change',guarded(()=>{void showHistory();}));
-on('backup',async()=>{const activities=await store.list();const draft=editor.activity;if(!activities.some(a=>a.id===draft.id)&&(draft.path.length||draft.waypoints.length))activities.push(draft);else {const i=activities.findIndex(a=>a.id===draft.id);if(i>=0)activities[i]=draft;}download(JSON.stringify({product:'SimRun',version:1,createdAt:new Date().toISOString(),activities,preferences},null,2),'simrun-backup.json','application/json');});
+$('history-collection').addEventListener('change',guarded(()=>{void showHistory();}));
+$('history-select-all').addEventListener('change',guarded(()=>{for(const activity of visibleHistory){if($<HTMLInputElement>('history-select-all').checked)selectedHistory.add(activity.id);else selectedHistory.delete(activity.id);}void showHistory();}));
+on('history-export-selected',async()=>{const selected=visibleHistory.filter(activity=>selectedHistory.has(activity.id)),resolved=selected.filter(activity=>activity.source!=='draft');if(!resolved.length)throw Error('Select at least one resolved activity to export.');const bytes=zipActivities(resolved);downloadFiles([{name:`simrun-simulated-activities-${resolved.length}.zip`,type:'application/zip',data:bytes}]);if(resolved.length<selected.length)toast(`${selected.length-resolved.length} draft activities were not included in the ZIP.`);});
+on('history-delete-selected',async()=>{const ids=visibleHistory.filter(activity=>selectedHistory.has(activity.id)).map(activity=>activity.id);if(!ids.length||!confirm(`Delete ${ids.length} selected activities from this browser?`))return;const removed=await removeActivities(store,ids);selectedHistory.clear();await showHistory();toast(`Deleted ${removed} activities from this browser.`);});
+on('library-export-all',async()=>{const activities=await store.list(),draft=editor.activity;if(!activities.some(activity=>activity.id===draft.id)&&(draft.path.length||draft.waypoints.length))activities.push(draft);else{const index=activities.findIndex(activity=>activity.id===draft.id);if(index>=0)activities[index]=draft;}const bytes=zipActivities(activities,preferences);downloadFiles([{name:'simrun-full-library-simulated.zip',type:'application/zip',data:bytes}]);});
+on('backup',async()=>{const activities=await store.list(),draft=editor.activity;if(!activities.some(a=>a.id===draft.id)&&(draft.path.length||draft.waypoints.length))activities.push(draft);else{const index=activities.findIndex(a=>a.id===draft.id);if(index>=0)activities[index]=draft;}download(createBackup(activities,preferences),'simrun-backup.json','application/json');});
 on('restore',()=>{$<HTMLInputElement>('backup-file').value='';$('backup-file').click();});
 $('backup-file').addEventListener('change',guarded(async()=>{const file=$<HTMLInputElement>('backup-file').files?.[0];if(!file)return;if(file.size>50000000)throw Error('Backup must be smaller than 50 MB.');const b=parseBackup(await file.text());if(!confirm(`Restore ${b.activities.length} activities and preferences? Matching activity IDs will be replaced.`))return;await store.restore(b.activities);preferences=b.preferences;try{writePreferences(preferences);}catch{toast('Preferences could not be persisted.');}document.documentElement.dataset.theme=preferences.theme;map.setStyle(mapStyleFor(preferences));render();await showHistory();toast('Backup restored. Open a route from the library.');}));
 on('settings',()=>{setInput('units',preferences.units);setInput('theme',preferences.theme);$<HTMLInputElement>('geocoding-enabled').checked=preferences.geocodingEnabled;$<HTMLInputElement>('poi-enabled').checked=preferences.poiEnabled;$<HTMLInputElement>('surface-data-enabled').checked=preferences.surfaceDataEnabled;for(const [id,key] of Object.entries({'map-style':'mapStyle','map-style-dark':'mapStyleDark','routing-url':'routingUrl','elevation-url':'elevationUrl','geocoding-url':'geocodingUrl','overpass-url':'overpassUrl'}))setInput(id,String(preferences[key as keyof Preferences]));setInput('hr-max',preferences.hrMax);setInput('trimp-resting-hr',preferences.trimpRestingHr??'');setInput('trimp-max-hr',preferences.trimpMaxHr??'');setInput('corridor-zoom',preferences.corridorZoom);$<HTMLInputElement>('offline-routing').checked=preferences.offlineRouting;$<HTMLInputElement>('avoid-highways').checked=preferences.avoidHighways;$<HTMLInputElement>('avoid-hills').checked=preferences.avoidHills;$<HTMLInputElement>('alternates-enabled').checked=preferences.alternates;void refreshOfflineStatus();void refreshStorageUsage();$<HTMLDialogElement>('settings-dialog').showModal();});
