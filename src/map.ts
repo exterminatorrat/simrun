@@ -118,7 +118,8 @@ export class RouteMap {
  fit():void {
   const p=this.a?.path.length?this.a.path:this.a?.waypoints;if(!p?.length)return;
   if(this.map&&this.ready){const bounds=new window.maplibregl.LngLatBounds();p.forEach(p=>bounds.extend([p.lon,p.lat]));this.map.fitBounds(bounds,{padding:innerWidth>760?{top:100,bottom:230,left:100,right:390}:{top:100,bottom:210,left:50,right:50},maxZoom:16,duration:450});return;}
-  const ps=p.map(world),xs=ps.map(q=>q[0]),ys=ps.map(q=>q[1]),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);const r=this.host.getBoundingClientRect();
+  // Reduce rather than spread: a 100,000-point route would exceed the argument limit of Math.min.
+  const ps=p.map(world);let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(const q of ps){if(q[0]<minX)minX=q[0];if(q[0]>maxX)maxX=q[0];if(q[1]<minY)minY=q[1];if(q[1]>maxY)maxY=q[1];}const r=this.host.getBoundingClientRect();
   this.view.x=(minX+maxX)/2;this.view.y=(minY+maxY)/2;this.view.zoom=Math.min(17,Math.max(1,Math.log2(Math.min(Math.max(100,r.width-(innerWidth>760?460:100))/Math.max(1e-7,maxX-minX),Math.max(100,r.height-350)/Math.max(1e-7,maxY-minY))/256)));this.drawFallback();
  }
  zoom(by:number):void {if(this.map){by>0?this.map.zoomIn():this.map.zoomOut();if(this.ready)return;}this.view.zoom=Math.max(1,Math.min(19,this.view.zoom+by));this.drawFallback();}

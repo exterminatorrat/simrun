@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {exportTCX, exportTCXCourse} from '../dist/src/tcx.js';
+import {exportTCX, exportTCXCourse, importTCX} from '../dist/src/tcx.js';
 import {defaults, simulate, PRODUCT} from '../dist/src/model.js';
+
+// importTCX parses with DOMParser (browser-only), but its input guards run before that.
+test('importTCX rejects oversized input and document types before parsing',()=>{
+ assert.throws(()=>importTCX('x'.repeat(15000001)),/15 MB/);
+ assert.throws(()=>importTCX('<!DOCTYPE foo><TrainingCenterDatabase/>'),/document types/);
+ assert.throws(()=>importTCX('<!ENTITY x "y"><TrainingCenterDatabase/>'),/document types/);
+});
 
 const activity=(settings={})=>{const a=defaults();a.path=[{lat:0,lon:0,ele:10},{lat:0,lon:0.01,ele:20},{lat:0,lon:0.02,ele:15}];a.source='routed';Object.assign(a.settings,settings);return a;};
 
