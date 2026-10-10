@@ -1,5 +1,6 @@
 name: Verify SimRun
 on:
+  pull_request:
   push:
     branches: [main]
   workflow_dispatch:
@@ -16,7 +17,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm test
+      - name: Unit tests with coverage
+        run: npm run test:coverage
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Local-first route planning and explicitly simulated GPX activities",
-  "engines": {"node": ">=20"},
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "start": "node scripts/serve.mjs",
@@ -12,7 +14,15 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test tests/*.test.mjs",
     "package": "node scripts/package.mjs",
-    "vendor": "node scripts/vendor.mjs"
+    "vendor": "node scripts/vendor.mjs",
+    "test:coverage": "npm run build && node --experimental-test-coverage --test tests/*.test.mjs",
+    "lint": "eslint ."
   },
-  "devDependencies": {"typescript": "5.8.3"}
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.12.0",
+    "globals": "17.13.0",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.71.1"
+  }
 }
