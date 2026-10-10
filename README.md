@@ -31,12 +31,17 @@ Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, pr
 ## Features
 
 - **Routing:** cancellable, throttled Valhalla requests (never automobile costing) with **walk**, **hike**, **road** and **mountain-bike** profiles; over-long routes get a clear public-limit message (about 100 km on foot, 150 km by bike) that points at self-hosting. Waypoint editing, shaping handles, undo/redo, reverse, out-and-back, close-loop, and loop planning by lap count or target distance.
-- **Simulation:** deterministic and seeded; time/pace/speed conversion, optional synthetic heart rate, simulated GPS noise and signal dropout, custom splits with a per-segment table.
-- **Import/export:** GPX, KML and GeoJSON in; GPX, turn-by-turn cue-sheet CSV, SVG profiles and JSON backup out.
+- **Simulation:** deterministic and seeded; terrain-aware pacing from a centered 30 m smoothed grade with asymmetric uphill/downhill cost; weather presets that scale duration and deepen cardiac drift; estimated power, cadence and fatigue; optional synthetic heart rate with warm-up and drift; distance-anchored rest stops with elapsed-vs-moving time; structured interval workouts; simulated GPS noise and signal dropout; custom splits and workout-step boundaries with a per-segment table.
+- **Import/export:** GPX, KML and GeoJSON in; GPX (with opt-in power/cadence/temperature extensions), TCX, turn-by-turn cue-sheet CSV, SVG profiles and JSON backup out.
+- **Analysis and library:** heart-rate zones, a pace/speed histogram and per-unit split charts; tags, search, sort, drag-and-drop import and a storage estimate.
 - **Local-first:** IndexedDB history and drafts with an explicitly labeled **Session only** fallback; offline app shell via service worker.
 - **UI:** MapLibre/OpenFreeMap basemap with a labeled coordinate-canvas fallback; metric/imperial units; light/dark appearance; mobile settings sheet.
 
 There is **no seeded activity, artificial road network, or fake successful routing**. Browser tests use their own synthetic fixtures and mocked providers. Failed road routing never promotes a straight waypoint preview into an exportable route.
+
+Routes can be shared as a geometry-only URL fragment with a copy fallback, a client-rendered QR code, a coordinate/history privacy note and a printable cue sheet; a PWA manifest enables installation. Gradient-shaded route segments and an interactive elevation scrubber (pointer or arrow keys, Escape to clear) sit on the profile chart. **FIT** activity files export and import alongside GPX/TCX; the library offers tags, search, sort, drag-and-drop import, a storage estimate and a side-by-side comparison of two activities. Optional, default-off offline behaviour downloads the bounded tile corridor that covers a route and can cache routing/elevation replies (network-first, capped at 50 entries and 30 days). Avoid-highways/hills options and one alternate route (under 60 km) shape routing requests. Every simulated value stays labeled as estimated, not measured.
+
+**Not implemented:** surface-type and traffic modelling (no data source), a separate training-load (TRIMP) metric, offline geocoding, and a full accessibility audit beyond the coarse-pointer target sizes and focus styling.
 
 ## Quick start
 

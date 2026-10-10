@@ -1,6 +1,6 @@
 import type {Point,Preferences,RouteProfile,Sport} from './types.js';
 import {atDistance,cumulative,decodePolyline,lowerBound,resample,validPoint} from './geometry.js';
-export interface RoutingProvider {route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>;elevation(path:Point[],signal:AbortSignal):Promise<Point[]>}
+export interface RoutingProvider {route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>;elevation(path:Point[],signal:AbortSignal):Promise<Point[]>;alternates?(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[][]>;lastCached?:boolean}
 export class ProviderError extends Error {constructor(message:string,public status=0,public code=0){super(message);}}
 /** Valhalla costing per profile; bicycle_type aliases are case-insensitive. */
 export const PROFILE_OPTIONS:Record<RouteProfile,{costing:'pedestrian'|'bicycle';options:Record<string,unknown>}>={walk:{costing:'pedestrian',options:{}},hike:{costing:'pedestrian',options:{max_hiking_difficulty:6}},road:{costing:'bicycle',options:{bicycle_type:'Hybrid'}},mtb:{costing:'bicycle',options:{bicycle_type:'Mountain',use_roads:.1}}};
@@ -13,6 +13,12 @@ export const capMessage=(profile:RouteProfile):string=>`This route is longer tha
 /** Advisory warning above 80% of the public cap; routing is never blocked. */
 export const routeCapWarning=(profile:RouteProfile,meters:number):string|null=>{const cap=PUBLIC_CAP_METERS[profile];return meters>cap*.8?`Long route: the public service caps ${footProfile(profile)?'walking and hiking':'cycling'} near ${Math.round(cap/1000)} km, so routing may fail. Self-hosting is documented in docs/SELF-HOST-VALHALLA.md.`:null;};
 const queues=new Map<string,Promise<unknown>>(),lastRequests=new Map<string,number>();
+// Opt-in, bounded offline cache for routing and elevation replies. Network-first: the
+// provider is always contacted online; a cached reply is only a fallback.
+const OFFLINE_KEY='simrun-offline-v1',OFFLINE_MAX=50,OFFLINE_TTL=30*86400000;
+function readOffline():Record<string,{t:number;data:unknown}>{try{return JSON.parse(localStorage.getItem(OFFLINE_KEY)||'{}');}catch{return {};}}
+function writeOffline(key:string,data:unknown):void{try{const all=readOffline();all[key]={t:Date.now(),data};const keys=Object.keys(all);if(keys.length>OFFLINE_MAX){keys.sort((a,b)=>all[a].t-all[b].t);for(const k of keys.slice(0,keys.length-OFFLINE_MAX))delete all[k];}localStorage.setItem(OFFLINE_KEY,JSON.stringify(all));}catch{}}
+export function clearOfflineCache():void{try{localStorage.removeItem(OFFLINE_KEY);}catch{}}
 const pause=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>{signal.throwIfAborted();const done=()=>{signal.removeEventListener('abort',cancel);resolve();};const timer=setTimeout(done,ms);const cancel=()=>{clearTimeout(timer);reject(signal.reason);};signal.addEventListener('abort',cancel,{once:true});});
 export function endpoint(value:string):string {const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||u.hash||u.search)throw Error('Provider URL must be HTTPS, without credentials, a query or a fragment.');return u.toString();}
 async function rateSlot(host:string,signal:AbortSignal):Promise<void>{
@@ -37,14 +43,46 @@ async function getJSON<T>(url:URL,signal:AbortSignal,retry=true):Promise<T>{
  });queues.set(host,job);return job;
 }
 export class ValhallaProvider implements RoutingProvider {
+ lastCached=false;
  constructor(private prefs:()=>Preferences){}
+ private async request<T>(url:URL,signal:AbortSignal,retry=true):Promise<T> {
+  const enabled=this.prefs().offlineRouting===true;
+  if(!enabled){this.lastCached=false;return getJSON<T>(url,signal,retry);}
+  const key=url.toString(),hit=readOffline()[key];
+  try{const data=await getJSON<T>(url,signal,retry);writeOffline(key,data);this.lastCached=false;return data;}
+  catch(error){if(hit&&Date.now()-hit.t<OFFLINE_TTL){this.lastCached=true;return hit.data as T;}throw error;}
+ }
+ /** Up to one alternate route, requested only when enabled and the estimate is under 60 km. */
+ async alternates(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[][]>{
+  if(points.length<2||points.length>50||!points.every(validPoint))throw new ProviderError('Use between 2 and 50 valid waypoints.');
+  const estimate=cumulative(points).at(-1)??0;
+  const main=await this.route(points,profile,signal);
+  if(estimate>=60000)return [main];
+  const {costing,options}=PROFILE_OPTIONS[profile]??PROFILE_OPTIONS.walk;
+  const prefs=this.prefs(),opts:Record<string,unknown>={...options};
+  if(prefs.avoidHills)opts.use_hills=0;
+  if(prefs.avoidHighways&&costing==='bicycle')opts.use_roads=0;
+  const url=new URL(endpoint(prefs.routingUrl));
+  url.searchParams.set('json',JSON.stringify({locations:points.map(({lat,lon})=>({lat,lon})),costing,costing_options:Object.keys(opts).length?{[costing]:opts}:undefined,units:'kilometers',directions_type:'none',alternates:1}));
+  try{
+   const data=await this.request<{alternates?:{trip?:{legs?:{shape:string}[]}}[]}>(url,signal);
+   const decode=(legs?:{shape:string}[]):Point[]=>{const path:Point[]=[];for(const leg of legs??[]){const p=decodePolyline(leg.shape);path.push(...(path.length?p.slice(1):p));}return path;};
+   const list=(data.alternates??[]).map(trip=>decode(trip.trip?.legs)).filter(p=>p.length>=2);
+   return list.length?list:[main];
+  }catch{return [main];}
+ }
  async route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>{
   if(points.length<2||points.length>50||!points.every(validPoint))throw new ProviderError('Use between 2 and 50 valid waypoints.');
   const {costing,options}=PROFILE_OPTIONS[profile]??PROFILE_OPTIONS.walk;
-  const url=new URL(endpoint(this.prefs().routingUrl));
-  url.searchParams.set('json',JSON.stringify({locations:points.map(({lat,lon})=>({lat,lon})),costing,costing_options:Object.keys(options).length?{[costing]:options}:undefined,units:'kilometers',directions_type:'none'}));
+  // Default-off avoid options. `use_hills` is documented for both pedestrian and bicycle;
+  // `use_roads` (avoid roads) is the closest documented bicycle lever for avoiding highways.
+  const prefs=this.prefs(),opts:Record<string,unknown>={...options};
+  if(prefs.avoidHills)opts.use_hills=0;
+  if(prefs.avoidHighways&&costing==='bicycle')opts.use_roads=0;
+  const url=new URL(endpoint(prefs.routingUrl));
+  url.searchParams.set('json',JSON.stringify({locations:points.map(({lat,lon})=>({lat,lon})),costing,costing_options:Object.keys(opts).length?{[costing]:opts}:undefined,units:'kilometers',directions_type:'none'}));
   let data:{trip?:{legs?:{shape:string}[]}};
-  try{data=await getJSON<{trip?:{legs?:{shape:string}[]}}>(url,signal);}
+  try{data=await this.request<{trip?:{legs?:{shape:string}[]}}>(url,signal);}
   catch(error){if(error instanceof ProviderError&&error.status===400&&error.code===154)throw new ProviderError(capMessage(profile),400,154);throw error;}
   const legs=data.trip?.legs;if(!legs?.length)throw new ProviderError('No accessible route found. Move a waypoint and try again.');
   const path:Point[]=[];
@@ -53,11 +91,11 @@ export class ValhallaProvider implements RoutingProvider {
  }
  async elevation(path:Point[],signal:AbortSignal):Promise<Point[]>{
   const c=cumulative(path),total=c[c.length-1];
-  // One small request, at most 60 samples: avoid public-service load and giant GET URLs.
-  const count=Math.max(2,Math.min(60,Math.ceil(total/100)+1));
+  // One small request, at most 120 samples (about one per 50 m): finer terrain without giant GET URLs.
+  const count=Math.max(2,Math.min(120,Math.ceil(total/50)+1));
   const shape=resample(path,count).map(p=>({lat:+p.lat.toFixed(6),lon:+p.lon.toFixed(6)}));
   const url=new URL(endpoint(this.prefs().elevationUrl));url.searchParams.set('json',JSON.stringify({shape,height_precision:1}));
-  const data=await getJSON<{height?:(number|null)[]}>(url,signal,false);const h=data.height;
+  const data=await this.request<{height?:(number|null)[]}>(url,signal,false);const h=data.height;
   if(!h||h.length!==count||h.every(x=>x===null))throw new ProviderError('Elevation is unavailable. Route and GPX remain usable.');
   return path.map((p,i)=>{const f=c[i]/total*(count-1),lo=Math.min(count-2,Math.floor(f)),hi=lo+1,a=h[lo],b=h[hi];return typeof a==='number'&&typeof b==='number'&&Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a)<=12000&&Math.abs(b)<=12000?{...p,ele:a+(b-a)*(f-lo)}:{...p};});
  }

@@ -1,10 +1,13 @@
 import type {Activity,Preferences} from './types.js';
-import {defaultPreferences,validateActivity} from './model.js';
+import {defaultPreferences,validateActivity,plannedPath,simulate} from './model.js';
+import {cumulative} from './geometry.js';
 import {endpoint} from './providers.js';
 export function readPreferences():Preferences {try{return validatePreferences(JSON.parse(localStorage.getItem('simrun-preferences')||'{}'));}catch{return {...defaultPreferences};}}
 export function validatePreferences(value:unknown):Preferences {
  const p=value&&typeof value==='object'?value as Partial<Preferences>:{};
- return {units:p.units==='imperial'?'imperial':'metric',theme:p.theme==='dark'?'dark':'light',geocodingEnabled:p.geocodingEnabled===true,mapStyle:p.mapStyle?endpoint(p.mapStyle):defaultPreferences.mapStyle,mapStyleDark:p.mapStyleDark?endpoint(p.mapStyleDark):defaultPreferences.mapStyleDark,routingUrl:p.routingUrl?endpoint(p.routingUrl):defaultPreferences.routingUrl,elevationUrl:p.elevationUrl?endpoint(p.elevationUrl):defaultPreferences.elevationUrl,geocodingUrl:p.geocodingUrl?endpoint(p.geocodingUrl):defaultPreferences.geocodingUrl};
+ const hrMax=Number.isFinite(p.hrMax)?Math.min(240,Math.max(100,Math.round(p.hrMax!))):defaultPreferences.hrMax;
+ const corridorZoom=Number.isFinite(p.corridorZoom)?Math.min(14,Math.max(8,Math.round(p.corridorZoom!))):defaultPreferences.corridorZoom;
+ return {units:p.units==='imperial'?'imperial':'metric',theme:p.theme==='dark'?'dark':'light',geocodingEnabled:p.geocodingEnabled===true,mapStyle:p.mapStyle?endpoint(p.mapStyle):defaultPreferences.mapStyle,mapStyleDark:p.mapStyleDark?endpoint(p.mapStyleDark):defaultPreferences.mapStyleDark,routingUrl:p.routingUrl?endpoint(p.routingUrl):defaultPreferences.routingUrl,elevationUrl:p.elevationUrl?endpoint(p.elevationUrl):defaultPreferences.elevationUrl,geocodingUrl:p.geocodingUrl?endpoint(p.geocodingUrl):defaultPreferences.geocodingUrl,hrMax,offlineRouting:p.offlineRouting===true,corridorZoom,avoidHighways:p.avoidHighways===true,avoidHills:p.avoidHills===true,alternates:p.alternates===true};
 }
 export function writePreferences(p:Preferences):void {localStorage.setItem('simrun-preferences',JSON.stringify(p));}
 export class LocalStore {
@@ -36,4 +39,45 @@ export function parseBackup(text:string):{activities:Activity[];preferences:Pref
  if(text.length>50000000)throw Error('Backup must be smaller than 50 MB.');const b=JSON.parse(text);
  if(b?.product!=='SimRun'||b.version!==1||!Array.isArray(b.activities)||b.activities.length>500)throw Error('Unsupported SimRun backup.');
  return {activities:b.activities.map(validateActivity),preferences:validatePreferences(b.preferences)};
+}
+export function sanitizeTags(value:unknown):string[]|undefined{
+ if(!Array.isArray(value))return undefined;
+ const out:string[]=[],seen=new Set<string>();
+ for(const v of value){
+  if(typeof v!=='string')continue;
+  const tag=v.trim().slice(0,24),key=tag.toLowerCase();
+  if(!tag||seen.has(key))continue;
+  seen.add(key);out.push(tag);
+  if(out.length>=8)break;
+ }
+ return out.length?out:undefined;
+}
+export function searchActivities(rows:Activity[],query:string):Activity[]{
+ const tokens=query.toLowerCase().split(/\s+/).filter(Boolean);
+ if(!tokens.length)return rows;
+ return rows.filter(a=>{const hay=[a.name,...(a.tags??[])].join('\n').toLowerCase();return tokens.every(t=>hay.includes(t));});
+}
+export function sortActivities(rows:Activity[],key:'updated'|'name'|'distance'|'duration'):Activity[]{
+ const distances=new Map<Activity,number>(),durations=new Map<Activity,number>();
+ for(const a of rows){
+  if(key==='distance')distances.set(a,cumulative(plannedPath(a)).at(-1)??0);
+  else if(key==='duration'){
+   try{durations.set(a,simulate(a).duration);}catch{durations.set(a,Number.POSITIVE_INFINITY);}
+  }
+ }
+ return [...rows].sort((a,b)=>{
+  if(key==='updated')return b.updatedAt-a.updatedAt;
+  if(key==='name')return a.name.localeCompare(b.name);
+  if(key==='distance')return (distances.get(a)??0)-(distances.get(b)??0);
+  return (durations.get(a)??Number.POSITIVE_INFINITY)-(durations.get(b)??Number.POSITIVE_INFINITY);
+ });
+}
+export async function storageUsage():Promise<{usage:number;quota:number}|null>{
+ const storage=globalThis.navigator?.storage;
+ if(typeof storage?.estimate!=='function')return null;
+ try{
+  // Call through the receiver: a detached platform method throws "Illegal invocation".
+  const e=await storage.estimate(),usage=Number(e?.usage),quota=Number(e?.quota);
+  return Number.isFinite(usage)&&Number.isFinite(quota)?{usage,quota}:null;
+}catch{return null;}
 }
