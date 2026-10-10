@@ -35,7 +35,8 @@ export function decodePolyline(text:string,precision=1e5):Point[] {
  return out;
 }
 
-const sportTag:Record<Sport,string>={run:'0',ride:'1'};
+const sportTag:Record<Sport,string>={run:'0',ride:'1',walk:'2',hike:'3','trail-run':'4',mtb:'5'};
+const tagSport:Record<string,Sport>={'0':'run','1':'ride','2':'walk','3':'hike','4':'trail-run','5':'mtb'};
 
 function toBase64Url(text:string):string {
  const bytes=new TextEncoder().encode(text);let bin='';
@@ -67,11 +68,11 @@ export function decodeShare(fragment:string):{points:Point[];sport:Sport}|null {
   if(payload.length>SHARE_POINT_LIMIT*32)return null;
   const text=fromBase64Url(payload);
   const tag=text[0];
-  if(tag!=='0'&&tag!=='1')return null;
+  if(!(tag in tagSport))return null;
   const points=decodePolyline(text.slice(1));
   if(points.length>SHARE_POINT_LIMIT)return null;
   for(const p of points)if(!validPoint(p))return null;
-  return {points,sport:tag==='1'?'ride':'run'};
+  return {points,sport:tagSport[tag]!};
  }catch{return null;}
 }
 

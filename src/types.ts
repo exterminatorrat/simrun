@@ -1,5 +1,6 @@
 export interface Point { lat:number; lon:number; ele?:number; time?:number; hr?:number }
-export type Sport = 'run' | 'ride';
+export type Sport = 'run' | 'ride' | 'walk' | 'hike' | 'trail-run' | 'mtb';
+export type PaceStrategy = 'even' | 'negative-split' | 'positive-split' | 'segments';
 export type RouteProfile = 'walk' | 'hike' | 'road' | 'mtb';
 export type RouteSource = 'draft' | 'routed' | 'imported';
 export interface LoopPlan { start:number; mode:'laps'|'distance'; value:number }
@@ -16,17 +17,17 @@ export interface RestStop { distance:number; seconds:number }
 export interface Pauses { rests:RestStop[] }
 export interface Settings {
   sport:Sport; profile?:RouteProfile; start:string; utcOffset:number; pace:number; speed:number;
-  mode:'constant'|'natural'; variation:number; sample:1|2|5;
+  mode:'constant'|'natural'; variation:number; sample:1|2|5; paceStrategy?:PaceStrategy; paceSegments?:number[];
   hrEnabled:boolean; hrAverage:number; hrVariation:number; seed:number;
   gps?:GpsSim; power?:PowerSim; cadence?:CadenceSim; fatigue?:FatigueSim; weather?:WeatherSim;
 }
 export interface Activity {
-  id:string; version:1; name:string; createdAt:number; updatedAt:number;
+  id:string; version:1; name:string; description?:string; createdAt:number; updatedAt:number;
   waypoints:Point[]; path:Point[]; source:RouteSource; settings:Settings; loop?:LoopPlan; splits?:Splits;
   workout?:Workout; pauses?:Pauses; tags?:string[];
 }
-export interface Sample extends Point { time:number; distance:number; speed:number; power?:number; cad?:number }
+export interface Sample extends Point { time:number; distance:number; speed:number; gapPace?:number; power?:number; cad?:number }
 export interface Simulation { points:Sample[]; duration:number; distance:number; interval:number; calories?:number }
-export interface Split { start:number; end:number; distance:number; duration:number; speed:number; gain:number|null; stopped?:boolean }
-export interface Preferences {units:'metric'|'imperial'; theme:'light'|'dark'; mapStyle:string; mapStyleDark:string; routingUrl:string; elevationUrl:string; geocodingUrl:string; geocodingEnabled:boolean; hrMax:number; offlineRouting:boolean; corridorZoom:number; avoidHighways:boolean; avoidHills:boolean; alternates:boolean }
+export interface Split { start:number; end:number; distance:number; duration:number; speed:number; gain:number|null; gapPace?:number; stopped?:boolean }
+export interface Preferences {units:'metric'|'imperial'; theme:'light'|'dark'; mapStyle:string; mapStyleDark:string; routingUrl:string; elevationUrl:string; geocodingUrl:string; geocodingEnabled:boolean; hrMax:number; trimpRestingHr?:number; trimpMaxHr?:number; offlineRouting:boolean; corridorZoom:number; avoidHighways:boolean; avoidHills:boolean; alternates:boolean }
 export interface ElevationStats {gain:number|null;loss:number|null;min:number|null;max:number|null}
