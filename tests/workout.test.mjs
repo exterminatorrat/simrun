@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import {workoutDistance,matchWorkout,expandWorkout,stepAt,workoutStepLabel} from '../dist/src/workout.js';
 
 const step=(kind,distance,extra={})=>({kind,distance,...extra});
+
+test('an overshoot larger than the last step falls back to scaling instead of going negative',()=>{
+ const w={steps:[step('work',9999),step('rest',1)]};
+ const expanded=expandWorkout(w,9960);
+ assert.ok(expanded.every(s=>s.step.distance>0),'every step distance stays positive');
+ assert.ok(expanded.every(s=>s.end>s.start),'every step spans a positive distance');
+ assert.ok(Math.abs(expanded[expanded.length-1].end-9960)<1e-6,'steps still total the route');
+});
+
+test('a fractional pace label carries the minute instead of printing 5:60',()=>{
+ assert.equal(workoutStepLabel(step('work',1000,{pace:359.9})),'Work 1.00 km @ 6:00/km');
+ assert.ok(!workoutStepLabel(step('work',1000,{pace:119.6})).includes(':60'));
+});
 const workout=(...steps)=>({steps});
 
 test('workoutDistance sums the step distances',()=>{

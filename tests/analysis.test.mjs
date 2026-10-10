@@ -4,6 +4,17 @@ import {hrZones,belowZoneSeconds,paceHistogram,perUnitSplits,compareActivities} 
 
 const samples=rows=>rows.map(([time,distance,speed,hr])=>({lat:0,lon:0,time,distance,speed,...(hr===undefined?{}:{hr})}));
 
+test('paceHistogram handles a constant value sitting on a bin boundary',()=>{
+ // 4 m/s run = 250 s/km, an exact multiple of the 10 s/km bin: the bin range collapses to one bin.
+ const flat=samples(Array.from({length:11},(_,i)=>[i*1000,i*4,4]));
+ const hist=paceHistogram(flat,'run','metric')[0];
+ assert.equal(hist.bins.length,1);
+ assert.ok(hist.bins[0].seconds>0);
+ // A constant 5 m/s ride (18 km/h) is likewise an exact bin multiple.
+ const ride=samples(Array.from({length:11},(_,i)=>[i*1000,i*5,5]));
+ assert.equal(paceHistogram(ride,'ride','metric')[0].bins.length,1);
+});
+
 test('HR zones partition weighted time and their percentages sum to 100',()=>{
   const points=samples([
     [0,0,3,110],[6000,50,3,112],[12000,100,3,130],[18000,150,3,128],[24000,200,3,150],

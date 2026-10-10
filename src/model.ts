@@ -114,7 +114,7 @@ export function validateActivity(value:unknown):Activity {
  const cleanWorkout=(v:Workout|undefined):Workout|undefined=>{
   if(v===undefined||v===null)return undefined;
   if(typeof v!=='object'||!Array.isArray(v.steps)||!v.steps.length||v.steps.length>200)throw Error('Invalid workout.');
-  return {steps:v.steps.map(st=>{if(typeof st!=='object'||(st.kind!=='work'&&st.kind!=='rest')||!Number.isFinite(st.distance)||st.distance<=0||st.distance>MAX_LOOP_DISTANCE)throw Error('Invalid workout step.');const step:WorkoutStep={kind:st.kind,distance:st.distance};if(st.pace!==undefined&&Number.isFinite(st.pace))step.pace=st.pace;if(st.speed!==undefined&&Number.isFinite(st.speed))step.speed=st.speed;if(st.hr!==undefined&&Number.isFinite(st.hr))step.hr=st.hr;return step;})};
+ return {steps:v.steps.map(st=>{if(typeof st!=='object'||(st.kind!=='work'&&st.kind!=='rest')||!Number.isFinite(st.distance)||st.distance<=0||st.distance>MAX_LOOP_DISTANCE)throw Error('Invalid workout step.');const step:WorkoutStep={kind:st.kind,distance:st.distance};if(st.pace!==undefined){if(!Number.isFinite(st.pace)||st.pace<60||st.pace>3600)throw Error('Workout pace must be between 1:00 and 60:00 per km.');step.pace=st.pace;}if(st.speed!==undefined){if(!Number.isFinite(st.speed)||st.speed<1||st.speed>150)throw Error('Workout speed must be between 1 and 150 km/h.');step.speed=st.speed;}if(st.hr!==undefined&&Number.isFinite(st.hr))step.hr=st.hr;return step;})};
  };
  const cleanPauses=(v:Pauses|undefined):Pauses|undefined=>{
   if(v===undefined||v===null)return undefined;
@@ -144,6 +144,8 @@ export function simulate(a:Activity):Simulation {
  if(duration<.01||duration>604800)throw Error('Activity duration must be between 0.01 seconds and 7 days.');
  const steps=a.workout?expandWorkout(a.workout,total):null;
  const baseMs=steps?steps.reduce((n,st)=>n+durationFor(st.end-st.start,s.sport,st.step.pace??s.pace,st.step.speed??s.speed)*1000,0):duration*1000;
+ const plannedMs=baseMs*weatherFactor(s.weather);
+ if(!(plannedMs>=10)||plannedMs>604800000)throw Error('Activity duration must be between 0.01 seconds and 7 days.');
  const durationMs=Math.max(1,Math.round(baseMs*weatherFactor(s.weather))),start=startTime(s);
  const n=Math.min(40000,Math.max(2,Math.ceil(total/10))),times=[0],ds=total/n;
  const phase=(s.seed%997)/997*Math.PI*2;

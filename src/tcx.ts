@@ -24,8 +24,12 @@ function trackpoint(p:Sample):string {
 }
 
 function timeAt(points:Sample[],distance:number):number {
+ const last=points[points.length-1];
+ if(distance<=points[0].distance)return points[0].time;
+ if(distance>=last.distance)return last.time;
+ // Interpolate within the segment that contains the distance, not the one after it.
  let i=1;while(i<points.length-1&&points[i].distance<distance)i++;
- const a=points[i],b=points[i+1]??points[i],span=b.distance-a.distance,t=span>0?(distance-a.distance)/span:0;
+ const a=points[i-1],b=points[i],span=b.distance-a.distance,t=span>0?(distance-a.distance)/span:0;
  return a.time+t*(b.time-a.time);
 }
 

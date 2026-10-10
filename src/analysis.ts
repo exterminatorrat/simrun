@@ -70,9 +70,10 @@ export function paceHistogram(points:Sample[],sport:Sport,units:'metric'|'imperi
   }
   if(!buckets.length)return [{bins:[],binSize,unit}];
   const first=Math.floor(min/binSize),last=Math.ceil(max/binSize);
-  const bins=Array.from({length:last-first},(_,k)=>({min:(first+k)*binSize,max:(first+k+1)*binSize,seconds:0}));
+  // A constant value that sits exactly on a bin boundary yields last===first; keep at least one bin.
+  const bins=Array.from({length:Math.max(1,last-first)},(_,k)=>({min:(first+k)*binSize,max:(first+k+1)*binSize,seconds:0}));
   for(const {v,dt} of buckets){
-    const index=Math.min(Math.floor(v/binSize),last-1)-first;
+    const index=Math.max(0,Math.min(bins.length-1,Math.floor(v/binSize)-first));
     bins[index].seconds+=dt;
   }
   for(const bin of bins)bin.seconds=round1(bin.seconds);

@@ -73,10 +73,11 @@ export function sortActivities(rows:Activity[],key:'updated'|'name'|'distance'|'
  });
 }
 export async function storageUsage():Promise<{usage:number;quota:number}|null>{
- const estimate=globalThis.navigator?.storage?.estimate;
- if(!estimate)return null;
+ const storage=globalThis.navigator?.storage;
+ if(typeof storage?.estimate!=='function')return null;
  try{
-  const e=await estimate(),usage=Number(e?.usage),quota=Number(e?.quota);
+  // Call through the receiver: a detached platform method throws "Illegal invocation".
+  const e=await storage.estimate(),usage=Number(e?.usage),quota=Number(e?.quota);
   return Number.isFinite(usage)&&Number.isFinite(quota)?{usage,quota}:null;
- }catch{return null;}
+}catch{return null;}
 }

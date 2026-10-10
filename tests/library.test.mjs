@@ -98,3 +98,12 @@ test('storageUsage feature-detects estimate and rejects non-finite numbers',asyn
  try{assert.equal(await storageUsage(),null);}
  finally{if(desc)Object.defineProperty(globalThis,'navigator',desc);else delete globalThis.navigator;}
 });
+test('storageUsage calls estimate with the storage object as its receiver',async()=>{
+ const desc=Object.getOwnPropertyDescriptor(globalThis,'navigator');
+ const set=v=>Object.defineProperty(globalThis,'navigator',{value:v,configurable:true});
+ // Platform methods throw "Illegal invocation" when detached from their receiver.
+ const storage={estimate:async function(){if(this!==storage)throw new TypeError('Illegal invocation');return {usage:5,quota:50};}};
+ set({storage});
+ try{assert.deepEqual(await storageUsage(),{usage:5,quota:50});}
+ finally{if(desc)Object.defineProperty(globalThis,'navigator',desc);else delete globalThis.navigator;}
+});

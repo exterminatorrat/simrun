@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {defaults, simulate, splitBoundaries, computeSplits} from '../dist/src/model.js';
+import {defaults, simulate, splitBoundaries, computeSplits, validateActivity} from '../dist/src/model.js';
 import {exportGPX} from '../dist/src/gpx.js';
 
 const path=[{lon:0,lat:0,ele:0},{lon:0.045,lat:0,ele:0}];
@@ -33,4 +33,17 @@ test('a workout that mismatches the route by more than 0.5% is scaled',()=>{
 test('GPX notes structured workout steps',()=>{
  const a=base();a.workout={steps:[{kind:'work',distance:5003.78,pace:300}]};
  assert.match(exportGPX(a,simulate(a)),/structured workout steps/);
+});
+
+test('a workout that would exceed the seven-day duration limit is rejected',()=>{
+ const a=defaults();a.path=[{lat:0,lon:0},{lat:0,lon:1.8}];a.source='routed';
+ a.workout={steps:[{kind:'work',distance:200000,pace:3600}]};
+ assert.throws(()=>simulate(a),/7 days/);
+});
+
+test('out-of-range workout pace and speed are rejected by validation',()=>{
+ const a=base();
+ assert.throws(()=>validateActivity({...a,workout:{steps:[{kind:'work',distance:1000,pace:10}]}}),/pace/);
+ assert.throws(()=>validateActivity({...a,workout:{steps:[{kind:'work',distance:1000,speed:500}]}}),/speed/);
+ assert.deepEqual(validateActivity({...a,workout:{steps:[{kind:'work',distance:1000,pace:300}]}}).workout,{steps:[{kind:'work',distance:1000,pace:300}]});
 });

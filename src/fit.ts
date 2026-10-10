@@ -38,7 +38,7 @@ export function exportFIT(a:Activity,s:Simulation):Uint8Array {
  const points=validated(s),fit=(ms:number)=>Math.round(ms/1000)-EPOCH;
  const start=fit(startTime(a.settings)),end=fit(points[points.length-1].time),elapsed=Math.max(0,end-start);
  const hr=points.some(p=>p.hr!==undefined),cad=points.some(p=>p.cad!==undefined),power=points.some(p=>p.power!==undefined);
- const hrs=points.map(p=>p.hr??0),avgHr=hrs.reduce((v,n)=>v+n,0)/points.length,maxHr=Math.max(...hrs);
+ const hrs=points.map(p=>p.hr).filter((h):h is number=>h!==undefined),avgHr=hrs.length?hrs.reduce((v,n)=>v+n,0)/hrs.length:0,maxHr=hrs.length?Math.max(...hrs):0;
  const avgSpeed=s.distance/Math.max(1,elapsed),maxSpeed=Math.max(...points.map(p=>p.speed));
  const b=new Buf();
  b.def(0,0,[[0,1,0x00],[1,2,0x84],[2,2,0x84],[3,4,0x86],[4,4,0x86],[8,16,0x07]]);
@@ -97,21 +97,23 @@ export function importFIT(data:Uint8Array):{activity:Activity;notice:string} {
  while(o<body.length){
   const head=body[o++];
   // Bit 6 (0x40) marks a definition message; bit 5 (0x20) on a definition means developer data.
+  // Bit 7 (0x80) marks a compressed-timestamp data message: local type is bits 5-6 and the
+  // timestamp offset is the low 5 bits, with no extra byte in the record.
+  const local=head&0x80?(head>>5)&0x03:head&0x0f;
   if(head&0x40){
    const dev=(head&0x20)!==0;
-   if(o+4>body.length){skipped.push('truncated definition');break;}
+   if(o+5>body.length){skipped.push('truncated definition');break;}
    const big=body[o+1]===1,mesg=big?body[o+2]<<8|body[o+3]:body[o+2]|body[o+3]<<8,count=body[o+4];o+=5;
    const fields:number[][]=[];
    for(let i=0;i<count&&o+3<=body.length;i++){fields.push([body[o],body[o+1],body[o+2]]);o+=3;}
    if(fields.length<count){skipped.push('truncated definition');break;}
    if(dev){skipped.push('developer data');break;}
-   defs.set(head&0x0f,{mesg,big,fields});continue;
+   defs.set(local,{mesg,big,fields});continue;
   }
-  const def=defs.get(head&0x0f);
-  if(!def){skipped.push(`data for undefined local type ${head&0x0f}`);break;}
+  const def=defs.get(local);
+  if(!def){skipped.push(`data for undefined local type ${local}`);break;}
   let stamp:number|undefined;
-  // Bit 7 (0x80) marks a compressed-timestamp data message.
-  if(head&0x80){const off=body[o++];stamp=(last&~255)|off;if(stamp<=last)stamp+=256;}
+  if(head&0x80){const off=head&0x1f;stamp=(last&~0x1f)|off;if(stamp<last)stamp+=0x20;}
   const vals=new Map<number,number|string|undefined>();let truncated=false;
   for(const f of def.fields){
    if(o+f[1]>body.length){truncated=true;break;}

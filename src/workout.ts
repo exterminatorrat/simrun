@@ -21,12 +21,16 @@ export function matchWorkout(w:Workout,routeMeters:number):MatchedWorkout {
 }
 
 export function expandWorkout(w:Workout,routeMeters:number):ExpandedStep[] {
- const match=matchWorkout(w,routeMeters);
+ let match=matchWorkout(w,routeMeters);
+ // Absorbing the residual must never drive the last step negative; fall back to uniform scaling.
  const residual=match.exact?routeMeters-workoutDistance(w):0;
+ const lastDistance=w.steps[w.steps.length-1].distance;
+ if(match.exact&&lastDistance+residual<=0)match={scale:routeMeters/workoutDistance(w),distance:routeMeters,exact:false};
+ const absorb=match.exact?residual:0;
  const expanded:ExpandedStep[]=[];
  let start=0;
  for(const [index,step] of w.steps.entries()){
-  const distance=step.distance*match.scale+(index===w.steps.length-1?residual:0);
+  const distance=step.distance*match.scale+(index===w.steps.length-1?absorb:0);
   expanded.push({index,start,end:start+distance,step:{...step,distance}});
   start=start+distance;
  }
@@ -46,7 +50,7 @@ export function workoutStepLabel(step:WorkoutStep):string {
  const km=(step.distance/1000).toFixed(2);
  const kind=step.kind==='work'?'Work':'Rest';
  if(step.pace!==undefined){
-  const minutes=Math.floor(step.pace/60),seconds=Math.round(step.pace%60);
+  const total=Math.round(step.pace),minutes=Math.floor(total/60),seconds=total%60;
   return `${kind} ${km} km @ ${minutes}:${String(seconds).padStart(2,'0')}/km`;
  }
  return `${kind} ${km} km`;
