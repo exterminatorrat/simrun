@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 const typescriptFiles = ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts'];
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'public/vendor/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'public/vendor/**', '.hoplite/**'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended.map(config => ({ ...config, files: typescriptFiles })),
   {

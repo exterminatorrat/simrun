@@ -69,8 +69,8 @@ export async function fetchPois(path:Point[],prefs:Preferences,signal:AbortSigna
   return places;
  }catch(error){
   if(signal.aborted)throw signal.reason;
-  if(timedOut)throw Error('Overpass request timed out.');
+  if(timedOut)throw Error('Overpass request timed out.',{cause:error});
   if(error instanceof Error&&error.message.startsWith('Overpass'))throw error;
-  throw Error('Overpass service is unavailable. Check your connection or endpoint.');
+  throw Error('Overpass service is unavailable. Check your connection or endpoint.',{cause:error});
  }finally{clearTimeout(timer);signal.removeEventListener('abort',cancel);}
 }

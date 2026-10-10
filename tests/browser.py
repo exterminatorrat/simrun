@@ -130,7 +130,9 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   assert abs(page.evaluate('async()=>await window.testDownloads.at(-1)').count('<trkpt')/lap_pts-2.5)<.2
   page.locator('#loop-clear').click();assert abs(float(page.locator('#distance').inner_text().split()[0])-one)<.02
   passed('Loop plan walks 2.5 laps, derives the finish, drags the start along the loop, exports the laps and clears')
-  page.locator('#undo').click();expect(page.locator('#waypoint-count')).to_have_text('3')
+  page.locator('#undo').click();expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
+  for _ in range(4):page.locator('#undo').click()
+  expect(page.locator('#waypoint-count')).to_have_text('3')
   page.locator('#ride').click();expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
   assert page.evaluate('window.testRequests.some(r=>r.data.costing==="bicycle")')
   passed('Cycling mode requests bicycle routing, not automobile routing')

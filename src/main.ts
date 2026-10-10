@@ -393,7 +393,7 @@ async function refreshOfflineStatus():Promise<void>{
  setText('offline-quota',usage?`Browser storage: ${formatBytes(usage.usage)} of ${formatBytes(usage.quota)} used · ${formatBytes(Math.max(0,usage.quota-usage.usage))} available.`:'Browser storage quota is unavailable.');
  if(!offlineSupported()){setText('offline-status','Offline caching is unavailable in this browser.');renderCorridors([]);return;}
  const status=await offlineStatus();
- setText('offline-status',status?(status.map?`${status.map} basemap resources cached on this device.`:'No basemap resources cached yet; open the map to fill the cache.'):'Offline cache is not active in this page yet; reload once to enable it.');
+ setText('offline-status',status?(status.map?`${status.map} of up to ${status.limit} basemap resources cached on this device.`:'No basemap resources cached yet; open the map to fill the cache.'):'Offline cache is not active in this page yet; reload once to enable it.');
  setText('offline-cache-size',status?`Total basemap cache size: about ${formatBytes(status.bytes)}.`:'Total basemap cache size is unavailable.');renderCorridors(status?.corridors??[]);
 }
 on('offline-clear',async()=>{if(await clearCachedMap()){toast('Cached map tiles and corridor downloads cleared. Tiles will be cached again as you view the map.');await refreshOfflineStatus();}else toast('The offline cache is not active in this page yet. Reload once and try again.');});
