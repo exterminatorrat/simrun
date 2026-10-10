@@ -53,6 +53,12 @@ test('saved places survive backup serialization and old backups remain readable'
  assert.deepEqual(parseBackup(JSON.stringify(old)).savedPlaces,[]);
 });
 
+test('first-run tip dismissal is an additive validated preference',()=>{
+ assert.equal(validatePreferences({}).tipsDismissed,false);
+ assert.equal(validatePreferences({tipsDismissed:true}).tipsDismissed,true);
+ assert.equal(validatePreferences({tipsDismissed:'yes'}).tipsDismissed,false);
+});
+
 test('layer and suggestion preferences are validated and default off',()=>{
  const defaultsOnly=validatePreferences({});
  assert.equal(defaultsOnly.mapBaseLayer,'vector');
