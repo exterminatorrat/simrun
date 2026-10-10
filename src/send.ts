@@ -1,4 +1,4 @@
-import type {Activity} from './types.js';
+import type {Activity,Simulation} from './types.js';
 import {exportGPX,safeFilename} from './gpx.js';
 import {exportTCX} from './tcx.js';
 import {exportFIT} from './fit.js';
@@ -17,9 +17,9 @@ export const platformGuidance=[
  {id:'ridewithgps',name:'Ride with GPS',format:'gpx',url:'https://support.ridewithgps.com/hc/en-us/articles/4419024044827-Upload-Activities-Routes-GPS-Files',instruction:'Choose Upload on the web, then save the GPX as a route or add it to activities.'}
 ] as const;
 export type PlatformId=typeof platformGuidance[number]['id'];
-export function createActivityFiles(activity:Activity):SendFile[] {
+export function createActivityFiles(activity:Activity,providedSimulation?:Simulation):SendFile[] {
  if(activity.source==='draft')throw Error('Resolve the route before exporting. A waypoint preview is not a routed path.');
- const simulation=simulate(activity),base=`${activity.settings.start.slice(0,10)}-${safeFilename(activity.name)}`;
+ const simulation=providedSimulation??simulate(activity),base=`${activity.settings.start.slice(0,10)}-${safeFilename(activity.name)}`;
  return [
   {name:`${base}.gpx`,type:'application/gpx+xml',data:exportGPX(activity,simulation)},
   {name:`${base}.tcx`,type:'application/vnd.garmin.tcx+xml',data:exportTCX(activity,simulation)},
@@ -30,12 +30,12 @@ export function selectPlatformFile(files:SendFile[],platform:PlatformId):SendFil
  const format=platformGuidance.find(item=>item.id===platform)?.format;
  return files.find(file=>file.name.toLowerCase().endsWith(`.${format}`));
 }
-export function zipActivities(activities:Activity[],preferences?:Parameters<typeof createBackup>[1]):Uint8Array {
+export function zipActivities(activities:Activity[],preferences?:Parameters<typeof createBackup>[1],simulations:Map<string,Simulation>=new Map()):Uint8Array {
  const entries:ZipEntry[]=[];
  if(preferences)entries.push({name:'simrun-backup.json',data:createBackup(activities,preferences)});
  for(const activity of activities){
   if(activity.source==='draft')continue;
-  const files=createActivityFiles(activity),prefix=`${activity.settings.start.slice(0,10)}-${safeFilename(activity.name)}-${safeFilename(activity.id).slice(0,20)}`;
+  const files=createActivityFiles(activity,simulations.get(activity.id)),prefix=`${activity.settings.start.slice(0,10)}-${safeFilename(activity.name)}-${safeFilename(activity.id).slice(0,20)}`;
   for(const file of files){const extension=file.name.slice(file.name.lastIndexOf('.'));entries.push({name:`activities/${prefix}${extension}`,data:file.data,modifiedAt:new Date(activity.updatedAt)});}
  }
  if(!entries.length)throw Error('No resolved activities to export.');
