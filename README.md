@@ -39,9 +39,9 @@ Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, pr
 
 There is **no seeded activity, artificial road network, or fake successful routing**. Browser tests use their own synthetic fixtures and mocked providers. Failed road routing never promotes a straight waypoint preview into an exportable route.
 
-Routes can be shared as a geometry-only URL fragment with a copy fallback, a coordinate/history privacy note and a printable cue sheet; a PWA manifest enables installation. Every simulated value stays labeled as estimated, not measured.
+Routes can be shared as a geometry-only URL fragment with a copy fallback, a client-rendered QR code, a coordinate/history privacy note and a printable cue sheet; a PWA manifest enables installation. Gradient-shaded route segments and an interactive elevation scrubber (pointer or arrow keys, Escape to clear) sit on the profile chart. **FIT** activity files export and import alongside GPX/TCX; the library offers tags, search, sort, drag-and-drop import, a storage estimate and a side-by-side comparison of two activities. Optional, default-off offline behaviour downloads the bounded tile corridor that covers a route and can cache routing/elevation replies (network-first, capped at 50 entries and 30 days). Avoid-highways/hills options and one alternate route (under 60 km) shape routing requests. Every simulated value stays labeled as estimated, not measured.
 
-**Not yet implemented:** FIT export/import, side-by-side activity comparison, QR-code rendering, route-corridor tile download, the opt-in offline routing cache, alternate-route requests and gradient-shaded route segments. Implementation plans for these live in `docs/plans/`.
+**Not implemented:** surface-type and traffic modelling (no data source), a separate training-load (TRIMP) metric, offline geocoding, and a full accessibility audit beyond the coarse-pointer target sizes and focus styling.
 
 ## Quick start
 

@@ -60,7 +60,8 @@ function buildCodewords(bytes:Uint8Array,version:number,ecc:Ecc):number[]{
  push(bytes.length,countBits);
  for(const b of bytes)push(b,8);
  push(0,Math.min(4,capacity-bits.length));
- while(bits.length%8!==0)bits.push(false);
+ bits.length-=bits.length%8;
+ bits.length+=8-(bits.length%8);
  const pads=[0xec,0x11];
  for(let p=0;bits.length<capacity;p++)push(pads[p%2],8);
  const codewords:number[]=[];

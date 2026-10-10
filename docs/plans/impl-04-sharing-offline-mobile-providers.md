@@ -2,11 +2,9 @@
 
 Concrete, file-and-function-level plan for cluster 04 on the current strict-TypeScript, dependency-free app. This is a planning artifact that records the design and what already landed; it is not a second implementation.
 
-## Status
+## Status — implemented
 
-Landed: geometry-only share links with a copy fallback and privacy note (`src/share.ts`, share dialog in `public/index.html` and `src/main.ts`), the printable cue sheet (`#print-sheet` + print stylesheet), shared-link intake through `importedActivity`, the PWA manifest (`public/manifest.json` + `<link rel="manifest">`), and default-off avoid-highways/avoid-hills routing options (`src/providers.ts`).
-
-Remaining: QR rendering, route-corridor tile download, the opt-in offline routing cache, alternate-route requests, and install/offline UI polish.
+All items below are now implemented and tested; this plan records the design. Share links and the printable sheet live in `src/share.ts`; QR rendering in `src/qr.ts` (byte mode, Reed-Solomon, structural tests because no external encoder was available to compare against); corridor tile maths in `src/offline.ts`; the corridor cache and download flow in `public/sw.js` and `src/sw.ts`; the opt-in offline routing/elevation cache and the single alternate route in `src/providers.ts`; the PWA manifest in `public/manifest.json`; install UI and coarse-pointer target sizes in `src/main.ts` and `public/app.css`.
 
 ## Architecture and ownership
 

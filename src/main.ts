@@ -170,7 +170,6 @@ async function showHistory():Promise<void>{
  if(!$<HTMLDialogElement>('history-dialog').open)$<HTMLDialogElement>('history-dialog').showModal();
 }
 on('history',showHistory);
-on('compare',()=>{void openCompare();});
 async function openCompare():Promise<void>{
  const rows=await store.list();if(rows.length<2){toast('Save at least two activities to compare.');return;}
  const left=$<HTMLSelectElement>('compare-left'),right=$<HTMLSelectElement>('compare-right');
