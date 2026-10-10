@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 import type {Activity,Simulation} from './types.js';
 import {exportGPX,safeFilename} from './gpx.js';
 import {exportTCX} from './tcx.js';
@@ -18,7 +19,7 @@ export const platformGuidance=[
 ] as const;
 export type PlatformId=typeof platformGuidance[number]['id'];
 export function createActivityFiles(activity:Activity,providedSimulation?:Simulation):SendFile[] {
- if(activity.source==='draft')throw Error('Resolve the route before exporting. A waypoint preview is not a routed path.');
+ if(activity.source==='draft')throw Error(t('Resolve the route before exporting. A waypoint preview is not a routed path.'));
  const simulation=providedSimulation??simulate(activity),base=`${activity.settings.start.slice(0,10)}-${safeFilename(activity.name)}`;
  return [
   {name:`${base}.gpx`,type:'application/gpx+xml',data:exportGPX(activity,simulation)},
@@ -38,7 +39,7 @@ export function zipActivities(activities:Activity[],preferences?:Parameters<type
   const files=createActivityFiles(activity,simulations.get(activity.id)),prefix=`${activity.settings.start.slice(0,10)}-${safeFilename(activity.name)}-${safeFilename(activity.id).slice(0,20)}`;
   for(const file of files){const extension=file.name.slice(file.name.lastIndexOf('.'));entries.push({name:`activities/${prefix}${extension}`,data:file.data,modifiedAt:new Date(activity.updatedAt)});}
  }
- if(!entries.length)throw Error('No resolved activities to export.');
+ if(!entries.length)throw Error(t('No resolved activities to export.'));
  return createZip(entries);
 }
 export function downloadFiles(files:SendFile[]):void {

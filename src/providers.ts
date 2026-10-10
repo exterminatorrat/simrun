@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 import type {Point,Place,Preferences,RouteProfile,Sport,RouteData,RouteSurfaceEdge,StreetNameSpan} from './types.js';
 import {profileForSport} from './sports.js';
 import {atDistance,cumulative,decodePolyline,lowerBound,resample,validPoint} from './geometry.js';
@@ -36,9 +37,9 @@ function sameRoute(a:Point[],b:Point[]):boolean {
 }
 function routeLabel(value:unknown):string|undefined {return typeof value==='string'&&/^[a-zA-Z0-9 _-]{1,64}$/.test(value.trim())?value.trim():undefined;}
 const footProfile=(p:RouteProfile):boolean=>p==='walk'||p==='hike';
-export const capMessage=(profile:RouteProfile):string=>`This route is longer than the public routing service allows for ${footProfile(profile)?'walking and hiking':'cycling'} (about ${Math.round(PUBLIC_CAP_METERS[profile]/1000)} km). Shorten the route, or self-host routing — see docs/SELF-HOST-VALHALLA.md.`;
+export const capMessage=(profile:RouteProfile):string=>t('This route is longer than the public routing service allows for {sport} (about {distance} km). Shorten the route, or self-host routing — see {documentation}.',{sport:t(footProfile(profile)?'walking and hiking':'cycling'),distance:Math.round(PUBLIC_CAP_METERS[profile]/1000),documentation:'docs/SELF-HOST-VALHALLA.md'});
 /** Advisory warning above 80% of the public cap; routing is never blocked. */
-export const routeCapWarning=(profile:RouteProfile,meters:number):string|null=>{const cap=PUBLIC_CAP_METERS[profile];return meters>cap*.8?`Long route: the public service caps ${footProfile(profile)?'walking and hiking':'cycling'} near ${Math.round(cap/1000)} km, so routing may fail. Self-hosting is documented in docs/SELF-HOST-VALHALLA.md.`:null;};
+export const routeCapWarning=(profile:RouteProfile,meters:number):string|null=>{const cap=PUBLIC_CAP_METERS[profile];return meters>cap*.8?t('Long route: the public service caps {sport} near {distance} km, so routing may fail. Self-hosting is documented in {documentation}.',{sport:t(footProfile(profile)?'walking and hiking':'cycling'),distance:Math.round(cap/1000),documentation:'docs/SELF-HOST-VALHALLA.md'}):null;};
 const queues=new Map<string,Promise<unknown>>(),lastRequests=new Map<string,number>();
 // Opt-in, bounded offline cache for routing and elevation replies. Network-first: the
 // provider is always contacted online; a cached reply is only a fallback.

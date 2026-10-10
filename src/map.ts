@@ -1,3 +1,4 @@
+import {formatNumber,t} from './i18n.js';
 import type {Activity,Point} from './types.js';
 import type {PointOfInterest} from './poi.js';
 import {atDistance,cumulative,interpolate,nearestOnPath,wrapLon} from './geometry.js';
@@ -13,8 +14,8 @@ const NS='http://www.w3.org/2000/svg';
 const world=(p:Point):[number,number]=>{const lat=Math.max(-85.0511,Math.min(85.0511,p.lat))*Math.PI/180;return [(p.lon+180)/360,(1-Math.log(Math.tan(Math.PI/4+lat/2))/Math.PI)/2];};
 const unworld=(x:number,y:number):Point=>({lon:wrapLon(x*360-180),lat:Math.atan(Math.sinh(Math.PI*(1-2*Math.max(0,Math.min(1,y)))))*180/Math.PI});
 /** Gradient legend: blue descending, green near-flat, red-orange climbing. */
-const gradeColor=(g:number):string=>g<-.02?'#2f7fd0':g>.02?'#d94f2b':'#8fa66a';
-const GRADE_STOPS:unknown[]=[-.15,'#2f7fd0',0,'#8fa66a',.15,'#d94f2b'];
+const gradeColor=(g:number):string=>g<-.02?'#2f7fd0':g>.02?'#d94f2b':'#708f2d';
+const GRADE_STOPS:unknown[]=[-.15,'#2f7fd0',0,'#708f2d',.15,'#d94f2b'];
 export class RouteMap {
  private map:any=null;private markers:any[]=[];private hoverMarker:any=null;private a:Activity|null=null;private plan:PlanMarks|null=null;private selected=-1;private drawing=true;private svg:SVGSVGElement;private view={x:0,y:0,zoom:13};private ready=false;private everReady=false;private missingSince=Date.now();private healthTimer:ReturnType<typeof setInterval>|null=null;private lastMapError='';private disposed=false;private resized:ResizeObserver;private moveCleanup:(()=>void)|null=null;private hoverPoint:Point|null=null;
  private freehand=false;private freehandCleanup:(()=>void)|null=null;private suppressClick=false;
@@ -44,14 +45,14 @@ export class RouteMap {
    this.map.on('click',(e:MapClickEvent)=>{if(!this.suppressClick&&!this.freehand&&this.drawing&&e.originalEvent.target instanceof HTMLCanvasElement)this.actions.add({lat:e.lngLat.lat,lon:wrapLon(e.lngLat.lng)});});
    // A single missing tile or glyph does not take the map down. The health check
    // falls back only when the whole basemap has no rendered vector features.
-   this.map.on('error',(event:any)=>{this.lastMapError=String(event?.error?.message||'Map resources unavailable.');if(this.ready){const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent='Some map data is unavailable. Route editing still works.';}});
+   this.map.on('error',(event:any)=>{this.lastMapError=String(event?.error?.message||'Map resources unavailable.');if(this.ready){const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=t('Some map data is unavailable. Route editing still works.');}});
    this.map.on('webglcontextlost',()=>this.useCoordinateCanvas('Map graphics unavailable. Coordinate view remains usable.'));
   }catch(error){const message=error instanceof Error?error.message:'';this.useCoordinateCanvas(/webgl|graphics/i.test(message)?'Map graphics unavailable. Coordinate view remains usable.':/style|library|local map/i.test(message)?'Map renderer unavailable. Coordinate view remains usable.':'Basemap unavailable. Coordinate view remains usable.');}
  }
  private showCoordinateCanvas():void {
   if(this.map){const center=this.map.getCenter(),[x,y]=world({lat:center.lat,lon:center.lng});this.view={x,y,zoom:this.map.getZoom()};}
   this.host.append(this.svg);this.host.classList.add('map-pending');this.drawFallback();
-  const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent='Loading basemap · coordinate canvas available';
+  const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=t('Loading basemap · coordinate canvas available');
  }
  private markBasemapReady():void {
   if(!this.map||this.disposed||this.ready)return;
@@ -74,7 +75,7 @@ export class RouteMap {
   this.poiMarkers.forEach(marker=>marker.remove());this.poiMarkers=[];this.map=null;this.markers=[];this.hoverMarker=null;
   this.host.querySelectorAll('.maplibregl-canvas-container,.maplibregl-control-container').forEach(node=>node.remove());
   this.host.append(this.svg);this.host.classList.remove('map-pending');this.drawFallback();
-  const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=`${message} Basemap layers are unavailable in the coordinate view.`;
+  const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=t('{message} Basemap layers are unavailable in the coordinate view.',{message});
   this.actions.message(message);
  }
  setStyle(style:string):void{if(!this.map)return;this.ready=false;this.missingSince=Date.now();this.lastMapError='';this.showCoordinateCanvas();try{this.map.setStyle(style,{diff:false});}catch{this.useCoordinateCanvas('Basemap unavailable. Coordinate view remains usable.');}}
@@ -131,16 +132,16 @@ export class RouteMap {
   this.map.setLayoutProperty('route-gradient','visibility',shaded?'visible':'none');
   this.map.getCanvas().style.cursor=this.freehand||this.drawing?'crosshair':'grab';this.markers.forEach(m=>m.remove());this.markers=[];
   const gl=window.maplibregl,pts=this.a.waypoints;
-  const add=(p:Point,i:number,mid=false)=>{const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));b.type='button';b.title=mid?'Drag to insert waypoint':`Waypoint ${i+1}: drag to move`;b.setAttribute('aria-label',b.title);b.onclick=e=>{e.stopPropagation();if(mid)this.actions.insert(i,p);else this.actions.select(i);};const m=new gl.Marker({element:b,draggable:true}).setLngLat([p.lon,p.lat]).addTo(this.map);m.on('dragend',()=>{const ll=m.getLngLat(),q={lat:ll.lat,lon:wrapLon(ll.lng)};if(mid)this.actions.insert(i,q);else this.actions.move(i,q);});this.markers.push(m);};
+  const add=(p:Point,i:number,mid=false)=>{const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));b.type='button';b.title=mid?t('Drag to insert waypoint'):t('Waypoint {index}: drag to move',{index:formatNumber(i+1)});b.setAttribute('aria-label',b.title);b.onclick=e=>{e.stopPropagation();if(mid)this.actions.insert(i,p);else this.actions.select(i);};const m=new gl.Marker({element:b,draggable:true}).setLngLat([p.lon,p.lat]).addTo(this.map);m.on('dragend',()=>{const ll=m.getLngLat(),q={lat:ll.lat,lon:wrapLon(ll.lng)};if(mid)this.actions.insert(i,q);else this.actions.move(i,q);});this.markers.push(m);};
   pts.forEach((p,i)=>{add(p,i);if(i<pts.length-1)add(this.middle(i),i,true);});
   if(!pts.length&&this.a.path.length){[this.a.path[0],this.a.path.at(-1)!].forEach((p,i)=>{const b=el('span',`waypoint ${i?'finish':'start'}`,i?'B':'A');this.markers.push(new gl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map));});}
-  if(this.plan)this.planMarks().forEach(m=>{const b=el('span',`waypoint ${m.cls}`,m.text);b.title=m.title;b.setAttribute('aria-label',m.title);const mk=new gl.Marker({element:b,draggable:m.draggable}).setLngLat([m.p.lon,m.p.lat]).addTo(this.map);if(m.draggable)mk.on('dragend',()=>{const ll=mk.getLngLat();this.actions.loopStart(this.fractionAt({lat:ll.lat,lon:wrapLon(ll.lng)}));});this.markers.push(mk);});
+  if(this.plan)this.planMarks().forEach(m=>{const b=el('span',`waypoint ${m.cls}`,m.text);b.title=t(m.title);b.setAttribute('aria-label',t(m.title));const mk=new gl.Marker({element:b,draggable:m.draggable}).setLngLat([m.p.lon,m.p.lat]).addTo(this.map);if(m.draggable)mk.on('dragend',()=>{const ll=mk.getLngLat();this.actions.loopStart(this.fractionAt({lat:ll.lat,lon:wrapLon(ll.lng)}));});this.markers.push(mk);});
   this.renderPois();
  }
  private renderPois():void {
   this.poiMarkers.forEach(marker=>marker.remove());this.poiMarkers=[];
   if(!this.map||!this.ready)return;
-  for(const place of this.pois){const label=place.kind==='water'?'Water':'Toilets',element=el('span',`poi-map-marker ${place.kind}`,place.kind==='water'?'W':'T');element.title=place.name?`${label}: ${place.name}`:label;element.setAttribute('aria-label',element.title);const marker:MapMarker=new window.maplibregl.Marker({element}).setLngLat([place.lon,place.lat]).addTo(this.map);this.poiMarkers.push(marker);}
+  for(const place of this.pois){const label=place.kind==='water'?t('Water'):t('Toilets'),element=el('span',`poi-map-marker ${place.kind}`,place.kind==='water'?'W':'T');element.title=place.name?t('{label}: {name}',{label:t(label),name:place.name}):t(label);element.setAttribute('aria-label',element.title);const marker:MapMarker=new window.maplibregl.Marker({element}).setLngLat([place.lon,place.lat]).addTo(this.map);this.poiMarkers.push(marker);}
  }
  private planMarks():{p:Point;cls:string;text:string;title:string;draggable:boolean}[] {
   const plan=this.plan;if(!plan)return [];
@@ -175,7 +176,7 @@ export class RouteMap {
    if(grade.features.length){for(const f of grade.features){const [x1,y1]=this.xy({lat:f.geometry.coordinates[0][1],lon:f.geometry.coordinates[0][0]}),[x2,y2]=this.xy({lat:f.geometry.coordinates[1][1],lon:f.geometry.coordinates[1][0]});make('line',{x1:x1.toFixed(1),y1:y1.toFixed(1),x2:x2.toFixed(1),y2:y2.toFixed(1),class:'fallback-route','stroke-width':'4',stroke:gradeColor(f.properties.g)});}}
    else path(this.a.path,'fallback-route');if(this.a.source==='draft')path(this.a.waypoints,'fallback-draft');this.a.waypoints.forEach((p,i)=>{const [x,y]=this.xy(p);make('circle',{cx:String(x),cy:String(y),r:'22',class:'fallback-hit','data-index':String(i)});make('circle',{cx:String(x),cy:String(y),r:'12',class:`fallback-point ${i===this.selected?'selected':''}`,'data-index':String(i)});const t=make('text',{x:String(x),y:String(y+4),class:'fallback-number','data-index':String(i)});t.textContent=String(i+1);if(i<this.a!.waypoints.length-1){const [mx,my]=this.xy(this.middle(i));make('circle',{cx:String(mx),cy:String(my),r:'22',class:'fallback-hit','data-mid':String(i)});make('circle',{cx:String(mx),cy:String(my),r:'6',class:'fallback-mid','data-mid':String(i)});}});}
   if(this.plan)this.planMarks().forEach(m=>{const [x,y]=this.xy(m.p),flag:Record<string,string>=m.draggable?{'data-loop-start':'1'}:{};if(m.draggable)make('circle',{cx:String(x),cy:String(y),r:'22',class:'fallback-hit','data-loop':'1',...flag});make('circle',{cx:String(x),cy:String(y),r:'10',class:`fallback-${m.cls}`,'data-loop':'1',...flag});const t=make('text',{x:String(x),y:String(y+3.5),class:'fallback-plan-label','data-loop':'1',...flag});t.textContent=m.text;});
-  this.pois.forEach(place=>{const [x,y]=this.xy(place),label=place.name?`${place.kind==='water'?'Water':'Toilets'}: ${place.name}`:place.kind==='water'?'Water':'Toilets',marker=make('circle',{cx:String(x),cy:String(y),r:'8',class:`fallback-poi ${place.kind}`,'aria-label':label,role:'img'});const title=make('title',{});title.textContent=label;marker.append(title);});
+  this.pois.forEach(place=>{const [x,y]=this.xy(place),label=place.name?`${place.kind==='water'?t('Water'):t('Toilets')}: ${place.name}`:place.kind==='water'?t('Water'):t('Toilets'),marker=make('circle',{cx:String(x),cy:String(y),r:'8',class:`fallback-poi ${place.kind}`,'aria-label':label,role:'img'});const title=make('title',{});title.textContent=t(label);marker.setAttribute('aria-label',label);marker.append(title);});
   if(this.hoverPoint){const [x,y]=this.xy(this.hoverPoint);make('circle',{cx:String(x),cy:String(y),r:'6',class:'chart-map-marker'});}
   this.svg.style.cursor=this.freehand||this.drawing?'crosshair':'grab';
  }
