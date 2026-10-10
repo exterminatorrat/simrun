@@ -30,9 +30,9 @@ export function selectPlatformFile(files:SendFile[],platform:PlatformId):SendFil
  const format=platformGuidance.find(item=>item.id===platform)?.format;
  return files.find(file=>file.name.toLowerCase().endsWith(`.${format}`));
 }
-export function zipActivities(activities:Activity[],preferences?:Parameters<typeof createBackup>[1]):Uint8Array {
+export function zipActivities(activities:Activity[],preferences?:Parameters<typeof createBackup>[1],savedPlaces:Parameters<typeof createBackup>[2]=[]):Uint8Array {
  const entries:ZipEntry[]=[];
- if(preferences)entries.push({name:'simrun-backup.json',data:createBackup(activities,preferences)});
+ if(preferences)entries.push({name:'simrun-backup.json',data:createBackup(activities,preferences,savedPlaces)});
  for(const activity of activities){
   if(activity.source==='draft')continue;
   const files=createActivityFiles(activity),prefix=`${activity.settings.start.slice(0,10)}-${safeFilename(activity.name)}-${safeFilename(activity.id).slice(0,20)}`;

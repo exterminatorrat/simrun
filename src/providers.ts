@@ -1,6 +1,8 @@
-import type {Point,Preferences,RouteProfile,Sport,RouteData,RouteSurfaceEdge,StreetNameSpan} from './types.js';
+import type {Point,Place,Preferences,RouteProfile,Sport,RouteData,RouteSurfaceEdge,StreetNameSpan} from './types.js';
 import {profileForSport} from './sports.js';
 import {atDistance,cumulative,decodePolyline,lowerBound,resample,validPoint} from './geometry.js';
+import {parseCoordinateQuery,parsePhotonResponse} from './places.js';
+export type {Place} from './types.js';
 export interface RoutingProvider {route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>;elevation(path:Point[],signal:AbortSignal):Promise<Point[]>;alternates?(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[][]>;routeDetails?(path:Point[],profile:RouteProfile,signal:AbortSignal):Promise<RouteData>;lastCached?:boolean}
 export class ProviderError extends Error {constructor(message:string,public status=0,public code=0){super(message);}}
 /** Valhalla costing per profile; bicycle_type aliases are case-insensitive. */
@@ -154,11 +156,9 @@ export class ValhallaProvider implements RoutingProvider {
   return path.map((p,i)=>{const f=c[i]/total*(count-1),lo=Math.min(count-2,Math.floor(f)),hi=lo+1,a=h[lo],b=h[hi];return typeof a==='number'&&typeof b==='number'&&Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a)<=12000&&Math.abs(b)<=12000?{...p,ele:a+(b-a)*(f-lo)}:{...p};});
  }
 }
-export interface Place {name:string;lat:number;lon:number}
 const searchCache=new Map<string,Place[]>();
 export async function searchPlaces(query:string,prefs:Preferences,signal:AbortSignal):Promise<Place[]>{
- const match=query.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
- if(match){const p={lat:+match[1],lon:+match[2],name:'Coordinates'};if(!validPoint(p))throw Error('Coordinates are outside latitude/longitude bounds.');return [p];}
+ const coordinate=parseCoordinateQuery(query);if(coordinate)return [coordinate];
  if(!prefs.geocodingEnabled)throw Error('Enable place search in Settings after reviewing the provider policy, or enter latitude, longitude.');
  const key=prefs.geocodingUrl+'|'+query.trim().toLowerCase();if(searchCache.has(key))return searchCache.get(key)!;
  try{const saved=JSON.parse(localStorage.getItem('simrun-search')||'{}');if(saved[key]&&Date.now()-saved[key].at<7*86400000){const places=saved[key].places;if(Array.isArray(places)&&places.every((p:Place)=>validPoint(p)&&typeof p.name==='string')){searchCache.set(key,places);return places;}}}catch{}
@@ -166,4 +166,8 @@ export async function searchPlaces(query:string,prefs:Preferences,signal:AbortSi
  const data=await getJSON<{display_name:string;lat:string;lon:string}[]>(url,signal,false);
  const places=data.map(p=>({name:p.display_name,lat:+p.lat,lon:+p.lon})).filter(validPoint).slice(0,5);
  searchCache.set(key,places);try{const old=JSON.parse(localStorage.getItem('simrun-search')||'{}');const entries=Object.entries(old).slice(-19);localStorage.setItem('simrun-search',JSON.stringify({...Object.fromEntries(entries),[key]:{at:Date.now(),places}}));}catch{}return places;
+}
+export async function searchPhoton(query:string,photonUrl:string,signal:AbortSignal):Promise<Place[]> {
+ const url=new URL(endpoint(photonUrl));url.searchParams.set('q',query.trim().slice(0,200));url.searchParams.set('limit','5');
+ return parsePhotonResponse(await getJSON<unknown>(url,signal,false));
 }

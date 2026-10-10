@@ -1,4 +1,6 @@
 export interface Point { lat:number; lon:number; ele?:number; time?:number; hr?:number }
+export interface Place extends Point { name:string }
+export interface SavedPlace extends Place { id:string }
 export type Sport = 'run' | 'ride' | 'walk' | 'hike' | 'trail-run' | 'mtb';
 export type PaceStrategy = 'even' | 'negative-split' | 'positive-split' | 'segments';
 export type RouteProfile = 'walk' | 'hike' | 'road' | 'mtb';
@@ -32,5 +34,5 @@ export interface Activity {
 export interface Sample extends Point { time:number; distance:number; speed:number; gapPace?:number; power?:number; cad?:number }
 export interface Simulation { points:Sample[]; duration:number; distance:number; interval:number; calories?:number }
 export interface Split { start:number; end:number; distance:number; duration:number; speed:number; gain:number|null; gapPace?:number; stopped?:boolean }
-export interface Preferences {units:'metric'|'imperial'; theme:'light'|'dark'; mapStyle:string; mapStyleDark:string; routingUrl:string; elevationUrl:string; geocodingUrl:string; geocodingEnabled:boolean; overpassUrl:string; poiEnabled:boolean; surfaceDataEnabled:boolean; hrMax:number; trimpRestingHr?:number; trimpMaxHr?:number; offlineRouting:boolean; corridorZoom:number; avoidHighways:boolean; avoidHills:boolean; alternates:boolean }
+export interface Preferences {units:'metric'|'imperial'; theme:'light'|'dark'; mapStyle:string; mapStyleDark:string; mapBaseLayer:'vector'|'topo'; mapCyclingOverlay:boolean; mapHikingOverlay:boolean; routingUrl:string; elevationUrl:string; geocodingUrl:string; geocodingEnabled:boolean; photonUrl:string; searchSuggestions:boolean; overpassUrl:string; poiEnabled:boolean; surfaceDataEnabled:boolean; hrMax:number; trimpRestingHr?:number; trimpMaxHr?:number; offlineRouting:boolean; corridorZoom:number; avoidHighways:boolean; avoidHills:boolean; alternates:boolean }
 export interface ElevationStats {gain:number|null;loss:number|null;min:number|null;max:number|null}
