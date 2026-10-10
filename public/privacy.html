@@ -32,7 +32,10 @@
     <ul>
       <li>When you request routing or elevation, the selected routing or elevation provider receives the route coordinates needed to calculate the result.</li>
       <li>When the map loads or moves, the configured map-style and tile providers receive requests that reveal the map area and zoom you view. The default basemap uses OpenFreeMap and OpenStreetMap resources.</li>
-      <li>If you opt in to a search feature, Nominatim, Photon, or Overpass may receive the search query or coordinates needed for that request.</li>
+      <li>If you choose the OpenTopoMap base layer or the Waymarked Trails cycling or hiking overlays in Settings, those tile servers receive requests that reveal the map area and zoom you view.</li>
+      <li>If you opt in to a search feature, Nominatim, Photon, or Overpass may receive the search query or coordinates needed for that request. Photon suggestions send what you type as you type; Overpass points of interest send sampled coordinates along your route when you choose Find places.</li>
+      <li>If you turn on surface and road-type data, the routed path is sent to the routing provider for that extra lookup.</li>
+      <li>Locate me asks your browser for your position only when you press it. The position is used on your device; it leaves your device only if you then route from it or search near it.</li>
       <li>Provider requests also reveal your IP address and ordinary connection metadata to that provider. Provider privacy practices apply to those requests.</li>
     </ul>
     <h2>Sharing</h2>
