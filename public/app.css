@@ -50,7 +50,7 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 
 .alternates{display:flex;gap:6px;margin:6px 0}
 .share-qr{display:flex;justify-content:center}
-.share-qr svg{width:160px;height:160px;image-rendering:pixelated}
+.share-qr svg{display:block;width:min(100%,350px);height:auto;background:#fff;image-rendering:pixelated}
 .compare-body{display:grid;gap:10px}
 .compare-table{display:grid;gap:4px;font-size:12px}
 .compare-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:6px}
