@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {qrMatrix,qrSvg} from '../dist/src/qr.js';
+import {qrBlockCodewordCount,qrCapacityBytes,qrFits,qrMatrix,qrPreferredEcc,qrSvg,qrTotalCodewordCount} from '../dist/src/qr.js';
 
 const GOLDEN=[
  {text:'Hello, World!',ecc:'M',version:1,mask:3,bits:'111111101001001111111100000101100001000001101110100101001011101101110101101001011101101110100111001011101100000100101101000001111111101010101111111000000001101100000000101101110101101001011001011011100110001101110010100111010100011101000001111000011010101101100010101100001000000001011110010101111111101110001010000100000101110110101110101110100110010111110101110101000110001110101110101001101100100100000100011011110001111111101011111100100'},
@@ -79,15 +79,50 @@ test('format info decodes back to the requested ECC level and a valid mask via B
  }
 });
 
-test('byte-mode capacity: smallest fitting version chosen, over version 10 throws',()=>{
+test('byte-mode capacity selects the smallest fitting version through version 40',()=>{
  assert.equal(qrMatrix('A'.repeat(17),'L').length,21);
  assert.equal(qrMatrix('A'.repeat(106),'M').length,41);
  assert.equal(qrMatrix('A'.repeat(107),'M').length,45);
  assert.equal(qrMatrix('A'.repeat(271),'L').length,57);
- assert.throws(()=>qrMatrix('A'.repeat(272),'L'),/version 10/);
+ assert.equal(qrMatrix('A'.repeat(272),'L').length,61);
  assert.equal(qrMatrix('A'.repeat(213)).length,57);
- assert.throws(()=>qrMatrix('A'.repeat(214)),/version 10/);
- assert.throws(()=>qrMatrix('A'.repeat(2001)),/version 10/);
+ assert.equal(qrMatrix('A'.repeat(214)).length,61);
+});
+
+test('byte capacity boundaries select the requested version for every ECC level',()=>{
+ const eccs=['L','M','Q','H'];
+ for(const ecc of eccs)for(const version of [1,5,9,10,11,20,40]){
+  const capacity=qrCapacityBytes(ecc,version);
+  assert.ok(qrFits('A'.repeat(capacity),ecc),version+'-'+ecc+' capacity');
+  assert.equal(qrMatrix('A'.repeat(capacity),ecc).length,21+4*(version-1),version+'-'+ecc+' version');
+  if(version<40)
+   assert.equal(qrMatrix('A'.repeat(capacity+1),ecc).length,21+4*version,version+'-'+ecc+' next version');
+  else assert.equal(qrFits('A'.repeat(capacity+1),ecc),false,version+'-'+ecc+' over capacity');
+ }
+ assert.deepEqual(eccs.map(ecc=>qrCapacityBytes(ecc)),[2953,2331,1663,1273]);
+});
+
+test('UTF-8 byte lengths, M-to-L fallback and version 40 rejection',()=>{
+ const utf8='é'.repeat(1476)+'A';
+ assert.equal(new TextEncoder().encode(utf8).length,2953);
+ assert.ok(qrFits(utf8,'L'));
+ assert.equal(qrFits(utf8+'A','L'),false);
+ const aboveM='A'.repeat(qrCapacityBytes('M')+1);
+ assert.equal(qrPreferredEcc('short'),'M');
+ assert.equal(qrPreferredEcc(aboveM),'L');
+ assert.equal(qrFits(aboveM,'M'),false);
+ assert.equal(qrFits(aboveM,'L'),true);
+ const aboveL='A'.repeat(qrCapacityBytes('L')+1);
+ assert.equal(qrPreferredEcc(aboveL),null);
+ assert.equal(qrFits(aboveL,'L'),false);
+ assert.throws(()=>qrMatrix(aboveL,'L'),/version 40/);
+});
+
+test('RS block structures sum to the version codeword totals for all versions and ECC levels',()=>{
+ for(let version=1;version<=40;version++)for(const ecc of ['L','M','Q','H'])
+  assert.equal(qrBlockCodewordCount(version,ecc),qrTotalCodewordCount(version),version+'-'+ecc+' codewords');
+ assert.equal(qrTotalCodewordCount(1),26);
+ assert.equal(qrTotalCodewordCount(40),3706);
 });
 
 test('qrSvg contains an svg with crispEdges and one rect per dark module',()=>{
@@ -113,5 +148,7 @@ test('ECC levels are honoured and output is deterministic',()=>{
  const a=qrMatrix('Determinism check','Q');
  const b=qrMatrix('Determinism check','Q');
  assert.deepEqual(a,b);
+ const large='A'.repeat(1000);
+ assert.deepEqual(qrMatrix(large),qrMatrix(large));
  assert.notDeepEqual(flat(qrMatrix('Hello, World!','L')),flat(qrMatrix('Hello, World!','H')));
 });
