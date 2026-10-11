@@ -4,6 +4,7 @@ type Catalog=Partial<Record<keyof typeof en,Message>>;
 type Parameters=Readonly<Record<string,string|number|Date>>;
 type LocaleModule={default?:Record<string,Message>};
 const preferenceKey='simrun.locale';
+export const localeNames:Readonly<Record<string,string>>={en:'English'};
 const english:Readonly<Record<string,Message>>=en;
 let preference='auto';
 let activeLocale='en';
@@ -43,7 +44,7 @@ async function loadCatalog(locale:string):Promise<void> {
   activeLocale='en';
   return;
  }
- const candidates=[locale,...locale.split('-').slice(0,1)];
+ const candidates=[locale,...locale.split('-').slice(0,1)].filter(candidate=>Object.hasOwn(localeNames,candidate));
  for(const candidate of candidates){
   if(candidate.toLowerCase()==='en')continue;
   try{

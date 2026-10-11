@@ -120,13 +120,13 @@ with sync_playwright() as p:
  page.wait_for_timeout(500);page.locator('#chart').focus();page.keyboard.press('ArrowRight')
  assert page.locator('#chart .chart-tooltip').count()==1,'chart arrow-key scrubbing did not show a data point'
  page.set_viewport_size({'width':390,'height':844})
- page.locator('#settings').click();page.locator('#locale').fill('en-XA');page.locator('#locale').dispatch_event('change')
+ page.evaluate("localStorage.setItem('simrun.locale','en-XA')");page.reload()
  page.wait_for_function("document.documentElement.lang==='en-XA'",timeout=10000);page.wait_for_timeout(250)
  assert page.locator('html').get_attribute('lang')=='en-XA'
  assert_pseudo_marker(page,'routed en-XA')
  page.locator('#settings').click()
  assert_pseudo_marker(page,'settings en-XA')
- page.locator('#settings-dialog [data-close]').click();page.locator('#settings').click();page.locator('#locale').fill('ar-XB');page.locator('#locale').dispatch_event('change')
+ page.locator('#settings-dialog [data-close]').click();page.evaluate("localStorage.setItem('simrun.locale','ar-XB')");page.reload()
  page.wait_for_function("document.documentElement.lang==='ar-XB'",timeout=10000);page.wait_for_timeout(250)
  assert page.locator('html').get_attribute('lang')=='ar-XB'
  assert page.locator('html').get_attribute('dir')=='rtl'

@@ -46,7 +46,7 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   browser=pw.chromium.launch(**opts)
   context=browser.new_context(viewport={'width':1440,'height':900},accept_downloads=True)
   context.add_init_script("const nativeGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...rest){return /webgl/i.test(String(type))?null:nativeGetContext.call(this,type,...rest)}")
-  page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+  page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)));failed=[];page.on('response',lambda r:failed.append((r.status,r.url)) if r.status>=400 and r.url.startswith(args.url) else None)
   page.route('https://unpkg.com/**',lambda r:r.abort())
   if args.isolated:
    html=(ROOT/'dist/index.html').read_text().replace('<script type="module" src="./src/main.js"></script>','').replace('<link rel="stylesheet" href="./app.css">','<style>'+(ROOT/'dist/app.css').read_text()+'</style>')
@@ -55,6 +55,7 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
    page.add_init_script(mock);page.goto(args.url)
   expect(page.locator('.brand')).to_contain_text('SimRun');page.wait_for_timeout(900)
   assert not errors,errors
+  assert not failed,failed
   passed('App shell renders with no JavaScript exceptions')
   page.locator('#export').click();expect(page.locator('#toast')).to_contain_text('Draw or import')
   page.locator('#gpx-file').set_input_files({'name':'bad.gpx','mimeType':'application/gpx+xml','buffer':b'<broken>'});expect(page.locator('#toast')).to_contain_text('not valid GPX')
