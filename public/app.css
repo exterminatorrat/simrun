@@ -105,3 +105,4 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
  .send-platforms th[scope=row]{font-size:12px}
  .send-platforms button{margin-top:6px}
 }
+#share-dialog .share-body{padding:4px 2px 8px}
