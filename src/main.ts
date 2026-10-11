@@ -211,7 +211,7 @@ function render():void {
 editor.onChange=()=>{if(roundtripController&&(editor.activity.id!==roundtripActivityId||editor.activity.updatedAt!==roundtripActivityUpdatedAt))roundtripController.abort();render();};editor.onMessage=toast;
 // Fixed UTC offsets are explicit, so serialized UTC never silently shifts with the machine's timezone.
 for(let offset=-720;offset<=840;offset+=15){const option=el('option');option.value=String(offset);option.textContent=t('UTC{sign}{hours}:{minutes}',{sign:offset<0?'−':'+',hours:formatNumber(Math.floor(Math.abs(offset)/60),{minimumIntegerDigits:2}),minutes:formatNumber(Math.abs(offset)%60,{minimumIntegerDigits:2})});$('offset').append(option);}
-for(const [value,preset] of Object.entries(WEATHER_PRESETS)){const option=el('option');option.value=value;option.dataset.i18n=preset.label;option.textContent=preset.label;$('weather').append(option);}
+const noWeather=el('option');noWeather.value='';noWeather.dataset.i18n='None (neutral)';noWeather.textContent=t('None (neutral)');$('weather').append(noWeather);for(const [value,preset] of Object.entries(WEATHER_PRESETS)){const option=el('option');option.value=value;option.dataset.i18n=preset.label;option.textContent=preset.label;$('weather').append(option);}
 on('run',()=>chooseSport('run'));on('ride',()=>chooseSport('ride'));
 function disableFreehand():void {freehandEnabled=false;map.setFreehand(false);}
 function openRangeDialog(action:'trim'|'split'):void {

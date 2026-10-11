@@ -340,6 +340,7 @@ export const en={
  "Humid":"Humid",
  "Humidity %":"Humidity %",
  "Ideal":"Ideal",
+ "None (neutral)":"None (neutral)",
  "Imperial · miles":"Imperial · miles",
  "Import a route":"Import a route",
  "Import GPX, KML or GeoJSON":"Import GPX, KML or GeoJSON",
