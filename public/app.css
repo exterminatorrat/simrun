@@ -42,7 +42,7 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 .history-controls{display:flex;gap:8px;margin:8px 0}
 .history-controls input{flex:1}
 
-.share-body{display:grid;gap:10px;padding:4px 2px 8px}
+.share-body{display:grid;gap:12px;padding:20px}
 .share-body input{width:100%;font-family:ui-monospace,monospace;font-size:12px}
 .share-actions{display:flex;gap:8px}
 .print-only{display:none}
@@ -97,3 +97,11 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 @media(min-width:761px) and (max-width:900px){.top-actions{gap:2px}.top-actions>button{padding:7px;width:30px;height:33px}.top-actions>button span{display:none}}
 .locale-field{gap:6px}.preferences-form fieldset .check-label+.check-label{margin-top:8px}
 .inline-actions{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:6px}.preferences-form fieldset p+.check-label,.fine-print+.fields{margin-top:10px}
+@media(max-width:560px){
+ .send-platforms thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+ .send-platforms,.send-platforms tbody,.send-platforms tr,.send-platforms th,.send-platforms td{display:block;width:100%}
+ .send-platforms tr{padding:10px 0;border-bottom:1px solid var(--line)}
+ .send-platforms th,.send-platforms td{padding:2px 0;border-bottom:0}
+ .send-platforms th[scope=row]{font-size:12px}
+ .send-platforms button{margin-top:6px}
+}
