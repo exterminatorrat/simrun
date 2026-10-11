@@ -27,6 +27,11 @@ for i in range(201):
  t=2*math.pi*i/200
  points.append(f'<trkpt lat="{31.23+.0054*math.sin(t):.7f}" lon="{121.47+.0105*math.cos(t):.7f}"><ele>{15+8*math.sin(3*t):.2f}</ele></trkpt>')
 fixture='<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Test fixture loop</name><trkseg>'+''.join(points)+'</trkseg></trk></gpx>'
+large_points=[]
+for i in range(701):
+ t=2*math.pi*i/700
+ large_points.append(f'<trkpt lat="{31.23+.0054*math.sin(t):.7f}" lon="{121.47+.0105*math.cos(t):.7f}"><ele>{15+8*math.sin(3*t):.2f}</ele></trkpt>')
+large_fixture='<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Long fixture loop</name><trkseg>'+''.join(large_points)+'</trkseg></trk></gpx>'
 results=[]
 def passed(label):
  results.append(label);print('PASS',label,flush=True)
@@ -36,6 +41,22 @@ def screenshot(page,name):
  if args.screenshots:
   Path(args.screenshots).mkdir(parents=True,exist_ok=True)
   page.screenshot(path=str(Path(args.screenshots)/(name+'.png')))
+def share_qr_metrics(page):
+ svg=page.locator('#share-qr svg')
+ expect(svg).to_be_visible()
+ box=svg.bounding_box();dialog=page.locator('#share-dialog').bounding_box()
+ assert box is not None and dialog is not None
+ assert box['x']>=dialog['x'] and box['y']>=dialog['y']
+ assert box['x']+box['width']<=dialog['x']+dialog['width']+1
+ assert box['y']+box['height']<=dialog['y']+dialog['height']+1
+ modules=float(svg.get_attribute('viewBox').split()[2])/4
+ module_size=box['width']/modules
+ assert module_size>=2
+ assert svg.evaluate('(e)=>getComputedStyle(e).backgroundColor')=='rgb(255, 255, 255)'
+ assert svg.locator('rect').first.get_attribute('x')=='16'
+ assert svg.locator('rect').first.get_attribute('y')=='16'
+ assert svg.locator('rect').first.evaluate('(e)=>getComputedStyle(e).fill')=='rgb(0, 0, 0)'
+ return module_size
 with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
  bundle=Path(temp)/'bundle.js'
  if args.isolated:
@@ -65,6 +86,65 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   distance=float(page.locator('#distance').inner_text().split()[0]);assert 4.5<distance<6
   change(page,'target','5:00');duration=page.locator('#duration-stat').inner_text();parts=[int(p) for p in duration.split(':')];seconds=sum(n*60**i for i,n in enumerate(reversed(parts)));assert abs(seconds-distance*300)<2
   passed('GPX import, route geometry, elevation and pace/duration consistency')
+  page.locator('#toast').evaluate('(e)=>{e.hidden=true;e.textContent=""}')
+  page.locator('#share').click()
+  expect(page.locator('#share-dialog')).to_be_visible()
+  share_url=page.locator('#share-url').input_value()
+  share_bytes=len(share_url.encode('utf-8'))
+  assert 800<=share_bytes<=2000
+  original_theme=page.locator('html').get_attribute('data-theme')
+  page.locator('html').evaluate('(e)=>e.dataset.theme="light"')
+  desktop_module=share_qr_metrics(page)
+  screenshot(page,'share-dialog-light-desktop')
+  page.set_viewport_size({'width':390,'height':844})
+  page.locator('html').evaluate('(e)=>e.dataset.theme="dark"')
+  mobile_module=share_qr_metrics(page)
+  screenshot(page,'share-dialog-dark-mobile')
+  assert desktop_module>=2 and mobile_module>=2
+  expect(page.locator('#toast')).to_be_hidden()
+  page.keyboard.press('Escape')
+  page.locator('html').evaluate('(e,v)=>{if(v===null)delete e.dataset.theme;else e.dataset.theme=v}',original_theme)
+  page.set_viewport_size({'width':1440,'height':900})
+  shared_context=browser.new_context(viewport={'width':1440,'height':900})
+  shared_context.add_init_script(mock)
+  shared_context.route('https://unpkg.com/**',lambda route:route.abort())
+  shared_page=shared_context.new_page();shared_errors=[]
+  shared_page.on('pageerror',lambda e:shared_errors.append(str(e)))
+  shared_page.goto(share_url)
+  expect(shared_page.locator('#activity-name')).to_have_value('Shared route',timeout=10000)
+  shared_distance=float(shared_page.locator('#distance').inner_text().split()[0])
+  assert abs(shared_distance-distance)<.1
+  assert not shared_errors,shared_errors
+  shared_context.close()
+  long_context=browser.new_context(viewport={'width':1440,'height':900})
+  long_context.add_init_script("const nativeGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...rest){return /webgl/i.test(String(type))?null:nativeGetContext.call(this,type,...rest)}")
+  long_context.add_init_script(mock)
+  long_context.route('https://unpkg.com/**',lambda route:route.abort())
+  long_page=long_context.new_page();long_errors=[]
+  long_page.on('pageerror',lambda e:long_errors.append(str(e)))
+  long_page.goto(args.url)
+  expect(long_page.locator('#storage-state')).to_contain_text('Saved on this device',timeout=10000)
+  long_page.locator('#toast').evaluate('(e)=>{e.hidden=true;e.textContent=""}')
+  long_page.locator('#gpx-file').set_input_files({'name':'long-fixture.gpx','mimeType':'application/gpx+xml','buffer':large_fixture.encode()})
+  expect(long_page.locator('#toast')).to_contain_text('Original timestamps were missing',timeout=10000)
+  long_page.locator('#toast').evaluate('(e)=>{e.hidden=true;e.textContent=""}')
+  long_page.locator('#share').click()
+  expect(long_page.locator('#share-dialog')).to_be_visible()
+  long_url=long_page.locator('#share-url').input_value()
+  assert 1800<=len(long_url.encode('utf-8'))<=2000
+  long_page.locator('html').evaluate('(e)=>e.dataset.theme="light"')
+  desktop_module=share_qr_metrics(long_page)
+  screenshot(long_page,'share-dialog-800-2000-desktop')
+  long_page.set_viewport_size({'width':390,'height':844})
+  long_page.locator('html').evaluate('(e)=>e.dataset.theme="dark"')
+  mobile_module=share_qr_metrics(long_page)
+  screenshot(long_page,'share-dialog-800-2000-mobile-dark')
+  assert desktop_module>=2 and mobile_module>=2
+  expect(long_page.locator('#toast')).to_be_hidden()
+  assert not long_errors,long_errors
+  long_page.keyboard.press('Escape')
+  long_context.close()
+  passed('Share QR opens without toast errors, fits desktop/mobile, and shared links decode in a new context')
   page.locator('#natural').click();page.locator('#hr-enabled').check();change(page,'hr-average','155')
   change(page,'start','2026-09-27T23:59');page.locator('#offset').select_option('540')
   page.locator('#chart-hr').click();expect(page.locator('#chart .profile-line')).to_be_visible()

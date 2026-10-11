@@ -1,8 +1,9 @@
 import type {Activity,Point,Sport} from './types.js';
 import {validPoint} from './geometry.js';
+import {qrCapacityBytes,qrFits} from './qr.js';
 
 /** Shared links carry geometry only; the recipient re-simulates timing. */
-export const SHARE_POINT_LIMIT=20000,SHARE_WARN_CHARS=8000,QR_CHAR_LIMIT=2000;
+export const SHARE_POINT_LIMIT=20000,SHARE_WARN_CHARS=8000,QR_CHAR_LIMIT=qrCapacityBytes('L');
 
 function encodeChunk(value:number):string {
  let v=value<0?~(value<<1):value<<1,out='';
@@ -81,7 +82,8 @@ export function shareUrl(base:string,a:Activity):string {
 }
 
 export function shareWarning(url:string):string|null {
- if(url.length>QR_CHAR_LIMIT)return `Share link is ${url.length} characters — too long for a QR code, export GPX instead.${url.length>SHARE_WARN_CHARS?' It is also long enough that some apps may truncate it.':''}`;
- if(url.length>SHARE_WARN_CHARS)return `Share link is ${url.length} characters — some apps may truncate links this long.`;
+ const byteLength=new TextEncoder().encode(url).length;
+ if(!qrFits(url,'L'))return 'Share link is '+byteLength+' bytes — too long for a QR code, export GPX instead.'+(url.length>SHARE_WARN_CHARS?' It is also long enough that some apps may truncate it.':'');
+ if(url.length>SHARE_WARN_CHARS)return 'Share link is '+url.length+' characters — some apps may truncate links this long.';
  return null;
 }

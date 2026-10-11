@@ -23,7 +23,7 @@ import {generateBatch} from './batch.js';
 import {corridorBounds,corridorTiles} from './offline.js';
 import {downloadCorridor} from './sw.js';
 import {exportFIT} from './fit.js';
-import {qrSvg} from './qr.js';
+import {qrPreferredEcc,qrSvg} from './qr.js';
 import {$,el,button,installIcons,setText,setInput,toast} from './ui.js';
 import {newId} from './id.js';
 import {failureMessage} from './messages.js';
@@ -304,7 +304,19 @@ on('send-share-files',async()=>{const result=await shareFiles(sendFiles);if(resu
 on('send-save-folder',async()=>{const result=await saveFilesToFolder(sendFiles);if(result==='saved')setText('send-status','Files saved to the selected folder.');else if(result==='downloaded')setText('send-status','Folder access is unavailable; downloads were started.');});
 on('send-zip',()=>{validRoute();const bytes=zipActivities([editor.activity],undefined,[],new Map([[editor.activity.id,sim!]]));downloadFiles([{name:`${editor.activity.settings.start.slice(0,10)}-${editor.activity.name.replace(/[^a-zA-Z0-9_-]+/g,'-')}-simulated-formats.zip`,type:'application/zip',data:bytes}]);setText('send-status','ZIP download started.');});
 document.querySelectorAll<HTMLButtonElement>('[data-platform-download]').forEach(button=>button.addEventListener('click',guarded(()=>{const platform=button.dataset.platformDownload as PlatformId,file=selectPlatformFile(sendFiles,platform);if(!file)throw Error('No recommended file is available for this platform.');downloadFiles([file]);setText('send-status',`${file.name} download started.`);})));
-on('share',()=>{if(editor.activity.path.length<2)throw Error('Draw or import a route before sharing.');const url=shareUrl(location.origin+location.pathname,editor.activity);$<HTMLInputElement>('share-url').value=url;const warning=shareWarning(url);setText('share-warning',warning??'');$('share-warning').hidden=!warning;const qr=$('share-qr');qr.replaceChildren();if(url.length<=2000)qr.innerHTML=qrSvg(url,{size:4,margin:2});else qr.append(el('p','fine-print','This link is too long for a QR code; export GPX instead.'));$<HTMLDialogElement>('share-dialog').showModal();});
+on('share',()=>{
+ if(editor.activity.path.length<2)throw Error('Draw or import a route before sharing.');
+ const url=shareUrl(location.origin+location.pathname,editor.activity);
+ $<HTMLInputElement>('share-url').value=url;
+ const warning=shareWarning(url);setText('share-warning',warning??'');$('share-warning').hidden=!warning;
+ const qr=$('share-qr');qr.replaceChildren();
+ const ecc=qrPreferredEcc(url);
+ if(ecc){
+  try{qr.innerHTML=qrSvg(url,{size:4,margin:4,ecc});}
+  catch{qr.append(el('p','fine-print','This link is too long for a QR code; export GPX instead.'));}
+ }else qr.append(el('p','fine-print','This link is too long for a QR code; export GPX instead.'));
+ $<HTMLDialogElement>('share-dialog').showModal();
+});
 on('share-copy',guarded(async()=>{const value=$<HTMLInputElement>('share-url').value;if(!value)throw Error('Open Share again to build a link.');try{await navigator.clipboard.writeText(value);toast('Share link copied.');}catch{$<HTMLInputElement>('share-url').select();document.execCommand('copy');toast('Share link copied.');}}));
 on('share-print',()=>{if(editor.activity.path.length<2)throw Error('Draw or import a route before printing.');buildPrintSheet();window.print();});
 function buildPrintSheet():void{
