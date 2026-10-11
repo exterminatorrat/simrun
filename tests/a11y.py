@@ -6,6 +6,7 @@ from playwright.sync_api import sync_playwright
 parser=argparse.ArgumentParser()
 parser.add_argument('--url',default='http://127.0.0.1:5190')
 parser.add_argument('--chromium',default=os.environ.get('CHROMIUM_PATH',''))
+parser.add_argument('--browser',choices=('chromium','firefox','webkit'),default='chromium')
 parser.add_argument('--axe',default=os.environ.get('AXE_PATH',str(Path(__file__).resolve().parent.parent/'node_modules'/'axe-core'/'axe.min.js')))
 args=parser.parse_args()
 axe_path=Path(args.axe)
@@ -32,7 +33,9 @@ def assert_pseudo_marker(page,label):
  missing=page.evaluate('''()=>{const out=[],skip='[hidden],script,style,svg,#map,.brand,.map-credit,.provider-guidance,.send-guidance',walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);while(walker.nextNode()){const n=walker.currentNode,text=n.textContent.trim(),e=n.parentElement;if(!text||!e||!e.getClientRects().length||e.closest(skip)||/^[0-9.,: %+/−–]+$/.test(text))continue;if(!text.startsWith('⟦')||!text.endsWith('⟧')||text.startsWith('⟦⟦')||text.endsWith('⟧⟧'))out.push({text:text.slice(0,100),tag:e.tagName,class:typeof e.className==='string'?e.className:''});}for(const e of document.querySelectorAll('input,select,textarea,button,a,[role]')){if(!e.getClientRects().length||e.closest(skip))continue;for(const attr of ['aria-label','aria-description','aria-valuetext','title','placeholder']){const value=e.getAttribute(attr)?.trim();if(value&&!/^[0-9.,: %+/−–]+$/.test(value)&&(!value.startsWith('⟦')||!value.endsWith('⟧')||value.startsWith('⟦⟦')||value.endsWith('⟧⟧')))out.push({attr,value:value.slice(0,100),tag:e.tagName,id:e.id});}}return out}''')
  assert not missing,f'{label} has visible unmarked or multiply marked strings: {missing[:20]}'
 with sync_playwright() as p:
- browser=p.chromium.launch(executable_path=args.chromium or None,headless=True)
+ launch_options={'headless':True}
+ if args.browser=='chromium':launch_options['executable_path']=args.chromium or None
+ browser=getattr(p,args.browser).launch(**launch_options)
  errors=[]
  for width,height in [(1440,900),(390,844)]:
   for theme in ['light','dark']:

@@ -42,3 +42,34 @@ jobs:
           name: simrun-sites-handoff
           path: simrun-sites-handoff.zip
           retention-days: 7
+  cross-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r tests/requirements.txt
+      - run: python -m playwright install --with-deps ${{ matrix.browser }}
+      - name: Browser tests with mocked providers
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 > /tmp/simrun-dev.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          python tests/browser.py --browser ${{ matrix.browser }} --url http://127.0.0.1:5173
+          python tests/a11y.py --browser ${{ matrix.browser }} --url http://127.0.0.1:5173

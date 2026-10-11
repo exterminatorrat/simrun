@@ -15,6 +15,7 @@ parser.add_argument('--url',default='http://127.0.0.1:5173')
 parser.add_argument('--isolated',action='store_true')
 parser.add_argument('--screenshots',default='')
 parser.add_argument('--chromium',default=os.environ.get('CHROMIUM_PATH',''))
+parser.add_argument('--browser',choices=('chromium','firefox','webkit'),default='chromium')
 args=parser.parse_args()
 loader=r"""const modules={},exportsCache={};function define(name,deps,factory){modules[name]={deps,factory}};function requireModule(name){name=name.replace(/\.js$/,'');if(exportsCache[name])return exportsCache[name];const m=modules[name];if(!m)throw Error('Module not found '+name);const ex={};exportsCache[name]=ex;m.factory(...m.deps.map(d=>d==='require'?requireModule:d==='exports'?ex:requireModule(d)));return ex;}if(!crypto.randomUUID)crypto.randomUUID=()=> '10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(+c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>+c/4).toString(16));"""
 mock=r"""window.testRequests=[];window.testRouteFailure=false;window.testDownloads=[];
@@ -63,10 +64,10 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   subprocess.run(['node',str(ROOT/'node_modules/typescript/bin/tsc'),'--module','AMD','--moduleResolution','node','--outFile',str(bundle)],cwd=ROOT,check=True)
  with sync_playwright() as pw:
   opts={'headless':True}
-  if args.chromium:opts['executable_path']=args.chromium
-  browser=pw.chromium.launch(**opts)
+  if args.chromium and args.browser=='chromium':opts['executable_path']=args.chromium
+  browser=getattr(pw,args.browser).launch(**opts)
   context=browser.new_context(viewport={'width':1440,'height':900},accept_downloads=True)
-  context.add_init_script("const nativeGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...rest){return /webgl/i.test(String(type))?null:nativeGetContext.call(this,type,...rest)}")
+  if args.browser=='chromium':context.add_init_script("const nativeGetContext=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...rest){return /webgl/i.test(String(type))?null:nativeGetContext.call(this,type,...rest)}")
   page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)));failed=[];page.on('response',lambda r:failed.append((r.status,r.url)) if r.status>=400 and r.url.startswith(args.url) else None)
   page.route('https://unpkg.com/**',lambda r:r.abort())
   if args.isolated:
@@ -124,6 +125,7 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   long_page.on('pageerror',lambda e:long_errors.append(str(e)))
   long_page.goto(args.url)
   expect(long_page.locator('#storage-state')).to_contain_text('Saved on this device',timeout=10000)
+  long_page.wait_for_function("document.querySelector('svg.coordinate-map')||document.querySelector('.maplibregl-canvas')",timeout=10000);long_page.wait_for_timeout(1500)
   long_page.locator('#toast').evaluate('(e)=>{e.hidden=true;e.textContent=""}')
   long_page.locator('#gpx-file').set_input_files({'name':'long-fixture.gpx','mimeType':'application/gpx+xml','buffer':large_fixture.encode()})
   expect(long_page.locator('#toast')).to_contain_text('Original timestamps were missing',timeout=10000)
@@ -188,8 +190,16 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   page.mouse.click(390,260);page.mouse.click(730,270);page.mouse.click(700,520)
   expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
   assert page.evaluate('window.testRequests.some(r=>r.data.costing==="pedestrian")')
-  assert page.locator('.fallback-point').count()==3
-  p=page.locator('.fallback-point').nth(1).bounding_box();page.mouse.move(p['x']+12,p['y']+12);page.mouse.down();page.mouse.move(p['x']+60,p['y']+60,steps=5);page.mouse.up()
+  if args.browser=='chromium':
+   assert page.locator('.fallback-point').count()==3
+   p=page.locator('.fallback-point').nth(1).bounding_box()
+  elif page.locator('.fallback-point').count():
+   assert page.locator('.fallback-point').count()==3
+   p=page.locator('.fallback-point').nth(1).bounding_box()
+  else:
+   points=page.locator('button.waypoint:not(.midpoint)');expect(points).to_have_count(3)
+   p=points.nth(1).bounding_box()
+  page.mouse.move(p['x']+12,p['y']+12);page.mouse.down();page.mouse.move(p['x']+60,p['y']+60,steps=5);page.mouse.up()
   expect(page.locator('#route-status')).to_contain_text('Route ready',timeout=6000)
   page.locator('#undo').click();page.locator('#redo').click()
   passed('Coordinate canvas add/drag with real provider adapter and mocked responses')
@@ -202,9 +212,16 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   page.locator('#loop-mode-laps').click();change(page,'loop-value','2.5')
   expect(page.locator('#loop-count')).to_have_text('2.5 laps');expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
   assert abs(float(page.locator('#distance').inner_text().split()[0])-2.5*one)<.05
-  assert page.evaluate("(()=>{const a=document.querySelector('.fallback-plan-start'),b=document.querySelector('.fallback-plan-finish');return !!a&&!!b&&(a.getAttribute('cx')!==b.getAttribute('cx')||a.getAttribute('cy')!==b.getAttribute('cy'))})()")
-  box=page.locator('.fallback-plan-finish').bounding_box();page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
-  before=page.locator('#loop-start').input_value();box=page.locator('.fallback-plan-start').bounding_box()
+  if page.locator('.fallback-plan-start').count():
+   assert page.evaluate("(()=>{const a=document.querySelector('.fallback-plan-start'),b=document.querySelector('.fallback-plan-finish');return !!a&&!!b&&(a.getAttribute('cx')!==b.getAttribute('cx')||a.getAttribute('cy')!==b.getAttribute('cy'))})()")
+   finish=page.locator('.fallback-plan-finish');start=page.locator('.fallback-plan-start')
+  else:
+   finish=page.locator('.waypoint.plan-finish');start=page.locator('.waypoint.plan-start')
+   expect(finish).to_have_count(1);expect(start).to_have_count(1)
+   finishbox=finish.bounding_box();startbox=start.bounding_box()
+   assert finishbox['x']!=startbox['x'] or finishbox['y']!=startbox['y']
+  box=finish.bounding_box();page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
+  before=page.locator('#loop-start').input_value();box=start.bounding_box()
   page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down();page.mouse.move(box['x']+110,box['y']+60,steps=8);page.mouse.up();page.wait_for_timeout(250)
   assert page.locator('#loop-start').input_value()!=before and page.locator('#waypoint-count').inner_text()=='4'
   expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
@@ -273,12 +290,15 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
    expect(page.locator('#offline-status')).to_contain_text('No basemap resources cached')
    page.locator('#settings-dialog [data-close]').click()
    passed('Settings report and clear cached basemap data')
-   context.set_offline(True)
-   page.reload()
-   expect(page.locator('.brand')).to_contain_text('SimRun')
-   assert page.locator('#offset option').count()>0,'app did not boot after an offline reload'
-   context.set_offline(False)
-   passed('The app shell reloads offline from the cache')
+   if args.browser=='chromium':
+    context.set_offline(True)
+    page.reload()
+    expect(page.locator('.brand')).to_contain_text('SimRun')
+    assert page.locator('#offset option').count()>0,'app did not boot after an offline reload'
+    context.set_offline(False)
+    passed('The app shell reloads offline from the cache')
+   else:
+    print(f'SKIP offline reload: Playwright {args.browser} cannot complete context-offline navigation with its service worker in this runtime')
   assert not errors,errors
   passed('No uncaught JavaScript exceptions throughout tested interactions')
   print(json.dumps({'passed':len(results),'mode':'isolated DOM; mocked providers; no native persistence' if args.isolated else 'HTTP; mocked providers','checks':results},indent=2))
