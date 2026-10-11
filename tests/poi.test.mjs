@@ -14,8 +14,10 @@ const response={elements:[
 
 test('Overpass corridor query is one bounded water-and-toilet query',()=>{
  const query=buildOverpassQuery(path),longPath=Array.from({length:1000},(_,i)=>({lat:31.2+i*.00001,lon:121.4+i*.00001})),bounded=buildOverpassQuery(longPath);
- assert.match(query,/amenity.*drinking_water.*toilets/);assert.match(query,/drinking_water/);assert.match(query,/natural/);assert.match(query,/out center 100/);
- assert.ok((bounded.match(/around:/g)||[]).length<=192);assert.ok(bounded.length<30000);
+ assert.match(query,/\["amenity"="drinking_water"\]/);assert.match(query,/\["amenity"="toilets"\]/);assert.match(query,/\["drinking_water"="yes"\]/);assert.match(query,/\["natural"="spring"\]/);assert.match(query,/out center 100/);
+ assert.doesNotMatch(query,/~/);
+ assert.equal((query.match(/around:/g)||[]).length,4);assert.equal((bounded.match(/around:/g)||[]).length,4);
+ const coordinates=bounded.match(/around:80,([-\d.,]+)\)/)[1].split(',');assert.ok(coordinates.length%2===0&&coordinates.length/2<=64);assert.ok(bounded.length<4000);
  assert.equal(poiRouteHash(path),poiRouteHash(path.map(point=>({...point}))));
 });
 

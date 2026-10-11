@@ -21,14 +21,8 @@ function corridorPoints(path:Point[]):Point[] {
 }
 
 export function buildOverpassQuery(path:Point[]):string {
- const samples=corridorPoints(path),queries:string[]=[];
- for(const point of samples){
-  const lat=point.lat.toFixed(5),lon=point.lon.toFixed(5),around=`around:80,${lat},${lon}`;
-  queries.push(`nwr(${around})["amenity"~"^(drinking_water|toilets)$"];`);
-  queries.push(`nwr(${around})["drinking_water"="yes"];`);
-  queries.push(`nwr(${around})["natural"="spring"];`);
- }
- return `[out:json][timeout:20];\n(\n${queries.join('\n')}\n);\nout center 100;`;
+ const coordinates=corridorPoints(path).map(point=>`${point.lat.toFixed(5)},${point.lon.toFixed(5)}`).join(','),around=`around:80,${coordinates}`;
+ return `[out:json][timeout:20];\n(\nnwr(${around})["amenity"="drinking_water"];\nnwr(${around})["amenity"="toilets"];\nnwr(${around})["drinking_water"="yes"];\nnwr(${around})["natural"="spring"];\n);\nout center 100;`;
 }
 
 export function parseOverpassResponse(value:unknown):PointOfInterest[] {
