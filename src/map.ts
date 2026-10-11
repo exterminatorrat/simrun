@@ -163,7 +163,7 @@ export class RouteMap {
   const ps=p.map(world);let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(const q of ps){if(q[0]<minX)minX=q[0];if(q[0]>maxX)maxX=q[0];if(q[1]<minY)minY=q[1];if(q[1]>maxY)maxY=q[1];}const r=this.host.getBoundingClientRect();
   this.view.x=(minX+maxX)/2;this.view.y=(minY+maxY)/2;this.view.zoom=Math.min(17,Math.max(1,Math.log2(Math.min(Math.max(100,r.width-(innerWidth>760?460:100))/Math.max(1e-7,maxX-minX),Math.max(100,r.height-350)/Math.max(1e-7,maxY-minY))/256)));this.drawFallback();
  }
- zoom(by:number):void {if(this.map){by>0?this.map.zoomIn():this.map.zoomOut();if(this.ready)return;}this.view.zoom=Math.max(1,Math.min(19,this.view.zoom+by));this.drawFallback();}
+ zoom(by:number):void {if(this.map){if(by>0)this.map.zoomIn();else this.map.zoomOut();if(this.ready)return;}this.view.zoom=Math.max(1,Math.min(19,this.view.zoom+by));this.drawFallback();}
  hover(p:Point|null):void {this.hoverPoint=p;if(this.map&&this.ready){this.hoverMarker?.remove();if(p){const b=el('span','hover-marker');this.hoverMarker=new window.maplibregl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map);}}else this.drawFallback();}
  private dimensions(){const r=this.host.getBoundingClientRect();return {w:r.width,h:r.height,cx:r.width/2-(innerWidth>760?145:0),cy:r.height/2-60,scale:256*2**this.view.zoom};}
  private xy(p:Point):[number,number]{const {cx,cy,scale}=this.dimensions(),[x,y]=world(p);let dx=x-this.view.x;if(dx>.5)dx--;if(dx<-.5)dx++;return [cx+dx*scale,cy+(y-this.view.y)*scale];}

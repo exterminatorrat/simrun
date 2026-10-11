@@ -143,7 +143,7 @@ export class Editor {
     const routed=this.closeRoutedPath(paths[0]);this.activity.path=routed;this.activity.source='routed';this.pending=false;this.status=this.provider.lastCached?t('Route ready · from offline cache'):this.alternatePaths.length?t('Route ready · alternate available'):t('Route ready · loading elevation');this.notify();
     if(this.provider.routeDetails)void this.provider.routeDetails(routed,profile,controller.signal).then(data=>{if(n!==this.sequence)return;if(data.streetNames?.length||data.surfaceEdges?.length)this.activity.routeData=data;else delete this.activity.routeData;this.notify();}).catch(()=>{});
     try{const elevated=await this.provider.elevation(routed,controller.signal);if(n!==this.sequence)return;this.activity.path=elevated;this.status=t('Route ready');this.notify();}
-    catch(error){if(n!==this.sequence)return;this.status=t('Elevation unavailable — retry the route to load it.');this.notify();}
+    catch{if(n!==this.sequence)return;this.status=t('Elevation unavailable — retry the route to load it.');this.notify();}
    }catch(error){if(n!==this.sequence)return;this.pending=false;this.status=t('Route unavailable — move a point or retry.');this.onMessage(failureMessage(error,'Network unavailable — check your connection and retry.'));this.notify();}
   },450);
  }

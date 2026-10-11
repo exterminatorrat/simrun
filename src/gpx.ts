@@ -1,5 +1,5 @@
 import type {Activity,Point,Simulation,Sample} from './types.js';
-import {PRODUCT,importedActivity,simulate,startTime} from './model.js';
+import {PRODUCT,importedActivity,simulate} from './model.js';
 import {validPoint} from './geometry.js';
 import {gpxSportType} from './sports.js';
 export const escapeXML=(s:string)=>s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]!));

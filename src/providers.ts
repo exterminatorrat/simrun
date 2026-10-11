@@ -1,7 +1,7 @@
 import {t} from './i18n.js';
 import type {Point,Place,Preferences,RouteProfile,Sport,RouteData,RouteSurfaceEdge,StreetNameSpan} from './types.js';
 import {profileForSport} from './sports.js';
-import {atDistance,cumulative,decodePolyline,lowerBound,resample,validPoint} from './geometry.js';
+import {cumulative,decodePolyline,resample,validPoint} from './geometry.js';
 import {parseCoordinateQuery,parsePhotonResponse} from './places.js';
 export type {Place} from './types.js';
 export interface RoutingProvider {route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>;elevation(path:Point[],signal:AbortSignal):Promise<Point[]>;alternates?(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[][]>;routeDetails?(path:Point[],profile:RouteProfile,signal:AbortSignal):Promise<RouteData>;lastCached?:boolean}
@@ -124,7 +124,7 @@ export class ValhallaProvider implements RoutingProvider {
   try{
    const surfaceData=await this.traceAttributes(path,profile,signal);
    if(surfaceData.surfaceEdges?.length)routeData.surfaceEdges=surfaceData.surfaceEdges;
-  }catch(error){if(signal.aborted)throw signal.reason;}
+  }catch{if(signal.aborted)throw signal.reason;}
   return routeData;
  }
  private async traceAttributes(path:Point[],profile:RouteProfile,signal:AbortSignal):Promise<RouteData>{
