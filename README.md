@@ -158,7 +158,7 @@ IndexedDB database `simrun-local`, schema version 1: `activities` and `meta` (cu
 
 ## Verification and real limitations
 
-See [docs/VERIFICATION.md](docs/VERIFICATION.md) and [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). The Node suite, strict type check and lint run in CI, and the Playwright harness runs in headless Chrome with mocked providers. **Live road routing, actual MapLibre rendering (WebGL was unavailable in the test browser), hosted CORS and CSP behaviour, native IndexedDB persistence across real reloads, cross-browser behaviour, real screen readers, and uploads into real Strava, Garmin and COROS accounts are not verified.**
+See [docs/VERIFICATION.md](docs/VERIFICATION.md) and [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). The Node suite, strict type check and lint run in CI, and the Playwright harness runs in Chromium, Firefox and WebKit with mocked providers. A separate pass exercised the real map, live OpenFreeMap, Valhalla, Photon, Nominatim and tile services, and the offline corridor download. **Overpass against a healthy server, hosted CORS and CSP behaviour on the deployed site, real screen readers, device performance, Web Share on real devices, and uploads into real Strava, Garmin and COROS accounts are not verified.**
 
 GPX, KML and GeoJSON imports retain the largest continuous segment when a file contains disjoint segments and tell the user; they do not invent connecting paths. GeoJSON and KML geometry without timestamps falls back to the activity timing settings. Exports are resimulations, not lossless copies of original recordings. Start time uses an explicit fixed UTC offset; check that offset for the chosen date, including daylight-saving changes. Very long simulations increase the effective sample interval to cap output at approximately 50,000 points. Optional custom splits and GPS noise/dropout are simulated deterministically from the saved seed: noise jitters exported coordinates while distance and timing stay on the true route, and dropout removes fixes in outages, which export as separate track segments instead of invented straight lines. These remain synthetic effects, not device measurements.
 
@@ -171,6 +171,9 @@ python -m pip install -r tests/requirements.txt
 python -m playwright install chromium
 # In another terminal, leave npm run dev running:
 python tests/browser.py --url http://127.0.0.1:5173
+# Other engines (Firefox needs HOME to be owned by the current user, or HOME=/root when running as root):
+python tests/browser.py --browser firefox --url http://127.0.0.1:5173
+python tests/browser.py --browser webkit --url http://127.0.0.1:5173
 # Use an installed Chrome instead of the downloaded Chromium:
 python tests/browser.py --url http://127.0.0.1:5173 --chromium /usr/bin/google-chrome
 ```

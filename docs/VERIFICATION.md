@@ -109,6 +109,8 @@ Total: **1,791,653 raw bytes; 548,051 bytes summed after gzip**. MapLibre's vend
 
 Date: 2026-10-10. Branch `hoplite/kos-04c6f62d`, after W1 to W9a were merged.
 
+Several items listed as not verified in this section (other browsers, real map rendering, live providers) were checked in the final polish pass at the end of this file, which takes precedence.
+
 - `npm test` (type check, build, Node suite): **248 passed, 0 failed**. `npm run lint`: **0 errors, 47 warnings** (existing `no-explicit-any`, unused variables and empty blocks that were tuned to warnings).
 - `python tests/browser.py` in headless Chrome with mocked providers: **26 of 26 checks pass** on three of four runs of the final tree. One run stopped at the 50k-point worker check, which bounds main-thread long tasks at 100 ms; it passed on the two following runs, so treat it as an intermittent timing flake on a cold page.
 - `python tests/a11y.py`: axe-core 4.14.0 (WCAG 2.0 and 2.1 A and AA, best practice) over 52 states (empty, routed, every dialog and settings section, light and dark, 1440x900 and 390x844) reports **no violations**; 60 checks stay "incomplete" (translucent map and glass contrast and a collapsed combobox) and were checked by hand. It also covers 320 px reflow, reduced-motion and high-contrast preferences, dialog focus entry, containment and return, keyboard waypoint add, move and delete, chart arrow scrubbing, and the accented and right-to-left pseudo-locales.
@@ -123,4 +125,38 @@ Date: 2026-10-10. Branch `hoplite/kos-04c6f62d`, after W1 to W9a were merged.
 - Web Share and folder-save on real devices, and imports of the exported GPX, TCX and FIT files into real Strava, Garmin Connect, COROS, TrainingPeaks, intervals.icu and Ride with GPS accounts.
 - Firefox and Safari; Lighthouse; a real screen reader; native IndexedDB persistence across real reloads on the deployed origin; the deployed security headers.
 - The acceptance scenarios 17 to 25 added to `docs/ACCEPTANCE.md` and the original 1 to 16 on the real deployment.
+
+## Final polish pass: real UI, live services and other browsers
+
+Date: 2026-10-11. This pass looked at the application as a user would, instead of relying on DOM assertions alone.
+
+### What was run
+
+- Screenshots from Chromium with working WebGL and live OpenFreeMap tiles were inspected at desktop, phone and touch-emulated sizes, in light and dark themes, for every dialog and the inspector sections.
+- `npm test` (253 tests), `npm run lint` (0 errors, 38 warnings), and `python tests/browser.py` and `python tests/a11y.py` against Chromium, Firefox and WebKit. The harness has a `--browser` option; the Chromium run is 28 checks, WebKit 27 and Firefox 26 (the remainder are Chromium-only checks that are skipped elsewhere with a printed reason). The accessibility script passes 4 of 4 on each engine. CI runs both engines in a `cross-browser` job, which passed on a hosted runner.
+- Two independent QR decoders (OpenCV and ZXing-C++) decoded 45 of 45 generated codes across versions 1 to 40 and all four error-correction levels.
+- Lighthouse 13 in headless Chromium with software-rendered WebGL: desktop performance 59, accessibility 100, best practices 100, SEO 100; mobile accessibility 100, best practices 100, SEO 100. The one mobile performance run that completed scored 47 and other attempts failed with a Lighthouse trace error. Total blocking time is dominated by the MapLibre bundle and software WebGL, so treat the performance scores as an upper bound on cost, not as device measurements.
+
+### Defects this found and fixed
+
+- Share never opened for real routes: the QR encoder stopped at version 10 (about 213 bytes) while the share handler allowed 2,000 characters, so it threw before showing the dialog. It now supports versions 1 to 40, falls back to a lower error-correction level, and the dialog always opens with the link.
+- The offline corridor download stored nothing with the default style: the OpenFreeMap vector source is referenced through a TileJSON `url`, which was ignored. It now resolves TileJSON and each source's zoom range. Verified live: 2 of 2 tiles stored (about 405 KB), listed in the manager, and the app and map reload offline.
+- Phone layout on real touch devices: coarse-pointer buttons are 44 px, so the seven top actions did not fit and History, Settings and the shortcut button were clipped. The actions now take a second row on narrow screens. The map attribution toggle was covered by the Activity settings button, the empty-state card sat under the toolbar strip, and the toolbar took about 40 percent of the screen height; all fixed and covered by a harness check.
+- A 404 for `/src/locales/en-US.js` on every English-region visitor; the locale list is now explicit.
+- Layout: the 761 to 860 px range overflowed horizontally; Share was drawn with the info icon and Send shared Import's icon; Language and Base layer labels were mis-styled; the Language field was a free-text box; collapsed section headers rendered reversed (for example "0Waypoints"); the Weather menu showed an empty value; the two offline buttons ran together; Trim, Split and Merge dialogs had no padding; the Send platform table was unusable on phones; the empty-state card was mispositioned in right-to-left layouts.
+- The worker responsiveness check was an absolute 100 ms limit and failed under load; it is now relative to the synchronous cost.
+
+### Live provider results
+
+- Valhalla: walking and cycling routes, elevation, GPX export with timestamps and the simulated label, trace-attributes surface and road-type breakdown, and street names in the cue sheet were all exercised against the public service and behaved correctly. A forced routing failure produced an actionable message and no exportable straight line.
+- Photon: typing produced one request about 0.6 s after the last keystroke, results appeared in the listbox and keyboard selection moved the map. Nominatim: nothing was sent while typing, and one explicit submit sent one request with the expected results. These counts were checked with mocked responses; a live run appeared to show two requests only because the service worker was counted twice.
+- OpenTopoMap and Waymarked Trails tiles loaded with HTTP 200 and attribution.
+- Overpass could not be verified. The public instance returned 504 for every request from this environment, including a trivial one. The app handles a 504 with a clear message and a working retry. The query was reshaped to one corridor linestring (`around:80,lat,lon,...`, documented since Overpass 0.7.55) with exact tag filters, which is about a quarter of the previous size.
+
+### Still not verified
+
+- Overpass results against a healthy server, live alternate routes and avoid options, and the cancel path of an offline download with real tiles.
+- Web Share and folder save on real devices, imports of exported files into real Strava, Garmin Connect, COROS, TrainingPeaks, intervals.icu and Ride with GPS accounts, and a real screen reader.
+- Device performance: the Lighthouse performance numbers above come from software-rendered WebGL.
+- The acceptance scenarios 1 to 25 on the deployed site.
 

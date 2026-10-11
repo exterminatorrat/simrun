@@ -12,9 +12,18 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 - Send and library: Web Share, save to folder, ZIP export, per-platform import guidance, collections, bulk actions and a full-library ZIP.
 - Maps and offline: Photon suggestions, locate-me, topo, cycling and hiking layers, saved places with offline search and an offline corridor manager.
 - Guidance: first-run tip, keyboard-shortcut help, draft and storage status, grouped settings and touch editing improvements.
+- Firefox and WebKit coverage in the browser harness and CI, a `--browser` option, PWA icons and phone layout regression checks.
 - Pull-request verification and built-in Node test coverage output.
 - Weekly grouped dependency updates and lint/EditorConfig tooling.
 - Static security headers, a local-first privacy page, and release policy guidance.
+
+### Fixed
+
+- Share now opens for real routes; the QR encoder supports versions 1 to 40 with an error-correction fallback.
+- Offline corridor downloads fetch the vector tiles of the default basemap by resolving TileJSON sources.
+- Phone layout on touch devices: all top actions reachable, attribution toggle uncovered, empty state clear of the toolbar.
+- Settings and inspector layout issues, the missing Share icon, a distinct Send icon, a language selector instead of a free-text field, and an explicit no-weather option.
+- Overpass points-of-interest queries use one corridor linestring with exact tag filters.
 
 ## [0.1.0]
 
