@@ -83,7 +83,6 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
  .save-indicator.warning #storage-history{font-size:11px}
 }
 @media(max-width:480px){
- .brand strong{display:none}
  .history-controls{flex-wrap:wrap}
  .history-controls input{flex:1 1 100%}
  .history-controls select{flex:1 1 0}
@@ -107,3 +106,23 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 }
 #share-dialog .share-body{padding:4px 2px 8px}
 :root[dir=rtl] .empty-state{transform:translate(50%,-50%)}
+@media(max-width:480px){
+ .topbar{height:104px;flex-wrap:wrap;align-content:center;row-gap:6px}
+ .workspace{height:calc(100dvh - 104px)}
+ .top-actions{order:3;flex:1 1 100%;margin-inline-start:0;justify-content:space-between}
+}
+@media(max-width:760px){
+ .empty-state{top:124px;transform:translateX(-50%)}
+ :root[dir=rtl] .empty-state{transform:translateX(50%)}
+ .mobile-inspector-button{bottom:60px}
+ .chart-panel{bottom:111px}
+ .empty-state{padding:14px 12px}
+ .empty-state h1{font-size:21px;margin-bottom:4px}
+ .empty-state p{line-height:1.45}
+ .empty-state button{margin-top:6px;padding:6px 10px}
+ .first-run-tip{margin-top:8px}
+}
+@media(max-width:760px) and (max-height:760px){.first-run-tip{display:none}}
+
+@media(max-width:760px) and (max-height:700px){.empty-state p{display:none}.empty-state h1{margin-bottom:0}}
+@media(max-width:760px){.workspace:has(.empty-state:not([hidden])) .chart-panel{display:none}}

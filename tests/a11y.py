@@ -92,9 +92,15 @@ with sync_playwright() as p:
  page.set_viewport_size({'width':320,'height':844})
  overflow=page.evaluate('document.documentElement.scrollWidth>document.documentElement.clientWidth')
  assert not overflow,'320px reflow has horizontal overflow'
- page.locator('#chart-splits').scroll_into_view_if_needed()
- tab_bounds=page.evaluate('''()=>{const a=document.querySelector('#chart-tabs'),b=document.querySelector('#chart-splits'),ar=a.getBoundingClientRect(),br=b.getBoundingClientRect();return br.left>=ar.left-1&&br.right<=ar.right+1}''')
+ tab_page=browser.new_page(viewport={'width':320,'height':844},reduced_motion='reduce')
+ tab_page.route('**/*',lambda route:route.continue_() if route.request.url.startswith(args.url) or route.request.url.startswith('data:') else route.abort())
+ tab_page.goto(args.url,wait_until='domcontentloaded');tab_page.wait_for_timeout(450)
+ tab_page.locator('#gpx-file').set_input_files({'name':'reflow.gpx','mimeType':'application/gpx+xml','buffer':fixture.encode()});tab_page.wait_for_timeout(700)
+ tab_page.locator('#chart-splits').scroll_into_view_if_needed()
+ tab_bounds=tab_page.evaluate('''()=>{const a=document.querySelector('#chart-tabs'),b=document.querySelector('#chart-splits'),ar=a.getBoundingClientRect(),br=b.getBoundingClientRect();return br.left>=ar.left-1&&br.right<=ar.right+1}''')
  assert tab_bounds,'the last chart tab is not reachable at 320px'
+ assert not tab_page.evaluate('document.documentElement.scrollWidth>document.documentElement.clientWidth'),'320px reflow with a route has horizontal overflow'
+ tab_page.close()
  page.set_viewport_size({'width':720,'height':450})
  overflow=page.evaluate('document.documentElement.scrollWidth>document.documentElement.clientWidth')
  assert not overflow,'200% zoom equivalent viewport has horizontal overflow'
