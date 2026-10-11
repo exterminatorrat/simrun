@@ -67,3 +67,29 @@ export function removeCorridorRecord(records:CorridorRecord[],id:string):Corrido
  const removed=clean.filter(record=>record.id===id),orphanedUrls=[...new Set(removed.flatMap(record=>record.urls).filter(url=>!retained.has(url)))];
  return {records:remaining,orphanedUrls};
 }
+
+interface TileSourceDescriptor {tiles?:unknown;url?:unknown;minzoom?:unknown;maxzoom?:unknown}
+
+export async function resolveTileTemplates(style:unknown,fetchJson:(url:string)=>Promise<unknown>,zoom:number):Promise<string[]> {
+ const sources=(style&&typeof style==='object'?(style as {sources?:unknown}).sources:undefined);
+ if(!sources||typeof sources!=='object')return [];
+ const templates=new Set<string>();
+ for(const source of Object.values(sources as Record<string,unknown>)){
+  if(!source||typeof source!=='object')continue;
+  let descriptor=source as TileSourceDescriptor;
+  if(!Array.isArray(descriptor.tiles)&&typeof descriptor.url==='string'){
+   try{
+    const resolved=await fetchJson(descriptor.url);
+    if(resolved&&typeof resolved==='object')descriptor={...(resolved as TileSourceDescriptor),minzoom:descriptor.minzoom??(resolved as TileSourceDescriptor).minzoom,maxzoom:descriptor.maxzoom??(resolved as TileSourceDescriptor).maxzoom};
+   }catch{
+    continue;
+   }
+  }
+  if(!Array.isArray(descriptor.tiles))continue;
+  const minzoom=typeof descriptor.minzoom==='number'?descriptor.minzoom:0,maxzoom=typeof descriptor.maxzoom==='number'?descriptor.maxzoom:22;
+  if(zoom<minzoom||zoom>maxzoom)continue;
+  for(const template of descriptor.tiles)if(typeof template==='string'&&template.startsWith('https://'))templates.add(template);
+ }
+ return [...templates];
+}
+

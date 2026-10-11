@@ -20,7 +20,7 @@ import {usesPace,sportLabel} from './sports.js';
 import {averageGapPace} from './gap.js';
 import {calculateTrimp} from './trimp.js';
 import {generateBatch} from './batch.js';
-import {corridorBounds,corridorTiles} from './offline.js';
+import {corridorBounds,corridorTiles,resolveTileTemplates} from './offline.js';
 import {downloadCorridor} from './sw.js';
 import {exportFIT} from './fit.js';
 import {qrPreferredEcc,qrSvg} from './qr.js';
@@ -424,7 +424,7 @@ on('corridor-download',async()=>{
  activeCorridorDownloadId=id;downloadButton.disabled=true;clearButton.disabled=true;setText('corridor-status','Preparing corridor tiles…');
  try{
   const path=plannedPath(editor.activity);if(path.length<2)throw Error('Draw or import a route before downloading map data.');
-  const templates=await tileTemplates();if(!templates.length)throw Error('The map style exposes no tile templates to download.');
+  const templates=await tileTemplates(preferences.corridorZoom);if(!templates.length)throw Error('The map style exposes no tile templates to download.');
   const plan=corridorTiles(path,2000,preferences.corridorZoom,400),urlsSet=new Set<string>();
   for(const tile of plan.tiles)for(const template of templates)urlsSet.add(template.replace('{z}',String(tile.z)).replace('{x}',String(tile.x)).replace('{y}',String(tile.y)).replace('{s}',['a','b','c'][(tile.x+tile.y)%3]));
   const allUrls=[...urlsSet],urls=allUrls.slice(0,600),sourceCapped=allUrls.length>urls.length;if(!urls.length)throw Error('The corridor has no downloadable map tiles.');
@@ -443,8 +443,8 @@ on('corridor-download',async()=>{
  finally{activeCorridorDownloadId=null;downloadButton.disabled=false;clearButton.disabled=false;cancelButton.hidden=true;progress.hidden=true;await refreshOfflineStatus();await refreshStorageUsage();}
 });
 on('corridor-cancel',async()=>{if(activeCorridorDownloadId)await cancelCorridor(activeCorridorDownloadId);});
-async function tileTemplates():Promise<string[]>{
- try{const style=await fetch(mapStyleFor(preferences)).then(r=>r.json()),out:string[]=[];for(const source of Object.values(style.sources??{}) as any[]){if(Array.isArray(source?.tiles))for(const t of source.tiles)if(typeof t==='string')out.push(t);}return out;}catch{return [];}
+async function tileTemplates(zoom:number):Promise<string[]>{
+ try{return await resolveTileTemplates(await fetch(mapStyleFor(preferences)).then(r=>r.json()),url=>fetch(url).then(r=>r.json()),zoom);}catch{return [];}
 }
 $('preferences-form').addEventListener('submit',e=>{e.preventDefault();guarded(()=>{roundtripController?.abort();const before=mapStyleFor(preferences),surfaceDataWasEnabled=preferences.surfaceDataEnabled;placeSuggestions.cancel();placeSuggestions.cache.clear();const next=validatePreferences({units:$<HTMLSelectElement>('units').value,theme:$<HTMLSelectElement>('theme').value,mapBaseLayer:$<HTMLSelectElement>('map-base-layer').value==='topo'?'topo':'vector',mapCyclingOverlay:$<HTMLInputElement>('map-cycling-overlay').checked,mapHikingOverlay:$<HTMLInputElement>('map-hiking-overlay').checked,geocodingEnabled:$<HTMLInputElement>('geocoding-enabled').checked,searchSuggestions:$<HTMLInputElement>('search-suggestions').checked,photonUrl:$<HTMLInputElement>('photon-url').value,mapStyle:$<HTMLInputElement>('map-style').value,mapStyleDark:$<HTMLInputElement>('map-style-dark').value,routingUrl:$<HTMLInputElement>('routing-url').value,elevationUrl:$<HTMLInputElement>('elevation-url').value,geocodingUrl:$<HTMLInputElement>('geocoding-url').value,overpassUrl:$<HTMLInputElement>('overpass-url').value,poiEnabled:$<HTMLInputElement>('poi-enabled').checked,surfaceDataEnabled:$<HTMLInputElement>('surface-data-enabled').checked,hrMax:Number($<HTMLInputElement>('hr-max').value),trimpRestingHr:$<HTMLInputElement>('trimp-resting-hr').value===''?undefined:Number($<HTMLInputElement>('trimp-resting-hr').value),trimpMaxHr:$<HTMLInputElement>('trimp-max-hr').value===''?undefined:Number($<HTMLInputElement>('trimp-max-hr').value),offlineRouting:$<HTMLInputElement>('offline-routing').checked,corridorZoom:Number($<HTMLInputElement>('corridor-zoom').value),avoidHighways:$<HTMLInputElement>('avoid-highways').checked,avoidHills:$<HTMLInputElement>('avoid-hills').checked,alternates:$<HTMLInputElement>('alternates-enabled').checked,tipsDismissed:preferences.tipsDismissed});preferences=next;editor.alternatesEnabled=next.alternates;try{writePreferences(next);}catch{toast('Preferences apply for this session only — allow browser storage to save them.');}document.documentElement.dataset.theme=next.theme;if(mapStyleFor(next)!==before)map.setStyle(mapStyleFor(next));map.setBasemapLayers(next.mapBaseLayer,next.mapCyclingOverlay,next.mapHikingOverlay);$<HTMLDialogElement>('settings-dialog').close();render();if(!surfaceDataWasEnabled&&next.surfaceDataEnabled)void editor.refreshRouteData().catch(error=>toast(failureMessage(error,'Route details are unavailable — retry the route.')));})();});
 on('save-selected-place',()=>{if(!selectedSearchPlace)throw Error('Choose a search result or locate a place first.');return saveNamedPlace(selectedSearchPlace);});
