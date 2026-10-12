@@ -18,6 +18,12 @@ test('the service worker caches the shell and only viewed basemap resources',asy
  // only skip its own script path and must not match every path ending in sw.js.
  assert.match(worker,/url\.pathname===WORKER_PATH/);
  assert.ok(!/endsWith\('\/sw\.js'\)/.test(worker));
+ assert.match(worker,/tile\.waymarkedtrails\.org/);
+ assert.match(worker,/endsWith\('\.tile\.opentopomap\.org'\)/);
+ assert.match(worker,/await trim\(cache\)/);
+ assert.match(worker,/if\(mapTileHost\(url\.hostname\)\)event\.respondWith\(basemap\(request\)\)/);
+ assert.match(worker,/simrun-corridor-delete/);
+ assert.match(worker,/simrun-corridor-cancel/);
 });
 test('offline registration is a no-op without service worker support',async()=>{
  const {registerOfflineCache,offlineSupported,offlineStatus}=await import('../dist/src/sw.js');

@@ -93,6 +93,6 @@ export function nearestSegmentIndex(points:Point[],p:Point):number {
 /** Valhalla's default encoded shape uses six decimal digits, not five. */
 export function decodePolyline(s:string):Point[] {
  let i=0,lat=0,lon=0;const out:Point[]=[];
- const value=()=>{let n=0,shift=0,b=0;do {if(i>=s.length||shift>30)throw Error('Invalid encoded route.');b=s.charCodeAt(i++)-63;n|=(b&31)<<shift;shift+=5;}while(b>=32);return n&1?~(n>>1):n>>1;};
+ const value=()=>{let n=0,shift=0,b:number;do {if(i>=s.length||shift>30)throw Error('Invalid encoded route.');b=s.charCodeAt(i++)-63;n|=(b&31)<<shift;shift+=5;}while(b>=32);return n&1?~(n>>1):n>>1;};
  while(i<s.length){lat+=value();lon+=value();const p={lat:lat/1e6,lon:lon/1e6};if(!validPoint(p))throw Error('Invalid routed coordinate.');out.push(p);}return out;
 }

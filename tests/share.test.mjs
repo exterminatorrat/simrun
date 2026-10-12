@@ -65,11 +65,13 @@ test('shareUrl embeds the payload as a fragment',()=>{
  assert.equal(decodeShare(url).points.length,path.length);
 });
 
-test('shareWarning thresholds behave',()=>{
+test('shareWarning follows QR byte-mode capacity and app-link thresholds',()=>{
+ assert.ok(QR_CHAR_LIMIT>2000);
  assert.equal(shareWarning('x'.repeat(QR_CHAR_LIMIT)),null);
  const warn=shareWarning('x'.repeat(SHARE_WARN_CHARS));
  assert.ok(warn);assert.match(warn,/QR/);assert.match(warn,/GPX/);assert.doesNotMatch(warn,/truncate/);
  const warnPlus=shareWarning('x'.repeat(QR_CHAR_LIMIT+1));
  assert.ok(warnPlus);assert.match(warnPlus,/QR/);assert.match(warnPlus,/GPX/);assert.doesNotMatch(warnPlus,/truncate/);
  assert.match(shareWarning('x'.repeat(SHARE_WARN_CHARS+1)),/truncate/);
+ assert.match(shareWarning('é'.repeat(Math.floor(QR_CHAR_LIMIT/2)+1)),/too long for a QR code/);
 });

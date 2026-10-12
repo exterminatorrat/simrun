@@ -14,7 +14,14 @@ const walk=async(directory,base=directory)=>{
   }
 };
 await walk('public');
-for (const name of (await readdir('src')).sort()) if (name.endsWith('.ts')) files.push(`src/${name.replace(/\.ts$/,'.js')}`);
+const walkSources=async(directory='src',base='src')=>{
+  for (const entry of (await readdir(directory, {withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))) {
+    const path=resolve(directory, entry.name);
+    if (entry.isDirectory()) await walkSources(path,base);
+    else if (entry.name.endsWith('.ts')&&!entry.name.endsWith('.d.ts')) files.push(`src/${relative(base,path).replace(/\.ts$/,'.js').split(sep).join('/')}`);
+  }
+};
+await walkSources();
 const precache=files.filter(name => name !== 'sw.js');
 await writeFile('dist/sw-manifest.json', JSON.stringify({files:precache}, null, 2) + '\n');
 console.log(`Static application built in dist/ with ${precache.length} precached files.`);

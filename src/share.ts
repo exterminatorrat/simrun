@@ -1,8 +1,9 @@
 import type {Activity,Point,Sport} from './types.js';
 import {validPoint} from './geometry.js';
+import {qrCapacityBytes,qrFits} from './qr.js';
 
 /** Shared links carry geometry only; the recipient re-simulates timing. */
-export const SHARE_POINT_LIMIT=20000,SHARE_WARN_CHARS=8000,QR_CHAR_LIMIT=2000;
+export const SHARE_POINT_LIMIT=20000,SHARE_WARN_CHARS=8000,QR_CHAR_LIMIT=qrCapacityBytes('L');
 
 function encodeChunk(value:number):string {
  let v=value<0?~(value<<1):value<<1,out='';
@@ -35,7 +36,8 @@ export function decodePolyline(text:string,precision=1e5):Point[] {
  return out;
 }
 
-const sportTag:Record<Sport,string>={run:'0',ride:'1'};
+const sportTag:Record<Sport,string>={run:'0',ride:'1',walk:'2',hike:'3','trail-run':'4',mtb:'5'};
+const tagSport:Record<string,Sport>={'0':'run','1':'ride','2':'walk','3':'hike','4':'trail-run','5':'mtb'};
 
 function toBase64Url(text:string):string {
  const bytes=new TextEncoder().encode(text);let bin='';
@@ -67,11 +69,11 @@ export function decodeShare(fragment:string):{points:Point[];sport:Sport}|null {
   if(payload.length>SHARE_POINT_LIMIT*32)return null;
   const text=fromBase64Url(payload);
   const tag=text[0];
-  if(tag!=='0'&&tag!=='1')return null;
+  if(!(tag in tagSport))return null;
   const points=decodePolyline(text.slice(1));
   if(points.length>SHARE_POINT_LIMIT)return null;
   for(const p of points)if(!validPoint(p))return null;
-  return {points,sport:tag==='1'?'ride':'run'};
+  return {points,sport:tagSport[tag]!};
  }catch{return null;}
 }
 
@@ -80,7 +82,8 @@ export function shareUrl(base:string,a:Activity):string {
 }
 
 export function shareWarning(url:string):string|null {
- if(url.length>QR_CHAR_LIMIT)return `Share link is ${url.length} characters — too long for a QR code, export GPX instead.${url.length>SHARE_WARN_CHARS?' It is also long enough that some apps may truncate it.':''}`;
- if(url.length>SHARE_WARN_CHARS)return `Share link is ${url.length} characters — some apps may truncate links this long.`;
+ const byteLength=new TextEncoder().encode(url).length;
+ if(!qrFits(url,'L'))return 'Share link is '+byteLength+' bytes — too long for a QR code, export GPX instead.'+(url.length>SHARE_WARN_CHARS?' It is also long enough that some apps may truncate it.':'');
+ if(url.length>SHARE_WARN_CHARS)return 'Share link is '+url.length+' characters — some apps may truncate links this long.';
  return null;
 }

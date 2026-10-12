@@ -33,3 +33,14 @@ See README and `docs/` for current limitations and deployment instructions.
 ## Offline cache
 
 `npm run build` writes `dist/sw-manifest.json`, listing every built file except the service worker itself, so the precache list cannot drift from the build. `public/sw.js` precaches that list into a shell cache whose name is derived from the manifest contents, which makes a new deploy install a new cache and prune the previous one. Basemap resources from the OpenFreeMap host are cached as they are viewed, cache-first and bounded to 1,500 entries; routing, elevation and geocoding responses are deliberately left to the network. The interface reads the entry count and clears the basemap cache over a `MessageChannel`; `src/sw.ts` owns registration and that messaging and no-ops where service workers or a secure context are unavailable.
+
+## Polish and release decisions
+
+- **Hand-off, not upload.** Sending a file to another platform is a user-initiated hand-off and does not make the app cloud-backed. Direct API upload would need credentials a static app cannot ship, so the app uses Web Share, save to folder, ZIP and per-platform guidance, and stores no tokens. A CORS probe showed the Strava and intervals.icu endpoints answering preflight requests with CORS headers, but no authenticated upload was tested and none is built.
+- **Honesty is unchanged.** Every export and send path keeps the simulated labelling. Activity name and description are free text, and no real manufacturer or product identifier is written to any file.
+- **Opt-in network features.** Photon suggestions, Overpass points of interest, surface data and overlay tiles are off by default and disclosed. Nominatim stays submit-only because its public policy forbids autocomplete; Photon is the suggestion provider.
+- **Backups.** `createBackup` and the full-library ZIP both carry preferences and saved places; older backups without `savedPlaces` or collections still import.
+- **Worker offload.** Simulations above a size threshold run in a module worker with chunked transferable results and fall back to the synchronous path where Workers are unavailable. `simulate()` itself is unchanged, so output is byte-identical.
+- **Pace strategies and metrics.** The default `even` strategy reproduces earlier output exactly. Grade-adjusted pace and TRIMP are bounded estimates, labelled as such.
+- **Undo.** Loop-plan changes are individual undo steps, so returning to the waypoints before a loop was closed takes one undo per plan change.
+

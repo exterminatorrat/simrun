@@ -1,6 +1,7 @@
 import type {Activity,Point,Simulation,Sample} from './types.js';
 import {PRODUCT,importedActivity,startTime} from './model.js';
 import {validPoint} from './geometry.js';
+import type {Sport} from './types.js';
 
 const EPOCH=631065600,SEMI=2147483648/180,INV16=0xffff,INV32=0x7fffffff;
 
@@ -34,8 +35,16 @@ function validated(s:Simulation):Sample[] {
  return s.points;
 }
 
+function fitSport(sport:Sport):{sport:number;subSport:number} {
+ if(sport==='walk')return {sport:11,subSport:0};
+ if(sport==='hike')return {sport:17,subSport:0};
+ if(sport==='trail-run')return {sport:1,subSport:3};
+ if(sport==='mtb')return {sport:2,subSport:8};
+ return sport==='ride'?{sport:2,subSport:0}:{sport:1,subSport:0};
+}
+
 export function exportFIT(a:Activity,s:Simulation):Uint8Array {
- const points=validated(s),fit=(ms:number)=>Math.round(ms/1000)-EPOCH;
+ const points=validated(s),fit=(ms:number)=>Math.round(ms/1000)-EPOCH,{sport,subSport}=fitSport(a.settings.sport);
  const start=fit(startTime(a.settings)),end=fit(points[points.length-1].time),elapsed=Math.max(0,end-start);
  const hr=points.some(p=>p.hr!==undefined),cad=points.some(p=>p.cad!==undefined),power=points.some(p=>p.power!==undefined);
  const hrs=points.map(p=>p.hr).filter((h):h is number=>h!==undefined),avgHr=hrs.length?hrs.reduce((v,n)=>v+n,0)/hrs.length:0,maxHr=hrs.length?Math.max(...hrs):0;
@@ -62,8 +71,8 @@ export function exportFIT(a:Activity,s:Simulation):Uint8Array {
  b.u8(2);b.u8(9);b.u8(1);b.u32(start);b.u32(elapsed*1000);b.u32(elapsed*1000);b.u32(Math.round(s.distance*100));b.u16(Math.round(avgSpeed*1000));b.u16(Math.round(maxSpeed*1000));
  if(hr){b.u8(Math.round(avgHr));b.u8(maxHr);}
  b.u32(end);
- b.def(3,18,[[0,1,0x00],[1,1,0x00],[2,4,0x86],[5,1,0x00],[7,4,0x86],[8,4,0x86],[9,4,0x86],[14,2,0x84],[15,2,0x84],...(hr?[[16,1,0x00],[17,1,0x00]]:[]),[26,2,0x84],[253,4,0x86]]);
- b.u8(3);b.u8(8);b.u8(1);b.u32(start);b.u8(a.settings.sport==='ride'?2:1);b.u32(elapsed*1000);b.u32(elapsed*1000);b.u32(Math.round(s.distance*100));b.u16(Math.round(avgSpeed*1000));b.u16(Math.round(maxSpeed*1000));
+ b.def(3,18,[[0,1,0x00],[1,1,0x00],[2,4,0x86],[5,1,0x00],[6,1,0x00],[7,4,0x86],[8,4,0x86],[9,4,0x86],[14,2,0x84],[15,2,0x84],...(hr?[[16,1,0x00],[17,1,0x00]]:[]),[26,2,0x84],[253,4,0x86]]);
+ b.u8(3);b.u8(8);b.u8(1);b.u32(start);b.u8(sport);b.u8(subSport);b.u32(elapsed*1000);b.u32(elapsed*1000);b.u32(Math.round(s.distance*100));b.u16(Math.round(avgSpeed*1000));b.u16(Math.round(maxSpeed*1000));
  if(hr){b.u8(Math.round(avgHr));b.u8(maxHr);}
  b.u16(1);b.u32(end);
  b.u8(4);b.u8(0);b.u8(4);b.u16(0);b.u32(end);
@@ -93,7 +102,7 @@ export function importFIT(data:Uint8Array):{activity:Activity;notice:string} {
  if(crc16(data.subarray(0,14+size))!==(data[14+size]|data[15+size]<<8))throw Error('FIT file CRC mismatch.');
  const body=data.subarray(14,14+size),defs=new Map<number,{mesg:number;big:boolean;fields:number[][]}>();
  const points:Point[]=[],waypoints:Point[]=[],skipped:string[]=[];
- let o=0,last=-1,unknown=0,laps=0,sport=0,name='';
+ let o=0,last=-1,unknown=0,laps=0,sport=0,subSport=0,name='';
  while(o<body.length){
   const head=body[o++];
   // Bit 6 (0x40) marks a definition message; bit 5 (0x20) on a definition means developer data.
@@ -123,7 +132,7 @@ export function importFIT(data:Uint8Array):{activity:Activity;notice:string} {
   const num=(n:number)=>{const v=vals.get(n);return typeof v==='number'?v:undefined;};
   if(def.mesg===0){
    if(num(0)!==4)skipped.push(`file type ${vals.get(0)}`);else{const text=vals.get(8);if(typeof text==='string')name=text;}
-  }else if(def.mesg===18)sport=num(5)??0;
+  }else if(def.mesg===18){sport=num(5)??0;subSport=num(6)??0;}
   else if(def.mesg===19)laps++;
   else if(def.mesg===32){
    const lat=num(2),lon=num(3);
@@ -141,7 +150,8 @@ export function importFIT(data:Uint8Array):{activity:Activity;notice:string} {
   if(stamp!==undefined)last=stamp;else{const t=num(253);if(t!==undefined)last=t;}
  }
  if(points.length<2)throw Error('FIT contains fewer than two usable records.');
- const made=importedActivity(points,name,sport===2?'cycling':'running','FIT');
+ const typeText=sport===2?(subSport===8?'mountain biking':'cycling'):sport===17?'hiking':sport===11?'walking':sport===1&&subSport===3?'trail running':'running';
+ const made=importedActivity(points,name,typeText,'FIT');
  if(waypoints.length)made.activity.waypoints=waypoints;
  if(unknown)made.notices.push(`Skipped ${unknown} unsupported message${unknown===1?'':'s'}.`);
  if(skipped.length)made.notices.push(`Skipped unsupported content: ${[...new Set(skipped)].join(', ')}.`);

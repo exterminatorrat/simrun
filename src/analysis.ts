@@ -1,13 +1,25 @@
-import type {Activity, Sample, Simulation, Sport} from './types.js';
+import type {Activity, Sample, Simulation, Sport,RouteSurfaceEdge} from './types.js';
 import {elevationStats} from './geometry.js';
 import {plannedPath} from './model.js';
+import {usesPace} from './sports.js';
+import {averageGapPace} from './gap.js';
+import {calculateTrimp,type TrimpHeartRates} from './trimp.js';
 
 // Analysis helpers produce simulated estimates derived from the activity model, not measured values.
 
 type HrZone = {index:number;min:number;max:number;seconds:number;percent:number};
 type Histogram = {bins:{min:number;max:number;seconds:number}[];binSize:number;unit:string};
-type UnitSplit = {start:number;end:number;distance:number;duration:number;pace:number;speed:number};
-export type ActivityStats = {name:string;sport:Sport;distance:number;duration:number;avgSpeed:number;avgPace:number|null;elevationGain:number|null;avgHr:number|null;calories:number|null};
+type UnitSplit = {start:number;end:number;distance:number;duration:number;pace:number;speed:number;gapPace?:number};
+export type ActivityStats = {name:string;sport:Sport;distance:number;duration:number;avgSpeed:number;avgPace:number|null;avgGapPace:number|null;elevationGain:number|null;avgHr:number|null;trimp:number|null;calories:number|null};
+export interface RouteCategoryDistance {name:string;distance:number}
+
+function routeCategory(edges:RouteSurfaceEdge[],key:'surface'|'roadClass'):RouteCategoryDistance[] {
+ const totals=new Map<string,number>();
+ for(const edge of edges){const name=edge[key];if(name)totals.set(name,(totals.get(name)||0)+edge.distance);}
+ return [...totals].map(([name,distance])=>({name,distance})).sort((a,b)=>b.distance-a.distance||a.name.localeCompare(b.name));
+}
+export const surfaceBreakdown=(edges:RouteSurfaceEdge[]=[]):RouteCategoryDistance[]=>routeCategory(edges,'surface');
+export const roadClassBreakdown=(edges:RouteSurfaceEdge[]=[]):RouteCategoryDistance[]=>routeCategory(edges,'roadClass');
 
 const round1=(v:number):number=>Math.round(v*10)/10;
 
@@ -49,7 +61,7 @@ export function belowZoneSeconds(points:Sample[],hrMax:number):number {
 }
 
 export function paceHistogram(points:Sample[],sport:Sport,units:'metric'|'imperial'):Histogram[] {
-  const metric=units==='metric',byPace=sport==='run';
+  const metric=units==='metric',byPace=usesPace(sport);
   const binSize=byPace?(metric?10:15):1;
   const unit=byPace?(metric?'s/km':'s/mi'):(metric?'km/h':'mph');
   const valueAt=(p:Sample):number=>{
@@ -99,7 +111,8 @@ export function perUnitSplits(sim:Simulation,unitMeters:number):UnitSplit[] {
   for(let i=1;i<boundaries.length;i++){
     const start=boundaries[i-1],end=boundaries[i],distance=end-start;
     const duration=(timeAt(end)-timeAt(start))/1000;
-    out.push({start,end,distance,duration,pace:distance>0&&duration>0?duration/(distance/1000):0,speed:duration>0?distance/duration:0});
+    const gapPace=averageGapPace(points,start,end);
+    out.push({start,end,distance,duration,pace:distance>0&&duration>0?duration/(distance/1000):0,speed:duration>0?distance/duration:0,...(gapPace!==null?{gapPace}:{})});
   }
   return out;
 }
@@ -119,11 +132,11 @@ function timeWeightedHr(points:Sample[]):number|null {
 
 function caloriesFor(sport:Sport,speed:number,duration:number):number|null {
   if(!(duration>0))return null;
-  const met=sport==='run'?1.03*speed*speed+3.5:8*Math.pow(speed*3.6/25,2.5);
+  const met=usesPace(sport)?1.03*speed*speed+3.5:8*Math.pow(speed*3.6/25,2.5);
   return Math.round(met*70*duration/3600);
 }
 
-function statsFor(entry:{activity:Activity;sim:Simulation}):ActivityStats {
+function statsFor(entry:{activity:Activity;sim:Simulation},heartRates:TrimpHeartRates):ActivityStats {
   const {activity,sim}=entry;
   const distance=sim.distance,duration=sim.duration;
   const avgSpeed=duration>0?distance/duration:0;
@@ -133,15 +146,17 @@ function statsFor(entry:{activity:Activity;sim:Simulation}):ActivityStats {
     distance,
     duration,
     avgSpeed,
-    avgPace:activity.settings.sport==='run'&&distance>0?duration/(distance/1000):null,
+    avgPace:usesPace(activity.settings.sport)&&distance>0?duration/(distance/1000):null,
+    avgGapPace:usesPace(activity.settings.sport)?averageGapPace(sim.points):null,
     elevationGain:elevationStats(plannedPath(activity)).gain,
     avgHr:timeWeightedHr(sim.points),
+    trimp:calculateTrimp(sim.points,heartRates),
     calories:caloriesFor(activity.settings.sport,avgSpeed,duration),
   };
 }
 
-export function compareActivities(left:{activity:Activity;sim:Simulation},right:{activity:Activity;sim:Simulation}):{left:ActivityStats;right:ActivityStats;delta:ActivityStats} {
-  const a=statsFor(left),b=statsFor(right);
+export function compareActivities(left:{activity:Activity;sim:Simulation},right:{activity:Activity;sim:Simulation},heartRates:TrimpHeartRates={}):{left:ActivityStats;right:ActivityStats;delta:ActivityStats} {
+  const a=statsFor(left,heartRates),b=statsFor(right,heartRates);
   const diff=(x:number|null,y:number|null):number|null=>x===null||y===null?null:y-x;
   return {
     left:a,
@@ -152,8 +167,10 @@ export function compareActivities(left:{activity:Activity;sim:Simulation},right:
       duration:diff(a.duration,b.duration) as number,
       avgSpeed:diff(a.avgSpeed,b.avgSpeed) as number,
       avgPace:diff(a.avgPace,b.avgPace),
+      avgGapPace:diff(a.avgGapPace,b.avgGapPace),
       elevationGain:diff(a.elevationGain,b.elevationGain),
       avgHr:diff(a.avgHr,b.avgHr),
+      trimp:diff(a.trimp,b.trimp),
       calories:diff(a.calories,b.calories),
     },
   };

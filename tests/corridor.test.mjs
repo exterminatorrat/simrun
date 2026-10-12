@@ -58,3 +58,22 @@ test('a long route at a high zoom is capped',()=>{
  assert.ok(r.count>50);
  assert.equal(corridorTileCount(long,200,20),r.count);
 });
+
+const {resolveTileTemplates}=await import('../dist/src/offline.js');
+const liberty={sources:{ne2_shaded:{type:'raster',tiles:['https://tiles.example/natural_earth/{z}/{x}/{y}.png'],maxzoom:6},openmaptiles:{type:'vector',url:'https://tiles.example/planet'}}};
+const tileJson={tiles:['https://tiles.example/planet/v1/{z}/{x}/{y}.pbf'],minzoom:0,maxzoom:14};
+
+test('tile templates resolve TileJSON urls and honour each source zoom range',async()=>{
+ const requested=[],fetchJson=async url=>{requested.push(url);return tileJson;};
+ assert.deepEqual(await resolveTileTemplates(liberty,fetchJson,12),['https://tiles.example/planet/v1/{z}/{x}/{y}.pbf']);
+ assert.deepEqual(requested,['https://tiles.example/planet']);
+ assert.deepEqual(await resolveTileTemplates(liberty,fetchJson,5),['https://tiles.example/natural_earth/{z}/{x}/{y}.png','https://tiles.example/planet/v1/{z}/{x}/{y}.pbf']);
+ assert.deepEqual(await resolveTileTemplates(liberty,fetchJson,15),[]);
+});
+
+test('tile templates skip sources whose TileJSON fails and ignore insecure or malformed entries',async()=>{
+ assert.deepEqual(await resolveTileTemplates(liberty,async()=>{throw Error('offline');},12),[]);
+ assert.deepEqual(await resolveTileTemplates({sources:{a:{tiles:['http://insecure.example/{z}/{x}/{y}.pbf',42,'https://ok.example/{z}/{x}/{y}.pbf']},b:null,c:'x'}},async()=>tileJson,3),['https://ok.example/{z}/{x}/{y}.pbf']);
+ assert.deepEqual(await resolveTileTemplates(undefined,async()=>tileJson,3),[]);
+ assert.deepEqual(await resolveTileTemplates({sources:{}},async()=>tileJson,3),[]);
+});
