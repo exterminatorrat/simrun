@@ -5,6 +5,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # typescript-eslint supports TypeScript <6.1.0, so a major TypeScript bump
+      # makes `npm ci` fail with ERESOLVE before any check can run. Lift this when
+      # typescript-eslint declares support for the new major.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
     groups:
       npm-dependencies:
         patterns:

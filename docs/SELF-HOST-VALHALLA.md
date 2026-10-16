@@ -15,6 +15,15 @@ The request-level `costing_options.max_distance` does **not** override it —
 the server's `service_limits` wins. Automobile costing is not capped this way,
 but the app never requests it.
 
+The demo also caps one request at 10 locations (`error_code 150`, "Exceeded max
+locations: 10"). The app therefore sends a route with more than 10 waypoints as
+a chain of requests that each stay inside that limit, and joins the returned
+geometry into one path with the street-name spans kept. Chaining is not a way
+around the distance cap: against the public demo the app stops once the joined
+route exceeds the cap and reports the cap message. A self-hosted endpoint is
+held only to its own `service_limits`, so its `max_locations` needs no change —
+the app never sends more than 10 locations per request.
+
 Self-hosting removes the distance cap. No application code changes are needed:
 the routing and elevation URLs are editable in **Settings → Open service
 endpoints**.

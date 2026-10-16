@@ -9,6 +9,25 @@ test('provider rejects credentials and non-HTTPS URLs',()=>{assert.throws(()=>en
 test('coordinate search is offline and Nominatim is informed opt-in',async()=>{const signal=new AbortController().signal;assert.equal((await searchPlaces('31.2304, 121.4737',defaultPreferences,signal))[0].lat,31.2304);await assert.rejects(searchPlaces('Paris',defaultPreferences,signal),/Enable place search/);await assert.rejects(searchPlaces('100, 200',defaultPreferences,signal));});
 test('Valhalla maps routing profiles to pedestrian/bicycle costing and decodes polyline6',async()=>{const path=[{lat:31,lon:121},{lat:31.02,lon:121.03}],old=globalThis.fetch;let body={};try{globalThis.fetch=async url=>{body=JSON.parse(new URL(url).searchParams.get('json'));return new Response(JSON.stringify({trip:{legs:[{shape:encode(path)}]}}),{status:200});};const prefs={...defaultPreferences,routingUrl:'https://profiles.example/route'};const provider=new ValhallaProvider(()=>prefs);assert.deepEqual(await provider.route(path,'walk',new AbortController().signal),path);assert.equal(body.costing,'pedestrian');assert.equal(body.costing_options,undefined);await provider.route(path,'road',new AbortController().signal);assert.equal(body.costing,'bicycle');assert.equal(body.costing_options.bicycle.bicycle_type,'Hybrid');}finally{globalThis.fetch=old;}});
 test('429 with long Retry-After fails without hammering the provider',async()=>{let count=0;const old=globalThis.fetch;try{globalThis.fetch=async()=>{count++;return new Response('{}',{status:429,headers:{'Retry-After':'90'}});};const p=new ValhallaProvider(()=>({...defaultPreferences,routingUrl:'https://limited.example/route'}));await assert.rejects(p.route([{lat:0,lon:0},{lat:0,lon:1}],'walk',new AbortController().signal),/rate-limited/);assert.equal(count,1);}finally{globalThis.fetch=old;}});
+test('more waypoints than the provider accepts per request are chained in order',async()=>{
+ const points=Array.from({length:12},(_,i)=>({lat:31+i*0.001,lon:121+i*0.001}));
+ const old=globalThis.fetch,requested=[];
+ try{
+  globalThis.fetch=async url=>{const body=JSON.parse(new URL(url).searchParams.get('json'));requested.push(body.locations.length);if(body.locations.length>10)return new Response(JSON.stringify({error_code:150,error:'Exceeded max locations: 10'}),{status:400});return new Response(JSON.stringify({trip:{legs:[{shape:encode(body.locations)}]}}),{status:200});};
+  const p=new ValhallaProvider(()=>({...defaultPreferences,routingUrl:'https://valhalla1.openstreetmap.de/route'}));
+  assert.deepEqual(await p.route(points,'walk',new AbortController().signal),points);
+  assert.deepEqual(requested,[10,3]);
+ }finally{globalThis.fetch=old;}
+});
+test('a chained route longer than the public cap still reports the cap',async()=>{
+ const points=Array.from({length:12},(_,i)=>({lat:31+i*0.09,lon:121})),old=globalThis.fetch;
+ try{
+  globalThis.fetch=async url=>new Response(JSON.stringify({trip:{legs:[{shape:encode(JSON.parse(new URL(url).searchParams.get('json')).locations)}]}}),{status:200});
+  const provider=url=>new ValhallaProvider(()=>({...defaultPreferences,routingUrl:url})),signal=()=>new AbortController().signal;
+  await assert.rejects(provider('https://valhalla1.openstreetmap.de/route').route(points,'walk',signal()),/self-host/i);
+  assert.equal((await provider('https://own.example/route').route(points,'walk',signal())).length,12);
+ }finally{globalThis.fetch=old;}
+});
 test('backups are sanitized; invalid geometry and versions are rejected',()=>{const a=defaults();a.path=[{lat:0,lon:0},{lat:1,lon:1}];const b=parseBackup(JSON.stringify({product:'SimRun',version:1,activities:[a],preferences:{...defaultPreferences,unknown:'ignored'}}));assert.equal(b.activities[0].id,a.id);assert.equal(b.preferences.unknown,undefined);a.path[0].lat=999;assert.throws(()=>parseBackup(JSON.stringify({product:'SimRun',version:1,activities:[a]})));assert.throws(()=>parseBackup('{"product":"SimRun","version":999,"activities":[]}'));});
 test('memory fallback preserves local-session history with independent duplicate IDs',async()=>{const s=new LocalStore();await assert.rejects(s.open());const a=defaults();await s.save(a);const b={...a,id:'separate',name:'copy'};await s.save(b);assert.equal((await s.list()).length,2);await s.remove(a.id);assert.equal((await s.list())[0].id,'separate');await s.saveDraft(a);assert.equal((await s.readDraft()).id,a.id);});
 test('draft projects cannot be directly exported from restored history',()=>{const a=defaults();a.path=[{lat:0,lon:0},{lat:1,lon:1}];assert.throws(()=>downloadActivity(a),/Resolve the route/);});
