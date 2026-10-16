@@ -3,6 +3,7 @@ import type {Point,Place,Preferences,RouteProfile,Sport,RouteData,RouteSurfaceEd
 import {profileForSport} from './sports.js';
 import {cumulative,decodePolyline,resample,validPoint} from './geometry.js';
 import {parseCoordinateQuery,parsePhotonResponse} from './places.js';
+import {defaultPreferences} from './model.js';
 export type {Place} from './types.js';
 export interface RoutingProvider {route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>;elevation(path:Point[],signal:AbortSignal):Promise<Point[]>;alternates?(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[][]>;routeDetails?(path:Point[],profile:RouteProfile,signal:AbortSignal):Promise<RouteData>;lastCached?:boolean}
 export class ProviderError extends Error {constructor(message:string,public status=0,public code=0){super(message);}}
@@ -12,6 +13,8 @@ export const PROFILE_OPTIONS:Record<RouteProfile,{costing:'pedestrian'|'bicycle'
 export const resolveProfile=(sport:Sport,profile?:RouteProfile):RouteProfile=>profile??profileForSport(sport);
 /** Public Valhalla distance caps: about 100 km on foot and 150 km by bicycle. */
 export const PUBLIC_CAP_METERS:Record<RouteProfile,number>={walk:100000,hike:100000,road:150000,mtb:150000};
+/** The public Valhalla demo rejects any request with more than 10 locations (`error_code 150`). */
+export const MAX_REQUEST_LOCATIONS=10;
 type ValhallaManeuver={begin_shape_index?:number;end_shape_index?:number;street_names?:unknown};
 type ValhallaLeg={shape:string;maneuvers?:ValhallaManeuver[]};
 type RouteRecord={path:Point[];data:RouteData};
@@ -34,6 +37,17 @@ function routeRecord(legs:ValhallaLeg[]|undefined):RouteRecord {
 function sameRoute(a:Point[],b:Point[]):boolean {
  if(a.length===b.length+1&&Math.abs(a[a.length-1].lat-b[0].lat)<1e-6&&Math.abs(a[a.length-1].lon-b[0].lon)<1e-6)a=a.slice(0,-1);
  return a.length===b.length&&a.every((p,i)=>Math.abs(p.lat-b[i].lat)<1e-6&&Math.abs(p.lon-b[i].lon)<1e-6);
+}
+const publicEndpoint=(value:string):boolean=>{try{return new URL(value).host===new URL(defaultPreferences.routingUrl).host;}catch{return false;}};
+/** Joins per-chunk records into one path, shifting street-name spans by the distance before each chunk. */
+function mergeRecords(records:RouteRecord[]):RouteRecord {
+ const path:Point[]=[],streetNames:StreetNameSpan[]=[];let offset=0;
+ for(const {path:part,data} of records){
+  for(const span of data.streetNames??[])streetNames.push({start:offset+span.start,end:offset+span.end,name:span.name});
+  offset+=cumulative(part).at(-1)??0;
+  path.push(...(path.length?part.slice(1):part));
+ }
+ return {path,data:streetNames.length?{streetNames}:{}};
 }
 function routeLabel(value:unknown):string|undefined {return typeof value==='string'&&/^[a-zA-Z0-9 _-]{1,64}$/.test(value.trim())?value.trim():undefined;}
 const footProfile=(p:RouteProfile):boolean=>p==='walk'||p==='hike';
@@ -86,7 +100,7 @@ export class ValhallaProvider implements RoutingProvider {
   if(points.length<2||points.length>50||!points.every(validPoint))throw new ProviderError('Use between 2 and 50 valid waypoints.');
   const estimate=cumulative(points).at(-1)??0;
   const main=await this.route(points,profile,signal);
-  if(estimate>=60000)return [main];
+  if(estimate>=60000||points.length>MAX_REQUEST_LOCATIONS)return [main];
   const {costing,options}=PROFILE_OPTIONS[profile]??PROFILE_OPTIONS.walk;
   const prefs=this.prefs(),opts:Record<string,unknown>={...options};
   if(prefs.avoidHills)opts.use_hills=0;
@@ -100,8 +114,7 @@ export class ValhallaProvider implements RoutingProvider {
    return records.length?records.map(record=>record.path):[main];
   }catch{return [main];}
  }
- async route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>{
-  if(points.length<2||points.length>50||!points.every(validPoint))throw new ProviderError('Use between 2 and 50 valid waypoints.');
+ private async routeRequest(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<{trip?:{legs?:ValhallaLeg[]}}>{
   const {costing,options}=PROFILE_OPTIONS[profile]??PROFILE_OPTIONS.walk;
   // Default-off avoid options. `use_hills` is documented for both pedestrian and bicycle;
   // `use_roads` (avoid roads) is the closest documented bicycle lever for avoiding highways.
@@ -110,10 +123,20 @@ export class ValhallaProvider implements RoutingProvider {
   if(prefs.avoidHighways&&costing==='bicycle')opts.use_roads=0;
   const url=new URL(endpoint(prefs.routingUrl));
   url.searchParams.set('json',JSON.stringify({locations:points.map(({lat,lon})=>({lat,lon})),costing,costing_options:Object.keys(opts).length?{[costing]:opts}:undefined,units:'kilometers',directions_type:'instructions'}));
-  let data:{trip?:{legs?:ValhallaLeg[]}};
-  try{data=await this.request<{trip?:{legs?:ValhallaLeg[]}}>(url,signal);}
+  try{return await this.request<{trip?:{legs?:ValhallaLeg[]}}>(url,signal);}
   catch(error){if(error instanceof ProviderError&&error.status===400&&error.code===154)throw new ProviderError(capMessage(profile),400,154);throw error;}
-  const result=routeRecord(data.trip?.legs),path=result.path;
+ }
+ async route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>{
+  if(points.length<2||points.length>50||!points.every(validPoint))throw new ProviderError('Use between 2 and 50 valid waypoints.');
+  const records:RouteRecord[]=[];let routed=0;
+  for(let start=0;start<points.length-1;start+=MAX_REQUEST_LOCATIONS-1){
+   const record=routeRecord((await this.routeRequest(points.slice(start,start+MAX_REQUEST_LOCATIONS),profile,signal)).trip?.legs);
+   if(record.path.length<2)throw new ProviderError('Route geometry is empty or too large.');
+   records.push(record);routed+=cumulative(record.path).at(-1)??0;
+   // The public service caps the whole requested route, so chaining may not route past its cap.
+   if(records.length>1&&routed>PUBLIC_CAP_METERS[profile]&&publicEndpoint(this.prefs().routingUrl))throw new ProviderError(capMessage(profile),400,154);
+  }
+  const result=mergeRecords(records),path=result.path;
   if(path.length<2||path.length>100000)throw new ProviderError('Route geometry is empty or too large.');
   this.routeRecords=[...this.routeRecords,result].slice(-8);return path;
  }
