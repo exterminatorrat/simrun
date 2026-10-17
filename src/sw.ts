@@ -16,6 +16,16 @@ const ask=<T>(message:unknown):Promise<T|null>=>new Promise(resolve=>{
 export const offlineSupported=():boolean=>'serviceWorker' in navigator;
 export function registerOfflineCache():void {
  if(!offlineSupported())return;
+ // A returning visit can fetch the previous release's shell before the new worker
+ // activates, so the page would keep running old code until a second reload. When an
+ // update takes control, reload once; the first install is skipped because that page
+ // already loaded the current release.
+ const hadController=!!navigator.serviceWorker.controller;
+ let reloading=false;
+ navigator.serviceWorker.addEventListener('controllerchange',()=>{
+  if(!hadController||reloading)return;
+  reloading=true;location.reload();
+ });
  try{navigator.serviceWorker.register('./sw.js').catch(()=>{});}catch{}
 }
 export const offlineStatus=():Promise<CacheStatus|null>=>ask<CacheStatus>({type:'simrun-cache-status'});

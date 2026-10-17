@@ -16,7 +16,11 @@ const activeCorridorDownloads=new Map();
 // compiled src/sw.js module is part of the shell and must be served from cache.
 const WORKER_PATH=new URL('sw.js',self.location.href).pathname;
 const digest=text=>{let hash=5381;for(let i=0;i<text.length;i++)hash=((hash<<5)+hash+text.charCodeAt(i))>>>0;return hash.toString(36);};
-const shellCacheName=files=>`simrun-shell-${digest([...files].sort().join('|'))}`;
+// Replaced at build time with a hash of the precached files. The browser only
+// installs a new service worker when this script's bytes change, so the build id
+// is what lets a content-only deploy reach a browser that already cached the shell.
+const BUILD='__SIMRUN_BUILD__';
+const shellCacheName=files=>`simrun-shell-${BUILD}-${digest([...files].sort().join('|'))}`;
 const shellName=async()=>(await caches.keys()).find(name=>name.startsWith('simrun-shell-'))||null;
 const manifestFiles=async()=>{
  try{const response=await fetch('./sw-manifest.json',{cache:'no-store'});return response.ok?(await response.json()).files||[]:null;}catch{return null;}
