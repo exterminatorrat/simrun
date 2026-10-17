@@ -25,6 +25,7 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 - Settings and inspector layout issues, the missing Share icon, a distinct Send icon, a language selector instead of a free-text field, and an explicit no-weather option.
 - Overpass points-of-interest queries use one corridor linestring with exact tag filters.
 - Routes with more than ten waypoints route again: the app chains requests that each stay inside the public Valhalla service's ten-location limit and joins the returned path.
+- A release that only changes file contents now reaches browsers that already cached the app shell: the build stamps a content hash into the service worker so the browser installs the new worker, and the page reloads once when the updated worker takes control.
 
 ## [0.1.0]
 
