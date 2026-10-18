@@ -5,7 +5,7 @@ The isolated mode tests an AMD compilation in a DOM-only page, not HTTP/ESM,
 MapLibre, CSP/CORS, native IndexedDB persistence, or ChatGPT Sites.
 """
 from pathlib import Path
-import argparse, json, math, subprocess, tempfile, re, os
+import argparse, json, math, subprocess, tempfile, re, os, time
 from datetime import datetime
 from xml.etree import ElementTree as ET
 from playwright.sync_api import sync_playwright, expect
@@ -36,6 +36,15 @@ large_fixture='<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topogra
 results=[]
 def passed(label):
  results.append(label);print('PASS',label,flush=True)
+def layout_box(locator,timeout_ms=5000):
+ """bounding_box() is None until an element has been laid out; wait for it."""
+ deadline=time.time()+timeout_ms/1000
+ while True:
+  box=locator.bounding_box()
+  if box:return box
+  if time.time()>=deadline:raise AssertionError('element never produced a layout box')
+  time.sleep(.1)
+
 def change(page,id,value):
  page.locator('#'+id).fill(value);page.locator('#'+id).dispatch_event('change')
 def screenshot(page,name):
@@ -225,10 +234,10 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   else:
    finish=page.locator('.waypoint.plan-finish');start=page.locator('.waypoint.plan-start')
    expect(finish).to_have_count(1);expect(start).to_have_count(1)
-   finishbox=finish.bounding_box();startbox=start.bounding_box()
+   finishbox=layout_box(finish);startbox=layout_box(start)
    assert finishbox['x']!=startbox['x'] or finishbox['y']!=startbox['y']
-  box=finish.bounding_box();page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
-  before=page.locator('#loop-start').input_value();box=start.bounding_box()
+  box=layout_box(finish);page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
+  before=page.locator('#loop-start').input_value();box=layout_box(start)
   page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down();page.mouse.move(box['x']+110,box['y']+60,steps=8);page.mouse.up();page.wait_for_timeout(250)
   assert page.locator('#loop-start').input_value()!=before and page.locator('#waypoint-count').inner_text()=='4'
   expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
