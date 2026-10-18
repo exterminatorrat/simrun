@@ -19,6 +19,7 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 
 ### Fixed
 
+- Restored the lighter interface styling: subtle panel and divider borders, filled fields without outlines, faded disabled controls and an icon-only route-tool rail, with the newer panels, metadata fields and editing tools kept and styled to match.
 - Share now opens for real routes; the QR encoder supports versions 1 to 40 with an error-correction fallback.
 - Offline corridor downloads fetch the vector tiles of the default basemap by resolving TileJSON sources.
 - Phone layout on touch devices: all top actions reachable, attribution toggle uncovered, empty state clear of the toolbar.
