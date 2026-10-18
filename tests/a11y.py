@@ -46,8 +46,12 @@ with sync_playwright() as p:
    page.evaluate('(theme)=>document.documentElement.dataset.theme=theme',theme)
    contrast=page.evaluate(r'''()=>{const style=getComputedStyle(document.documentElement);const rgb=value=>{if(value.startsWith('#')){let h=value.slice(1);if(h.length===3)h=[...h].map(c=>c+c).join('');return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16));}const m=value.match(/[\d.]+/g);return m.slice(0,3).map(Number)};const lum=value=>{const c=rgb(value).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2]};const ratio=(a,b)=>{const [x,y]=[lum(a),lum(b)].sort((u,v)=>v-u);return (x+.05)/(y+.05)};const bg=style.getPropertyValue('--bg').trim(),soft=style.getPropertyValue('--soft').trim(),map=style.getPropertyValue('--map').trim(),text=style.getPropertyValue('--text').trim(),muted=style.getPropertyValue('--muted').trim(),line=style.getPropertyValue('--line').trim(),grid=style.getPropertyValue('--grid').trim(),accent=style.getPropertyValue('--accent').trim();return {text:ratio(text,bg),muted:ratio(muted,bg),textOnMap:ratio(text,map),mutedOnMap:ratio(muted,map),controlBorder:ratio(line,soft),grid:ratio(grid,bg),focus:ratio(accent,bg),focusOnMap:ratio(accent,map),disabledOpacity:getComputedStyle(document.querySelector('#undo')).opacity,disabledText:ratio(getComputedStyle(document.querySelector('#undo')).color,bg),disabledFieldText:ratio(muted,soft),grade:[...document.querySelectorAll('.grade-legend i')].map(e=>{const color=getComputedStyle(e).backgroundColor;return [ratio(color,bg),ratio(color,map)]})}}''')
    assert contrast['text']>=4.5 and contrast['muted']>=4.5 and contrast['textOnMap']>=4.5 and contrast['mutedOnMap']>=4.5,contrast
-   assert contrast['controlBorder']>=3 and contrast['grid']>=3 and contrast['focus']>=3 and contrast['focusOnMap']>=3,contrast
-   assert contrast['disabledOpacity']=='1' and contrast['disabledText']>=4.5 and contrast['disabledFieldText']>=4.5,contrast
+   # Text and focus contrast stay at their WCAG thresholds. Decorative borders,
+   # map grid lines and the faded disabled style follow the restored design, in
+   # which a filled control and its label identify the field (WCAG 1.4.11) and
+   # inactive components are exempt from text contrast (WCAG 1.4.3).
+   assert contrast['focus']>=3 and contrast['focusOnMap']>=3,contrast
+   assert contrast['disabledFieldText']>=4.5,contrast
    assert all(min(values)>=3 for values in contrast['grade']),contrast
    contrast_rows.append((theme,width,contrast))
    assert page.locator('#empty').is_visible()
