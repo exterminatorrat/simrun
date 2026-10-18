@@ -238,7 +238,10 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
    assert finishbox['x']!=startbox['x'] or finishbox['y']!=startbox['y']
   box=layout_box(finish);page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
   before=page.locator('#loop-start').input_value();box=layout_box(start)
-  page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down();page.mouse.move(box['x']+110,box['y']+60,steps=8);page.mouse.up();page.wait_for_timeout(250)
+  page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down();page.mouse.move(box['x']+110,box['y']+60,steps=8);page.mouse.up()
+  # WebKit needs longer than a fixed pause to commit the drag and re-route.
+  deadline=time.time()+8
+  while page.locator('#loop-start').input_value()==before and time.time()<deadline:page.wait_for_timeout(100)
   assert page.locator('#loop-start').input_value()!=before and page.locator('#waypoint-count').inner_text()=='4'
   expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
   page.locator('#export').click();page.wait_for_timeout(80)
