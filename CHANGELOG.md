@@ -17,6 +17,10 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 - Weekly grouped dependency updates and lint/EditorConfig tooling.
 - Static security headers, a local-first privacy page, and release policy guidance.
 
+### Changed
+
+- Interface polish: a single icon-only tool rail on the left, the inspector and elevation chart docked to the window edges on desktop, hairline panel borders, larger minimum text size and plain sentence-case labels. Phone layout is unchanged.
+
 ### Fixed
 
 - Share now opens for real routes; the QR encoder supports versions 1 to 40 with an error-correction fallback.
