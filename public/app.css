@@ -71,8 +71,8 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 #map,.maplibregl-control-container,.search-wrap,.map-tools,.zoom-tools{direction:ltr}
 :root[data-theme=dark] .primary,:root[data-theme=dark] button.primary,:root[data-theme=dark] input.primary{color:#282b29}
 @media (prefers-contrast: more){
- :root{--muted:#454b46;--line:#69736b;--grid:#69736b;--accent:#982f10}
- :root[data-theme=dark]{--muted:#d2d9d2;--line:#a0aaa2;--grid:#a0aaa2;--accent:#ffb199}
+ :root{--muted:#454b46;--field:#69736b;--line:#69736b;--grid:#69736b;--accent:#982f10}
+ :root[data-theme=dark]{--muted:#d2d9d2;--field:#a0aaa2;--line:#a0aaa2;--grid:#a0aaa2;--accent:#ffb199}
 }
 @media(max-width:360px){.chart-panel>header{flex-wrap:wrap;gap:6px}.chart-tabs{max-width:100%;min-width:0;flex:1 1 100%;overflow-x:auto}#save-indicator{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}#storage-history{display:none!important}}
 .locale-field{margin-top:12px}
