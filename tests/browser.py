@@ -225,10 +225,11 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   else:
    finish=page.locator('.waypoint.plan-finish');start=page.locator('.waypoint.plan-start')
    expect(finish).to_have_count(1);expect(start).to_have_count(1)
+   expect(finish).to_be_visible();expect(start).to_be_visible()
    finishbox=finish.bounding_box();startbox=start.bounding_box()
    assert finishbox['x']!=startbox['x'] or finishbox['y']!=startbox['y']
-  box=finish.bounding_box();page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
-  before=page.locator('#loop-start').input_value();box=start.bounding_box()
+  expect(finish).to_be_visible();box=finish.bounding_box();page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
+  expect(start).to_be_visible();before=page.locator('#loop-start').input_value();box=start.bounding_box()
   page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down();page.mouse.move(box['x']+110,box['y']+60,steps=8);page.mouse.up();page.wait_for_timeout(250)
   assert page.locator('#loop-start').input_value()!=before and page.locator('#waypoint-count').inner_text()=='4'
   expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
