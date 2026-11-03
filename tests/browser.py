@@ -38,6 +38,12 @@ def passed(label):
  results.append(label);print('PASS',label,flush=True)
 def change(page,id,value):
  page.locator('#'+id).fill(value);page.locator('#'+id).dispatch_event('change')
+def box_of(locator,attempts=100):
+ for _ in range(attempts):
+  b=locator.bounding_box()
+  if b is not None:return b
+  locator.page.wait_for_timeout(50)
+ raise AssertionError('Marker never reported a bounding box')
 def screenshot(page,name):
  if args.screenshots:
   Path(args.screenshots).mkdir(parents=True,exist_ok=True)
@@ -219,17 +225,12 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   page.locator('#loop-mode-laps').click();change(page,'loop-value','2.5')
   expect(page.locator('#loop-count')).to_have_text('2.5 laps');expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
   assert abs(float(page.locator('#distance').inner_text().split()[0])-2.5*one)<.05
-  if page.locator('.fallback-plan-start').count():
-   assert page.evaluate("(()=>{const a=document.querySelector('.fallback-plan-start'),b=document.querySelector('.fallback-plan-finish');return !!a&&!!b&&(a.getAttribute('cx')!==b.getAttribute('cx')||a.getAttribute('cy')!==b.getAttribute('cy'))})()")
-   finish=page.locator('.fallback-plan-finish');start=page.locator('.fallback-plan-start')
-  else:
-   finish=page.locator('.waypoint.plan-finish');start=page.locator('.waypoint.plan-start')
-   expect(finish).to_have_count(1);expect(start).to_have_count(1)
-   expect(finish).to_be_visible();expect(start).to_be_visible()
-   finishbox=finish.bounding_box();startbox=start.bounding_box()
-   assert finishbox['x']!=startbox['x'] or finishbox['y']!=startbox['y']
-  expect(finish).to_be_visible();box=finish.bounding_box();page.mouse.click(box['x']+box['width']/2,box['y']+box['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
-  expect(start).to_be_visible();before=page.locator('#loop-start').input_value();box=start.bounding_box()
+  finish=page.locator('.plan-finish,.fallback-plan-finish');start=page.locator('.plan-start,.fallback-plan-start')
+  expect(finish).to_have_count(1);expect(start).to_have_count(1)
+  finishbox=box_of(finish);startbox=box_of(start)
+  assert finishbox['x']!=startbox['x'] or finishbox['y']!=startbox['y']
+  page.mouse.click(finishbox['x']+finishbox['width']/2,finishbox['y']+finishbox['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
+  before=page.locator('#loop-start').input_value();box=box_of(start)
   page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down();page.mouse.move(box['x']+110,box['y']+60,steps=8);page.mouse.up();page.wait_for_timeout(250)
   assert page.locator('#loop-start').input_value()!=before and page.locator('#waypoint-count').inner_text()=='4'
   expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
