@@ -89,6 +89,8 @@ STRAVA_REDIRECT_URI=...    # optional; defaults to https://<your-host>/api/strav
 
 Register `https://<your-host>/api/strava/callback` as the authorization callback domain in the Strava application settings. The functions in `api/strava/` perform the OAuth exchange with `activity:write`, keep the tokens in HttpOnly cookies scoped to `/api/strava`, and forward the chosen FIT, TCX or GPX file to Strava's upload API. No activity is ever uploaded without the user pressing Upload to Strava, and Disconnect Strava revokes the grant at Strava and clears the stored tokens. Without these variables the endpoint reports that uploads are unavailable and the dialog falls back to file guidance.
 
+Strava asks for the domain alone in its "Authorization Callback Domain" field, not the full path: enter `simrun.vercel.app`, and let the app send `/api/strava/callback` as the `redirect_uri`. One domain per application means the connection only works on that exact host, so register the production domain rather than a per-deployment preview URL. Registering an application requires a Strava subscription, and a new application starts in single-player mode where only the owner's Strava account can authorize it; serving other athletes needs the access upgrade Strava describes in its API documentation.
+
 Garmin Connect has no public activity-upload API and the COROS Partner API requires a partner application, so those platforms remain a file hand-off.
 
 ## Architecture
