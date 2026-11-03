@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f8f9f8">
+  <title>About SimRun — open-source route planner and GPX activity simulator</title>
+  <meta name="description" content="SimRun is a free, open-source, local-first web app that plans running and cycling routes, simulates the activity, and exports GPX, TCX and FIT files without an account.">
+  <link rel="canonical" href="https://simrun.vercel.app/about.html">
+  <link rel="stylesheet" href="./app.css">
+  <style>
+    body.doc-body { overflow: auto; background: var(--bg); color: var(--text); }
+    .doc-page { max-width: 760px; margin: 0 auto; padding: 32px 24px 64px; }
+    .doc-page nav { margin-bottom: 28px; display: flex; gap: 16px; flex-wrap: wrap; }
+    .doc-page h1 { margin-bottom: 16px; }
+    .doc-page h2 { margin: 28px 0 10px; }
+    .doc-page p, .doc-page li, .doc-page dd { line-height: 1.6; }
+    .doc-page ul { padding-left: 24px; }
+    .doc-page dl { margin: 0; }
+    .doc-page dt { font-weight: 600; margin-top: 18px; }
+    .doc-page dd { margin: 6px 0 0; }
+  </style>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://simrun.vercel.app/#app",
+        "name": "SimRun",
+        "url": "https://simrun.vercel.app/",
+        "description": "Local-first route planner that simulates a running or cycling activity and exports GPX, TCX and FIT files.",
+        "applicationCategory": "HealthApplication",
+        "applicationSubCategory": "Route planning and activity simulation",
+        "operatingSystem": "Any modern web browser",
+        "browserRequirements": "JavaScript and WebGL; a coordinate canvas covers browsers without WebGL",
+        "isAccessibleForFree": true,
+        "license": "https://opensource.org/license/mit",
+        "codeRepository": "https://github.com/exterminatorrat/simrun",
+        "programmingLanguage": "TypeScript",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "featureList": [
+          "Draw, import and edit routes on a map",
+          "Simulate running, walking, hiking, trail running, cycling and mountain biking with seeded, repeatable output",
+          "Export GPX, TCX, FIT, cue-sheet CSV, SVG and JSON",
+          "Local activity library with search, tags, comparison and backup",
+          "Offline app shell and optional offline map corridors"
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://simrun.vercel.app/about.html#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How do I create a GPX file without an account?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Open SimRun, click the map to add at least two waypoints, then press Export. The GPX file is generated in the browser and downloaded to your device; no account, upload or server storage is involved."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can SimRun files be imported into Strava, Garmin Connect or COROS?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, as files. SimRun exports GPX, TCX and FIT, which those services import through their own upload pages or phone apps. The Send dialog can also hand the file through the system share sheet or a folder. Where the deployment enables it, SimRun can upload one activity directly to your own Strava account after you connect it; nothing is uploaded otherwise."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is SimRun free and open source?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. SimRun is MIT-licensed and free to use, with the source published at github.com/exterminatorrat/simrun. It has no paid tiers, no account system and no runtime dependencies."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Where are my routes and activities stored?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "In your own browser: IndexedDB for the activity library and drafts, localStorage for preferences, and Cache Storage for the offline app shell. Nothing is uploaded to SimRun, and data does not transfer between browsers or devices unless you export a backup."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Are the exported activities real recordings?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. SimRun activities are explicitly simulated and labeled as such in the interface and in exported files. Pacing, heart rate, power, cadence and elevation figures are estimates, not measurements from a device."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which external services does SimRun contact?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Routing and elevation use the public FOSSGIS Valhalla service, and the default basemap uses OpenFreeMap and OpenStreetMap tiles. Nominatim search, Photon suggestions, Overpass points of interest, OpenTopoMap and Waymarked Trails layers are all off by default and only contact their servers after you enable and use them."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body class="doc-body">
+  <main class="doc-page">
+    <nav><a href="./">Open SimRun</a><a href="./privacy.html">Privacy</a><a href="https://github.com/exterminatorrat/simrun">Source code</a></nav>
+
+    <h1>SimRun: an open-source route planner and activity simulator</h1>
+    <p>SimRun is a free web app for planning a running or cycling route, simulating what that activity would look like, and exporting the result as a GPX, TCX or FIT file. It runs entirely in your browser: no SimRun account, analytics or cloud history. The only server-side code is an optional Strava upload that stays off unless the deployment configures it and you connect your own account. The source is MIT-licensed and published on GitHub.</p>
+
+    <h2>What SimRun does</h2>
+    <ul>
+      <li><strong>Plan a route.</strong> Click on the map to place waypoints and let road, path and trail routing connect them, or import an existing GPX, KML or GeoJSON line. Routes can be reversed, turned into an out-and-back, closed into a loop, trimmed, split, merged or generated as a target-distance round trip.</li>
+      <li><strong>Simulate the activity.</strong> Choose running, walking, hiking, trail running, cycling or mountain biking, set a pace or speed, and add heart rate, power, cadence, weather, fatigue, GPS noise and dropouts. Output is seeded, so the same seed reproduces the same activity.</li>
+      <li><strong>Read the result.</strong> Distance, duration, pace, elevation gain, splits, rest stops, grade-adjusted pace, training load estimates and profile charts are computed locally.</li>
+      <li><strong>Export or hand off.</strong> Download GPX, TCX, FIT, a printable cue sheet, an SVG profile, JSON, a ZIP archive or a full library backup, or pass a file to another app through the share sheet.</li>
+    </ul>
+
+    <h2>What SimRun deliberately does not do</h2>
+    <ul>
+      <li>It does not record real GPS traces. Every activity is labeled simulated or estimated.</li>
+      <li>It does not upload anything on its own. Garmin Connect and COROS files are handed over by you, and the optional Strava upload runs only when you press the button and connect your own account.</li>
+      <li>It does not store anything on a server, so there is nothing to delete from an account.</li>
+      <li>It does not model traffic, offer satellite imagery, or provide translations beyond English.</li>
+    </ul>
+
+    <h2>Who it is for</h2>
+    <p>Runners and cyclists preparing a route before a run; developers and testers who need realistic GPX, TCX or FIT sample files; coaches and clubs producing example activities for training sessions; and anyone who wants a route file without creating an account on a commercial platform.</p>
+
+    <h2 id="faq">Frequently asked questions</h2>
+    <dl>
+      <dt>How do I create a GPX file without an account?</dt>
+      <dd>Open SimRun, click the map to add at least two waypoints, then press Export. The file is generated in your browser and downloaded directly to your device.</dd>
+
+      <dt>Can SimRun files be imported into Strava, Garmin Connect or COROS?</dt>
+      <dd>Yes, as files. Those services import GPX, TCX and FIT through their own upload pages or phone apps. SimRun stays account-free by default; where the deployment enables it, you can connect your own Strava account and upload a single activity directly.</dd>
+
+      <dt>Is SimRun free and open source?</dt>
+      <dd>Yes. SimRun is MIT-licensed. There are no paid tiers, no accounts and no runtime dependencies, and the source is at <a href="https://github.com/exterminatorrat/simrun">github.com/exterminatorrat/simrun</a>.</dd>
+
+      <dt>Where are my routes and activities stored?</dt>
+      <dd>In your browser: IndexedDB for activities and drafts, localStorage for preferences, and Cache Storage for the offline shell. Export a JSON backup to move them to another browser or device.</dd>
+
+      <dt>Are the exported activities real recordings?</dt>
+      <dd>No. They are simulated and labeled that way in the interface and in the exported files. Pacing, heart rate, power, cadence and elevation values are estimates.</dd>
+
+      <dt>Which external services does SimRun contact?</dt>
+      <dd>Routing and elevation use the public FOSSGIS Valhalla service; the default basemap uses OpenFreeMap and OpenStreetMap tiles. Nominatim, Photon, Overpass, OpenTopoMap and Waymarked Trails are off by default and contact their servers only after you enable and use them.</dd>
+    </dl>
+
+    <h2>Related</h2>
+    <ul>
+      <li><a href="./">Open the SimRun route studio</a></li>
+      <li><a href="./privacy.html">Privacy details</a></li>
+      <li><a href="https://github.com/exterminatorrat/simrun">Source code and issue tracker</a></li>
+      <li><a href="./llms.txt">Machine-readable summary for language models</a></li>
+    </ul>
+  </main>
+</body>
+</html>

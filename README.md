@@ -77,6 +77,20 @@ For static hosting, serve **`dist/`** (entry `dist/index.html`). Relative asset 
 
 The production app is live at **https://simrun.vercel.app**. `vercel.json` pins the build (`npm ci`, `npm run build`, output `dist`). Never serve the unbuilt `public/` directory. Project linkage, deploy commands and credential handling are in [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md).
 
+### Optional Strava upload
+
+The app works without any backend. One optional feature does need server code: uploading a single simulated activity to the user's own Strava account. It is off unless the deployment sets both credentials as Vercel environment variables:
+
+```sh
+STRAVA_CLIENT_ID=...       # from a Strava API application
+STRAVA_CLIENT_SECRET=...
+STRAVA_REDIRECT_URI=...    # optional; defaults to https://<your-host>/api/strava/callback
+```
+
+Register `https://<your-host>/api/strava/callback` as the authorization callback domain in the Strava application settings. The functions in `api/strava/` perform the OAuth exchange with `activity:write`, keep the tokens in HttpOnly cookies scoped to `/api/strava`, and forward the chosen FIT, TCX or GPX file to Strava's upload API. No activity is ever uploaded without the user pressing Upload to Strava, and Disconnect Strava revokes the grant at Strava and clears the stored tokens. Without these variables the endpoint reports that uploads are unavailable and the dialog falls back to file guidance.
+
+Garmin Connect has no public activity-upload API and the COROS Partner API requires a partner application, so those platforms remain a file hand-off.
+
 ## Architecture
 
 Strict TypeScript, native DOM components, ES modules, and standard browser APIs. TypeScript is the only build dependency, exactly pinned in `package-lock.json`. The project does not use React/Vite: a small standards-based static app was chosen over an unverified framework dependency chain.

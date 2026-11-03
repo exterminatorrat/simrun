@@ -50,7 +50,13 @@ self.addEventListener('activate',event=>{
 const trim=async cache=>{const keys=await cache.keys();if(keys.length<=MAP_LIMIT)return;for(const key of keys.slice(0,keys.length-MAP_LIMIT))await cache.delete(key);};
 async function navigation(request){
  const name=await shellName();
- if(name){const cached=await (await caches.open(name)).match('index.html');if(cached)return cached;}
+ if(name){
+  const cache=await caches.open(name),{pathname}=new URL(request.url);
+  const document_=await cache.match(pathname==='/'||pathname.endsWith('/')?'index.html':pathname.slice(1),{ignoreSearch:true});
+  if(document_)return document_;
+  const cached=await cache.match('index.html');
+  if(cached)return cached;
+ }
  try{return await fetch(request);}catch{return new Response('SimRun is offline and its app shell is not cached on this device yet.',{status:503,headers:{'Content-Type':'text/plain'}});}
 }
 async function shell(request){
@@ -105,6 +111,7 @@ self.addEventListener('fetch',event=>{
  try{url=new URL(request.url);}catch{return;}
  if(url.origin===self.location.origin){
   if(url.pathname===WORKER_PATH||url.pathname.endsWith('/sw-manifest.json'))return;
+  if(url.pathname.startsWith('/api/'))return;
   event.respondWith(request.mode==='navigate'?navigation(request):shell(request));
   return;
  }

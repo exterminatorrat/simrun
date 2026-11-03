@@ -89,6 +89,14 @@ with sync_playwright() as p:
  page.on('pageerror',lambda error:errors.append(str(error)))
  page.route('**/*',lambda route:route.continue_() if route.request.url.startswith(args.url) or route.request.url.startswith('data:') else route.abort())
  page.goto(args.url,wait_until='domcontentloaded');page.wait_for_timeout(450)
+ base=args.url.rstrip('/')
+ for document in ('about.html','privacy.html'):
+  document_page=browser.new_page(viewport={'width':1280,'height':900})
+  document_page.on('pageerror',lambda error:errors.append(str(error)))
+  document_page.goto(f'{base}/{document}',wait_until='domcontentloaded');document_page.wait_for_timeout(300)
+  document_page.add_script_tag(path=str(axe_path))
+  scan(document_page,document)
+  document_page.close()
  page.set_viewport_size({'width':320,'height':844})
  overflow=page.evaluate('document.documentElement.scrollWidth>document.documentElement.clientWidth')
  assert not overflow,'320px reflow has horizontal overflow'

@@ -2,10 +2,15 @@
 
 All notable changes to SimRun are documented here. This changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-11-03
+
+First public open-source release.
 
 ### Added
 
+- Search and social metadata, a canonical URL, `robots.txt` and `sitemap.xml`.
+- A skip link to the route controls and a persistent page heading for screen readers.
+- Long-lived HTTP caching for vendor assets and revalidating caching for application modules.
 - Route editing: trim, split, merge and freehand drawing, all undoable.
 - Routing intelligence: target-distance round trips, surface and road-type data, street names in cue sheets and opt-in water and toilet points of interest.
 - Simulation: pace strategies, grade-adjusted pace, TRIMP, walk, hike, trail run and mountain-bike sports, activity descriptions, batch generation and worker-backed simulation for large routes.

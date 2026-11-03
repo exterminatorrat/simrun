@@ -20,7 +20,7 @@
   <main class="privacy-page">
     <nav><a href="./">Back to SimRun</a></nav>
     <h1>Privacy</h1>
-    <p>SimRun is a local-first app. It has no accounts, analytics, backend, or cloud history. Activities and drafts are not uploaded automatically.</p>
+    <p>SimRun is a local-first app. It has no SimRun accounts, analytics or cloud history, and activities and drafts are never uploaded automatically. Its only server-side code is the optional Strava upload described under Sharing, which stores nothing beyond the connection cookies in your browser.</p>
     <h2>What stays in your browser</h2>
     <ul>
       <li>Your activity library and drafts are stored in IndexedDB on this device.</li>
@@ -40,7 +40,8 @@
     </ul>
     <h2>Sharing</h2>
     <p>A share link can contain route geometry in the URL fragment. The fragment is not sent in the page request to SimRun, but anyone you give the complete link to can read that geometry. Sharing a link or exported file is a choice you make.</p>
-    <p>SimRun does not connect to Strava, Garmin, COROS, or other services using an account or upload your activity history. A file or link leaves your device only when you explicitly hand it to another app or person.</p>
+    <p>SimRun never uploads your activity history. Garmin Connect, COROS and other services receive a file only when you hand it over yourself.</p>
+    <p>If the deployment enables the optional Strava upload, you can connect your own Strava account from the Send dialog. The authorization token is kept in an HttpOnly cookie for this site only, and the single file you choose is passed through this site's serverless function to Strava's upload API. Nothing is uploaded unless you press Upload to Strava, and Disconnect Strava revokes the access grant at Strava and clears the stored token. Strava's own privacy policy applies to the activity once it reaches your account.</p>
   </main>
 </body>
 </html>

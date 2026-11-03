@@ -1,8 +1,19 @@
 import {cp, mkdir, readdir, readFile, writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {relative, resolve, sep} from 'node:path';
+import {transform} from 'esbuild';
 await mkdir('dist', {recursive:true});
 await cp('public', 'dist', {recursive:true});
+const minify=async(path,loader)=>{await writeFile(path, (await transform(await readFile(path,'utf8'), {loader, minify:true, format:'esm'})).code);};
+const minifySource=async(directory='dist/src')=>{
+  for (const entry of await readdir(directory, {withFileTypes:true})) {
+    const path=resolve(directory, entry.name);
+    if (entry.isDirectory()) await minifySource(path);
+    else if (entry.name.endsWith('.js')) await minify(path, 'js');
+  }
+};
+await minifySource();
+await minify('dist/app.css', 'css');
 // The service worker precaches the built layout: the copied static assets plus the
 // modules TypeScript compiled into dist/src. Deriving that list from public/ and
 // src/ keeps it exact even when dist/ still holds output from an earlier build.
@@ -23,7 +34,7 @@ const walkSources=async(directory='src',base='src')=>{
   }
 };
 await walkSources();
-const precache=files.filter(name => name !== 'sw.js');
+const precache=files.filter(name => name !== 'sw.js' && !name.startsWith('vendor/'));
 await writeFile('dist/sw-manifest.json', JSON.stringify({files:precache}, null, 2) + '\n');
 // The service worker is served byte-for-byte from public/, so a release that only
 // changes file contents would never trip the browser's update check. Stamping a hash
