@@ -73,7 +73,7 @@ export async function upload({token,body,filename,dataType,name,description},fet
   if(!response.ok)throw Error(data.errors?.[0]?.message||data.message||'Strava refused the upload.');
   return data;
 }
-export async function pollUpload(token,id,fetchImpl=fetch,attempts=4,delayMs=1200){
+export async function pollUpload(token,id,fetchImpl=fetch,attempts=3,delayMs=1000){
   for(let attempt=0;attempt<attempts;attempt++){
     await new Promise(resolve=>setTimeout(resolve,delayMs));
     const response=await fetchImpl(`${UPLOADS}/${id}`,{headers:{Authorization:`Bearer ${token}`}});

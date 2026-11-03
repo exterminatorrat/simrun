@@ -187,3 +187,13 @@ test('polling returns a pending result when Strava keeps processing',async()=>{
   assert.deepEqual(await pollUpload('t',7,globalThis.fetch,2,0),{pending:true});
  }finally{globalThis.fetch=original;}
 });
+
+test('upload polling stays well inside the serverless function limit',async()=>{
+ const original=globalThis.fetch;
+ const started=Date.now();
+ globalThis.fetch=async()=>new Response(JSON.stringify({id:7,status:'processing'}),{status:200});
+ try{
+  await pollUpload('t',7);
+  assert.ok(Date.now()-started<5000,'polling must not approach the default 10 s function limit');
+ }finally{globalThis.fetch=original;}
+});
