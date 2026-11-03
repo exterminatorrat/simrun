@@ -118,15 +118,15 @@ test('sign-out without a token does not call Strava',async()=>{
 test('upload rejects missing configuration, bad types and missing authorization',async()=>{
  await withoutEnv(async()=>{
   const res=response();
-  await uploadHandler(request({method:'POST',headers:{'x-data-type':'fit'}}),res);
+  await uploadHandler(request({method:'POST',url:'/api/strava/upload?type=fit'}),res);
   assert.equal(res.statusCode,503);
  });
  await withEnv(async()=>{
   const res=response();
-  await uploadHandler(request({method:'POST',headers:{'x-data-type':'zip'}}),res);
+  await uploadHandler(request({method:'POST',url:'/api/strava/upload?type=zip'}),res);
   assert.equal(res.statusCode,400);
   const unauthorised=response();
-  await uploadHandler(request({method:'POST',headers:{'x-data-type':'fit'}}),unauthorised);
+  await uploadHandler(request({method:'POST',url:'/api/strava/upload?type=fit'}),unauthorised);
   assert.equal(unauthorised.statusCode,401);
  });
 });
@@ -142,12 +142,32 @@ test('upload posts the file to Strava and returns the activity id',async()=>{
   };
   try{
    const res=response();
-   await uploadHandler(request({method:'POST',headers:{cookie:`${cookies().access}=token`,'x-data-type':'fit','x-file-name':'run.fit'},body:Buffer.from('binary')}),res);
+   await uploadHandler(request({method:'POST',url:'/api/strava/upload?type=fit&file=run.fit',headers:{cookie:`${cookies().access}=token`},body:Buffer.from('binary')}),res);
    assert.equal(res.statusCode,200);
    assert.deepEqual(payload(res),{activityId:12345});
    assert.equal(seen[0].url,'https://www.strava.com/api/v3/uploads');
    assert.equal(seen[0].init.headers.Authorization,'Bearer token');
    assert.ok(seen[0].init.body instanceof FormData);
+  }finally{globalThis.fetch=original;}
+ });
+});
+
+test('upload decodes the percent-encoded activity name and description',async()=>{
+ await withEnv(async()=>{
+  let form=null;
+  const original=globalThis.fetch;
+  globalThis.fetch=async (input,init)=>{
+   if(String(input).endsWith('/uploads')){form=init.body;return new Response(JSON.stringify({id:8,activity_id:4242}),{status:201});}
+   return new Response(JSON.stringify({id:8,activity_id:4242}),{status:200});
+  };
+  try{
+   const res=response();
+   const query=new URLSearchParams({type:'fit',file:'run.fit',name:'Morning run — 5 km',description:'Easy pace & hills'});
+   await uploadHandler(request({method:'POST',url:`/api/strava/upload?${query}`,headers:{cookie:`${cookies().access}=token`},body:Buffer.from('binary')}),res);
+   assert.equal(res.statusCode,200);
+   assert.ok(form instanceof FormData);
+   assert.equal(form.get('name'),'Morning run — 5 km');
+   assert.equal(form.get('description'),'Easy pace & hills');
   }finally{globalThis.fetch=original;}
  });
 });

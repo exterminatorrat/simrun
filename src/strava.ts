@@ -12,7 +12,8 @@ export async function stravaDisconnect():Promise<void> {
 export interface StravaUploadResult{activityId?:number;pending?:boolean}
 export async function stravaUpload(file:SendFile,name:string,description:string):Promise<StravaUploadResult> {
  const dataType=(file.name.slice(file.name.lastIndexOf('.')+1)||'').toLowerCase();
- const response=await fetch('./api/strava/upload',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-File-Name':file.name,'X-Data-Type':dataType,'X-Activity-Name':encodeURIComponent(name),'X-Activity-Description':encodeURIComponent(description)},body:file.data as BlobPart});
+ const params=new URLSearchParams({type:dataType,file:file.name,name,description});
+ const response=await fetch(`./api/strava/upload?${params}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file.data as BlobPart});
  const data=await response.json().catch(()=>({})) as {error?:string;activityId?:number;pending?:boolean};
  if(response.status===401)throw Error(t('Connect Strava before uploading.'));
  if(!response.ok)throw Error(data.error||t('Strava refused the upload.'));
