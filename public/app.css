@@ -132,7 +132,8 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 .search-wrap form>span{display:grid;place-items:center;width:18px}
 .search-wrap input{font-size:13px}
 .search-wrap input:focus{outline:none}
-.search-wrap button[type=submit]{border-radius:50%;background:var(--accent);color:#fff}
+.search-wrap button[type=submit]{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff}
+.search-wrap button[type=submit] .icon{transform:translateX(.5px)}
 .search-wrap button[type=submit]:hover{filter:brightness(1.08)}
 [data-theme=dark] .search-wrap button[type=submit]{color:#282b29}
 .map-tools{align-items:center;border-radius:14px;padding:6px;gap:2px;box-shadow:var(--shadow)}
