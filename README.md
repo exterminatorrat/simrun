@@ -87,7 +87,7 @@ STRAVA_CLIENT_SECRET=...
 STRAVA_REDIRECT_URI=...    # optional; defaults to https://<your-host>/api/strava/callback
 ```
 
-Register `https://<your-host>/api/strava/callback` as the authorization callback domain in the Strava application settings. The functions in `api/strava/` perform the OAuth exchange with `activity:write`, keep the tokens in HttpOnly cookies scoped to `/api/strava`, and forward the chosen FIT, TCX or GPX file to Strava's upload API. No activity is ever uploaded without the user pressing Upload to Strava, and Disconnect Strava clears the stored tokens. Without these variables the endpoint reports that uploads are unavailable and the dialog falls back to file guidance.
+Register `https://<your-host>/api/strava/callback` as the authorization callback domain in the Strava application settings. The functions in `api/strava/` perform the OAuth exchange with `activity:write`, keep the tokens in HttpOnly cookies scoped to `/api/strava`, and forward the chosen FIT, TCX or GPX file to Strava's upload API. No activity is ever uploaded without the user pressing Upload to Strava, and Disconnect Strava revokes the grant at Strava and clears the stored tokens. Without these variables the endpoint reports that uploads are unavailable and the dialog falls back to file guidance.
 
 Garmin Connect has no public activity-upload API and the COROS Partner API requires a partner application, so those platforms remain a file hand-off.
 

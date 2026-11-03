@@ -1,6 +1,7 @@
 const AUTHORIZE='https://www.strava.com/oauth/authorize';
 const TOKEN='https://www.strava.com/oauth/token';
 const UPLOADS='https://www.strava.com/api/v3/uploads';
+const DEAUTHORIZE='https://www.strava.com/oauth/deauthorize';
 const ACCESS_COOKIE='simrun_strava_access';
 const REFRESH_COOKIE='simrun_strava_refresh';
 const STATE_COOKIE='simrun_strava_state';
@@ -54,6 +55,12 @@ export async function accessToken(req,res){
   const data=await exchangeToken(config,{grant_type:'refresh_token',refresh_token:jar[REFRESH_COOKIE]});
   res.setHeader('Set-Cookie',[accessCookie(data.access_token),refreshCookie(data.refresh_token),...(res.getHeader('Set-Cookie')||[])]);
   return data.access_token;
+}
+export async function deauthorize(token,fetchImpl=fetch){
+  try{
+    const response=await fetchImpl(DEAUTHORIZE,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',Authorization:`Bearer ${token}`},body:new URLSearchParams({access_token:token})});
+    return response.ok;
+  }catch{return false;}
 }
 export async function upload({token,body,filename,dataType,name,description},fetchImpl=fetch){
   const form=new FormData();

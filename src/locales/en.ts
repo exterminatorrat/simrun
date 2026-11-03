@@ -137,7 +137,7 @@ export const en={
  "Checking storage":"Checking storage",
  "Checking the offline cache…":"Checking the offline cache…",
  "Choose a different saved activity to merge.":"Choose a different saved activity to merge.",
- "Choose a file hand-off or download. No credentials are stored.":"Choose a file hand-off or download. No credentials are stored.",
+ "Choose a file hand-off or download. Nothing is uploaded unless you ask for it.":"Choose a file hand-off or download. Nothing is uploaded unless you ask for it.",
  "Choose a route operation.":"Choose a route operation.",
  "Choose a saved activity to merge.":"Choose a saved activity to merge.",
  "Choose a search result or locate a place first.":"Choose a search result or locate a place first.",

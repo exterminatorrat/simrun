@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {authorizeUrl,parseCookies,cookie,clearCookie,upload,pollUpload,redirectUri,cookies} from '../api/_strava.js';
+import {authorizeUrl,parseCookies,cookie,clearCookie,upload,pollUpload,redirectUri,cookies,deauthorize} from '../api/_strava.js';
 import configHandler from '../api/strava/config.js';
 import loginHandler from '../api/strava/login.js';
 import logoutHandler from '../api/strava/logout.js';
@@ -74,11 +74,45 @@ test('sign-in redirects to Strava and refuses when unconfigured',async()=>{
  });
 });
 
-test('sign-out clears both token cookies',()=>{
- const res=response();
- logoutHandler(request(),res);
- assert.equal(res.statusCode,200);
- assert.equal(res.headers['set-cookie'].length,2);
+test('sign-out revokes the Strava grant and clears both token cookies',async()=>{
+ const seen=[];
+ const original=globalThis.fetch;
+ globalThis.fetch=async (input,init)=>{seen.push({url:String(input),init});return new Response('{}',{status:200});};
+ try{
+  const res=response();
+  await logoutHandler(request({headers:{cookie:`${cookies().access}=token`}}),res);
+  assert.equal(res.statusCode,200);
+  assert.deepEqual(payload(res),{connected:false,revoked:true});
+  assert.equal(res.headers['set-cookie'].length,2);
+  assert.equal(seen[0].url,'https://www.strava.com/oauth/deauthorize');
+  assert.equal(seen[0].init.headers.Authorization,'Bearer token');
+ }finally{globalThis.fetch=original;}
+});
+
+test('sign-out still clears cookies when revocation fails',async()=>{
+ const original=globalThis.fetch;
+ globalThis.fetch=async()=>{throw Error('network down');};
+ try{
+  const res=response();
+  await logoutHandler(request({headers:{cookie:`${cookies().access}=token`}}),res);
+  assert.equal(res.statusCode,200);
+  assert.deepEqual(payload(res),{connected:false,revoked:false});
+  assert.equal(res.headers['set-cookie'].length,2);
+  assert.equal(await deauthorize('t',globalThis.fetch),false);
+ }finally{globalThis.fetch=original;}
+});
+
+test('sign-out without a token does not call Strava',async()=>{
+ const original=globalThis.fetch;
+ let called=false;
+ globalThis.fetch=async()=>{called=true;return new Response('{}',{status:200});};
+ try{
+  const res=response();
+  await logoutHandler(request(),res);
+  assert.equal(res.statusCode,200);
+  assert.deepEqual(payload(res),{connected:false,revoked:false});
+  assert.equal(called,false);
+ }finally{globalThis.fetch=original;}
 });
 
 test('upload rejects missing configuration, bad types and missing authorization',async()=>{

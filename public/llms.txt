@@ -1,6 +1,6 @@
 # SimRun
 
-> SimRun is a free, MIT-licensed, local-first web app that plans running and cycling routes, simulates the resulting activity, and exports GPX, TCX and FIT files. It runs entirely in the browser with no account, backend, analytics or cloud history.
+> SimRun is a free, MIT-licensed, local-first web app that plans running and cycling routes, simulates the resulting activity, and exports GPX, TCX and FIT files. It runs entirely in the browser with no SimRun account, analytics or cloud history; the only server-side code is an optional Strava upload that is off unless configured and used.
 
 Canonical URL: https://simrun.vercel.app/
 Source code: https://github.com/exterminatorrat/simrun
