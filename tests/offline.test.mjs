@@ -4,7 +4,8 @@ import {readFile} from 'node:fs/promises';
 const read=name=>readFile(new URL(`../dist/${name}`,import.meta.url),'utf8');
 test('the build emits a precache manifest covering the app shell',async()=>{
  const {files}=JSON.parse(await read('sw-manifest.json'));
- for(const required of ['index.html','app.css','favicon.png','src/main.js','src/map.js','src/sw.js','vendor/maplibre-gl-csp.js','vendor/maplibre-gl-csp-worker.js','vendor/maplibre-gl.css'])assert.ok(files.includes(required),`manifest is missing ${required}`);
+ for(const required of ['index.html','app.css','favicon.png','src/main.js','src/map.js','src/sw.js'])assert.ok(files.includes(required),`manifest is missing ${required}`);
+ assert.ok(!files.some(name=>name.startsWith('vendor/')),'vendor files are cached on first use rather than precached');
  assert.ok(!files.includes('sw.js')&&!files.includes('sw-manifest.json'));
  assert.equal(new Set(files).size,files.length);
 });

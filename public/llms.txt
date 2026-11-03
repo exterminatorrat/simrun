@@ -1,0 +1,37 @@
+# SimRun
+
+> SimRun is a free, MIT-licensed, local-first web app that plans running and cycling routes, simulates the resulting activity, and exports GPX, TCX and FIT files. It runs entirely in the browser with no account, backend, analytics or cloud history.
+
+Canonical URL: https://simrun.vercel.app/
+Source code: https://github.com/exterminatorrat/simrun
+License: MIT
+
+## What it does
+
+- Route planning: click-to-place waypoints with road, path and trail routing; import GPX, KML or GeoJSON; reverse, out-and-back, close loop, target-distance round trip, trim, split, merge and freehand drawing.
+- Activity simulation: run, walk, hike, trail run, ride and mountain bike; constant or natural pacing; pace strategies; heart rate, power, cadence, weather, fatigue, rest stops, GPS noise and dropouts. Output is seeded and repeatable.
+- Analysis: distance, duration, pace, elevation gain, splits, grade-adjusted pace, training load estimates and profile charts, all computed locally.
+- Export: GPX, TCX, FIT, cue-sheet CSV, SVG profile, JSON, ZIP archive and a full library backup.
+- Library: browser-local activity history with search, tags, comparison, collections and bulk export.
+- Offline: installable app shell plus optional downloaded map corridors.
+
+## What it does not do
+
+- It does not record real GPS traces. All activities are explicitly simulated and labeled as estimates in the interface and in exported files.
+- It does not sign in to Strava, Garmin Connect or COROS and does not upload on the user's behalf; users hand the exported file to those services themselves.
+- It does not use a server, so no data is stored outside the user's browser.
+- It does not model traffic, provide satellite imagery, or support languages other than English.
+
+## Common questions
+
+- How do I create a GPX file without an account? Add at least two waypoints on the map in SimRun and press Export; the file is generated and downloaded in the browser.
+- Can SimRun files go to Strava, Garmin Connect or COROS? Yes, as uploaded files; those services accept GPX, TCX or FIT. SimRun stays account-free.
+- Is SimRun free? Yes, MIT-licensed with no paid tiers or accounts.
+- Where is data stored? IndexedDB, localStorage and Cache Storage in the user's own browser; a JSON backup moves it between devices.
+- Which services see data? Routing and elevation use the public FOSSGIS Valhalla service; the default basemap uses OpenFreeMap and OpenStreetMap. Nominatim, Photon, Overpass, OpenTopoMap and Waymarked Trails are off by default.
+
+## Pages
+
+- [SimRun route studio](https://simrun.vercel.app/): the application itself
+- [About and FAQ](https://simrun.vercel.app/about.html): what SimRun is, who it is for, and answers to common questions
+- [Privacy](https://simrun.vercel.app/privacy.html): what stays local and which providers receive which requests
