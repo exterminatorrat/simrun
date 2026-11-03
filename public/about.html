@@ -64,7 +64,7 @@
             "name": "Can SimRun files be imported into Strava, Garmin Connect or COROS?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes, as files. SimRun exports GPX, TCX and FIT, which those services import through their own upload pages or phone apps. SimRun does not connect to those accounts and does not upload anything on its own; the Send dialog offers the file through the system share sheet or a folder."
+              "text": "Yes, as files. SimRun exports GPX, TCX and FIT, which those services import through their own upload pages or phone apps. The Send dialog can also hand the file through the system share sheet or a folder. Where the deployment enables it, SimRun can upload one activity directly to your own Strava account after you connect it; nothing is uploaded otherwise."
             }
           },
           {
@@ -123,7 +123,7 @@
     <h2>What SimRun deliberately does not do</h2>
     <ul>
       <li>It does not record real GPS traces. Every activity is labeled simulated or estimated.</li>
-      <li>It does not sign in to Strava, Garmin Connect or COROS, and it does not upload on your behalf.</li>
+      <li>It does not upload anything on its own. Garmin Connect and COROS files are handed over by you, and the optional Strava upload runs only when you press the button and connect your own account.</li>
       <li>It does not store anything on a server, so there is nothing to delete from an account.</li>
       <li>It does not model traffic, offer satellite imagery, or provide translations beyond English.</li>
     </ul>
@@ -137,7 +137,7 @@
       <dd>Open SimRun, click the map to add at least two waypoints, then press Export. The file is generated in your browser and downloaded directly to your device.</dd>
 
       <dt>Can SimRun files be imported into Strava, Garmin Connect or COROS?</dt>
-      <dd>Yes, as files. Those services import GPX, TCX and FIT through their own upload pages or phone apps. SimRun itself stays account-free and only gives you the file.</dd>
+      <dd>Yes, as files. Those services import GPX, TCX and FIT through their own upload pages or phone apps. SimRun stays account-free by default; where the deployment enables it, you can connect your own Strava account and upload a single activity directly.</dd>
 
       <dt>Is SimRun free and open source?</dt>
       <dd>Yes. SimRun is MIT-licensed. There are no paid tiers, no accounts and no runtime dependencies, and the source is at <a href="https://github.com/exterminatorrat/simrun">github.com/exterminatorrat/simrun</a>.</dd>

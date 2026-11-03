@@ -18,14 +18,14 @@ License: MIT
 ## What it does not do
 
 - It does not record real GPS traces. All activities are explicitly simulated and labeled as estimates in the interface and in exported files.
-- It does not sign in to Strava, Garmin Connect or COROS and does not upload on the user's behalf; users hand the exported file to those services themselves.
+- It does not upload anything on its own. Garmin Connect and COROS files are handed over by the user; an optional Strava upload only runs when the user connects their own account and presses the button, and only where the deployment configures Strava credentials.
 - It does not use a server, so no data is stored outside the user's browser.
 - It does not model traffic, provide satellite imagery, or support languages other than English.
 
 ## Common questions
 
 - How do I create a GPX file without an account? Add at least two waypoints on the map in SimRun and press Export; the file is generated and downloaded in the browser.
-- Can SimRun files go to Strava, Garmin Connect or COROS? Yes, as uploaded files; those services accept GPX, TCX or FIT. SimRun stays account-free.
+- Can SimRun files go to Strava, Garmin Connect or COROS? Yes, as uploaded files; those services accept GPX, TCX or FIT. A deployment can also enable a direct Strava upload for the user's own account.
 - Is SimRun free? Yes, MIT-licensed with no paid tiers or accounts.
 - Where is data stored? IndexedDB, localStorage and Cache Storage in the user's own browser; a JSON backup moves it between devices.
 - Which services see data? Routing and elevation use the public FOSSGIS Valhalla service; the default basemap uses OpenFreeMap and OpenStreetMap. Nominatim, Photon, Overpass, OpenTopoMap and Waymarked Trails are off by default.

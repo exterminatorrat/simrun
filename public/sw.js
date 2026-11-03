@@ -105,6 +105,7 @@ self.addEventListener('fetch',event=>{
  try{url=new URL(request.url);}catch{return;}
  if(url.origin===self.location.origin){
   if(url.pathname===WORKER_PATH||url.pathname.endsWith('/sw-manifest.json'))return;
+  if(url.pathname.startsWith('/api/'))return;
   event.respondWith(request.mode==='navigate'?navigation(request):shell(request));
   return;
  }
