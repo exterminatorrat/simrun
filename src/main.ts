@@ -52,7 +52,7 @@ function distanceInputValue(m:number):string{return (m/(preferences.units==='imp
 function lapLabel(n:number):string{return t('lap',{count:Number(n.toFixed(2))});}
 function heightValue(v:number|null):string{return v===null?'—':formatNumber(Math.round(v*(preferences.units==='imperial'?3.28084:1)));}
 function stat(id:string,value:string,unit=''):void{const e=$(id);e.replaceChildren(document.createTextNode(t(value)));if(unit)e.append(document.createTextNode(' '),el('small','',t(unit)));}
-function mark(id:string,on:boolean):void{$(id).classList.toggle('active',on);$(id).setAttribute('aria-pressed',String(on));}
+function mark(id:string,on:boolean):void{const button=$(id);button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));const group=button.closest<HTMLElement>('.segmented,.sport-switch');if(group){const index=[...group.querySelectorAll('button')].findIndex(item=>item.classList.contains('active'));if(index>=0)group.style.setProperty('--seg-index',String(index));}}
 function setDraftSavedStatus():void {
  if(!store.available){setText('draft-save-state','Session only — not saved');return;}
  const time=formatTime(new Date());
