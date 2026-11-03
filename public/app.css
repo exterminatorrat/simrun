@@ -162,3 +162,13 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 @media(min-width:761px) and (max-width:1100px){.workspace{--panel:304px}}
 .top-actions>button,.export-actions button{white-space:nowrap}
 @media(min-width:761px) and (max-width:1100px){.save-indicator #storage-usage-hint{display:none}}
+*{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+.inline-field>label:has(:is(input,select)){display:flex;flex:1;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.inline-field>label>:is(input:not([type=checkbox]):not([type=range]),select){width:150px;flex:none;padding:7px 10px}
+.inline-field>label:not(:has(:is(input,select))),.inline-field>label:first-child{min-width:0}
+.settings-section .inline-field+.inline-field{margin-top:12px}
+.settings-section .text-button{margin-top:10px}
+.settings-section .segmented{margin-top:14px}
