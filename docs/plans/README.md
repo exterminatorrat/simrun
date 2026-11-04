@@ -17,6 +17,7 @@ Baseline for everything below: `npm ci && npm test` on this checkout is green at
 | 03 | [Analysis and library](03-analysis-and-library.md) | HR zones, pace histogram, per-km split chart, activity comparison; tags, search, sort, drag-and-drop import, storage quota | ~6 dev-days |
 | 04 | [Sharing, offline, mobile, providers](04-sharing-offline-mobile-providers.md) | Route-in-URL + QR + printable cue sheet; corridor tile download, opt-in offline routing cache, PWA install, touch targets; walk/hike/MTB profiles, avoid options, alternatives, public-cap handling | 13–17 dev-days |
 | 05 | [Polish and release readiness](05-polish-and-release.md) | Editing, routing intelligence, send and library, maps and offline, hygiene, UX, accessibility and i18n, verification | see plan |
+| 06 | [Multi-day and stage routes](06-multi-day-stages.md) | Split one route into 2–31 days by count or daily distance; per-day stats, local library entries, and one export file set per day | ~3 dev-days |
 
 Rollup: roughly **37–47 dev-days**. Features are independently shippable; the sequencing
 below is a recommendation, not a hard block.
@@ -32,6 +33,7 @@ inside `validateActivity()` (`src/model.ts:43`).
 | Location | Additions | Source plan |
 |----------|-----------|-------------|
 | `Activity` | `workout?: Workout`; `pauses?: Pauses`; `tags?: string[]` | 01, 03 |
+| `Activity` | `stage?: StageRef` | 06 |
 | `Settings` | `power?/cadence?/fatigue?`; `weather?: WeatherSim`; `profile?: RouteProfile` | 02, 04 |
 | `Sample` | `power?: number`; `cad?: number` | 02 |
 | `Preferences` | `hrMax`; `offlineRouting`; `corridorZoom` | 03, 04 |

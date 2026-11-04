@@ -21,6 +21,7 @@ export interface WorkoutStep { kind:'work'|'rest'; distance:number; pace?:number
 export interface Workout { steps:WorkoutStep[] }
 export interface RestStop { distance:number; seconds:number }
 export interface Pauses { rests:RestStop[] }
+export interface StageRef { tourId:string; index:number; total:number }
 export interface Settings {
   sport:Sport; profile?:RouteProfile; start:string; utcOffset:number; pace:number; speed:number;
   mode:'constant'|'natural'; variation:number; sample:1|2|5; paceStrategy?:PaceStrategy; paceSegments?:number[];
@@ -30,7 +31,7 @@ export interface Settings {
 export interface Activity {
   id:string; version:1; name:string; description?:string; createdAt:number; updatedAt:number;
   waypoints:Waypoint[]; path:Point[]; source:RouteSource; settings:Settings; loop?:LoopPlan; splits?:Splits; routeData?:RouteData;
-  workout?:Workout; pauses?:Pauses; tags?:string[]; collection?:string;
+  workout?:Workout; pauses?:Pauses; tags?:string[]; collection?:string; stage?:StageRef;
 }
 export interface Sample extends Point { time:number; distance:number; speed:number; gapPace?:number; power?:number; cad?:number }
 export interface Simulation { points:Sample[]; duration:number; distance:number; interval:number; calories?:number }

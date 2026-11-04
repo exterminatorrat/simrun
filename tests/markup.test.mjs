@@ -22,6 +22,13 @@ test('simulation-depth controls are present and wired to the editor',()=>{
  for(const id of controls){assert.ok(html.includes(`id="${id}"`),`missing HTML control ${id}`);assert.ok(main.includes(`'${id}'`),`missing app wiring for ${id}`);}
 });
 
+test('multi-day plan controls are present and wired',()=>{
+ const controls=['stages-mode-days','stages-mode-distance','stages-days','stages-distance','stages-table','stages-status','stages-preview','stages-save','stages-export','stages-count'];
+ for(const id of controls){assert.ok(html.includes(`id="${id}"`),`missing HTML control ${id}`);assert.ok(main.includes(`'${id}'`),`missing app wiring for ${id}`);}
+ assert.ok(html.includes('id="stages-details"'),'missing multi-day section');
+ assert.match(html,/aria-label="Break down by"/);
+});
+
 
 test('empty state offers map, import, and search starts with a persisted-tips control',()=>{
  assert.match(html,/Click the map to add a waypoint, import a GPX, KML or GeoJSON file, or search for a place/);

@@ -180,6 +180,21 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   page.locator('#undo').click();assert float(page.locator('#distance').inner_text().split()[0])==old
   page.locator('#redo').click();assert abs(float(page.locator('#distance').inner_text().split()[0])-2*old)<.02
   passed('Imported reverse, out-and-back, undo and redo update true geometry')
+  page.locator('#stages-details summary').click();expect(page.locator('#stages-details')).to_have_attribute('open','')
+  change(page,'stages-days','3');page.locator('#stages-preview').click()
+  expect(page.locator('#stages-table .stage-row')).to_have_count(4)
+  day_rows=page.locator('#stages-table .stage-row').all_inner_texts()[1:]
+  assert all(row.strip() for row in day_rows) and day_rows[0].split()[0]=='1'
+  screenshot(page,'stages-preview')
+  page.locator('#stages-save').click();expect(page.locator('#stages-status')).to_contain_text('Saved each day')
+  page.locator('#history').click();expect(page.locator('.history-row')).to_have_count(5)
+  for _ in range(3):
+   page.once('dialog',lambda dialog:dialog.accept())
+   page.locator('.history-row').filter(has_text='Day').first.get_by_role('button',name='Delete activity').click()
+   page.wait_for_timeout(150)
+  expect(page.locator('.history-row')).to_have_count(2)
+  page.locator('#history-dialog button[data-close]').first.click()
+  passed('Multi-day preview, per-day stats, save, and library entries')
   page.locator('#undo').click();page.locator('#chart-elevation').click();page.locator('#fit').click();page.locator('#toast').evaluate('(e)=>e.hidden=true');screenshot(page,'desktop')
   page.set_viewport_size({'width':1280,'height':800});page.wait_for_timeout(100);screenshot(page,'laptop')
   page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(100);assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
