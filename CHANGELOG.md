@@ -7,6 +7,7 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 ### Added
 
 - Collapse the route tool rail, the activity panel and the top bar, each with an edge tab that restores it; the skip link reopens a collapsed activity panel.
+- Spanish and Brazilian Portuguese interface catalogs, listed in the language setting and covered by catalog-completeness tests.
 
 ## [1.0.0] - 2026-11-03
 
