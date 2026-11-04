@@ -68,6 +68,32 @@ test('English catalog has every referenced key and no unused entries',()=>{
  assert.deepEqual([...expected].filter(key=>!used.has(key)).sort(),[],'unused English keys');
 });
 
+const placeholders=value=>[...value.matchAll(/\{(\w+)\}/g)].map(match=>match[1]).sort();
+const placeholdersMatch=(key,value)=>{
+ const expected=placeholders(key);
+ const actual=placeholders(value);
+ return expected.every(name=>actual.includes(name))&&actual.every(name=>expected.includes(name)||name==='count');
+};
+const localeFiles=(await readdir(join(root,'src/locales'))).filter(file=>file.endsWith('.ts')&&file!=='en.ts');
+
+test('shipped locale catalogs cover the English catalog with matching placeholders',async()=>{
+ const {localeNames}=await import('../dist/src/i18n.js');
+ const englishKeys=Object.keys(en).sort();
+ for(const file of localeFiles){
+  const code=file.replace(/\.ts$/,'');
+  const {default:catalog}=await import(`../dist/src/locales/${code}.js`);
+  assert.ok(catalog,`${file} must default-export a catalog`);
+  assert.ok(localeNames[code],`${file} must appear in localeNames`);
+  assert.deepEqual(Object.keys(catalog).sort(),englishKeys,`${file} keys`);
+  for(const [key,value] of Object.entries(catalog)){
+   const forms=typeof value==='string'?[value]:Object.values(value);
+   if(typeof value!=='string')assert.ok(value.other,`${file} ${key} needs an other form`);
+   for(const form of forms)assert.ok(placeholdersMatch(key,form),`${file} ${key} placeholders`);
+  }
+  assert.notEqual(catalog.Language,'Language',`${file} must translate visible text`);
+ }
+});
+
 test('pseudo-locales generate accented expansion and RTL direction',async()=>{
  const storage=new Map();
  const document={documentElement:{lang:'',dir:''},querySelectorAll:()=>[]};
