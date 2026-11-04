@@ -21,7 +21,10 @@ const digest=text=>{let hash=5381;for(let i=0;i<text.length;i++)hash=((hash<<5)+
 // is what lets a content-only deploy reach a browser that already cached the shell.
 const BUILD='__SIMRUN_BUILD__';
 const shellCacheName=files=>`simrun-shell-${BUILD}-${digest([...files].sort().join('|'))}`;
-const shellName=async()=>(await caches.keys()).find(name=>name.startsWith('simrun-shell-'))||null;
+const shellName=async()=>{
+ const names=await caches.keys();
+ return names.find(name=>name.startsWith(`simrun-shell-${BUILD}-`))||names.find(name=>name.startsWith('simrun-shell-'))||null;
+};
 const manifestFiles=async()=>{
  try{const response=await fetch('./sw-manifest.json',{cache:'no-store'});return response.ok?(await response.json()).files||[]:null;}catch{return null;}
 };
