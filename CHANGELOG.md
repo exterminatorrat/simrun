@@ -8,6 +8,8 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 
 - Collapse the route tool rail, the activity panel and the top bar, each with an edge tab that restores it; the skip link reopens a collapsed activity panel.
 - The collapsed-panel and chart choice is remembered across reloads and travels with a backup.
+- Export the planned route as GeoJSON or a vertex CSV from the send dialog, for QGIS, spreadsheets and other tools.
+- Name and note each waypoint stop; named stops reach the cue sheet as their own rows with Name and Note columns, sharing a row when they land on a turn.
 
 ### Fixed
 

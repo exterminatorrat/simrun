@@ -1,4 +1,4 @@
-import type {Activity,Point} from './types.js';
+import type {Activity,Point,Waypoint} from './types.js';
 import {importedActivity} from './model.js';
 import {validPoint} from './geometry.js';
 import {importGPX} from './gpx.js';
@@ -35,19 +35,35 @@ export function parseKmlCoordinates(text:string):Point[] {
 export function importGeoJSON(text:string):ImportResult {
  checkSize(text,'GeoJSON');
  let data:unknown;try{data=JSON.parse(text);}catch{throw Error('This file is not valid GeoJSON.');}
- const candidates:Point[][]=[];let name='';
+ const candidates:Point[][]=[],stops:Waypoint[]=[];let name='';
+ const isLine=(type:unknown)=>type==='LineString'||type==='MultiLineString'||type==='GeometryCollection';
+ const readStop=(node:any):void=>{
+  const p=node.properties??{},coords=node.coordinates;
+  if(!Array.isArray(coords))return;
+  const point=position(coords[0],coords[1],coords[2]);
+  const label=p.name??p.title,note=p.note??p.description;
+  stops.push({...point,...(label?{name:String(label)}:{}),...(note?{note:String(note)}:{})});
+ };
  const walk=(node:any):void=>{
   if(!node||typeof node!=='object')return;
   if(Array.isArray(node)){node.forEach(walk);return;}
   if(node.type==='FeatureCollection'){if(!name&&typeof node.name==='string')name=node.name;(node.features??[]).forEach(walk);return;}
-  if(node.type==='Feature'){const p=node.properties??{};if(!name)name=String(p.name??p.title??'');walk(node.geometry);return;}
+  if(node.type==='Feature'){
+   const p=node.properties??{};
+   if(node.geometry?.type==='Point'){readStop({...node.geometry,properties:p});return;}
+   if(!name&&isLine(node.geometry?.type))name=String(p.name??p.title??'');
+   walk(node.geometry);return;
+  }
   if(node.type==='GeometryCollection'){(node.geometries??[]).forEach(walk);return;}
+  if(node.type==='Point'){readStop(node);return;}
   if(node.type==='LineString'){candidates.push((node.coordinates??[]).map((c:any)=>position(c?.[0],c?.[1],c?.[2])));return;}
   if(node.type==='MultiLineString'){(node.coordinates??[]).forEach((line:any)=>candidates.push((line??[]).map((c:any)=>position(c?.[0],c?.[1],c?.[2]))));return;}
  };
  walk(data);
  const {points,notice}=largest(candidates,'GeoJSON');
- return merge(notice,importedActivity(points,name,name,'GeoJSON'));
+ const result=importedActivity(points,name,name,'GeoJSON');
+ if(stops.length)result.activity.waypoints=stops.slice(0,200);
+ return merge(notice,result);
 }
 export function importKML(text:string):ImportResult {
  checkSize(text,'KML');
