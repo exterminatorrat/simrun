@@ -2,6 +2,12 @@
 
 All notable changes to SimRun are documented here. This changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Collapse the route tool rail, the activity panel and the top bar, each with an edge tab that restores it; the skip link reopens a collapsed activity panel.
+
 ## [1.0.0] - 2026-11-03
 
 First public open-source release.
