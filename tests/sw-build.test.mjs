@@ -47,3 +47,25 @@ test('a query string does not hide the cached document',async()=>{
  const about=await navigationFor('/about.html?from=settings',{'index.html':'APP SHELL','about.html':'ABOUT PAGE'});
  assert.equal(about.body,'ABOUT PAGE');
 });
+
+test('the current build wins when a stale shell cache is still present',async()=>{
+ const source=await readFile(new URL('../dist/sw.js',import.meta.url),'utf8');
+ const build=source.match(/const BUILD='([0-9a-f]{16})'/)[1];
+ const shell=name=>({match:async key=>key==='index.html'?new Response(name):undefined,put:async()=>{},keys:async()=>[]});
+ const stores=new Map([
+  ['simrun-shell-0000000000000000-stale',shell('STALE BUILD')],
+  [`simrun-shell-${build}-current`,shell('CURRENT BUILD')]
+ ]);
+ const handlers={};
+ const context={
+  self:{location:{origin:'https://simrun.test',href:'https://simrun.test/sw.js'},addEventListener:(type,fn)=>{handlers[type]=fn;},skipWaiting:()=>{},clients:{claim:()=>{}}},
+  caches:{open:async name=>stores.get(name),keys:async()=>[...stores.keys()],delete:async()=>{}},
+  fetch:async ()=>new Response('network'),
+  Response,Request,URL,console,setTimeout,clearTimeout
+ };
+ context.self.self=context.self;
+ vm.runInNewContext(source,context);
+ let pending=null;
+ handlers.fetch({request:{method:'GET',url:'https://simrun.test/',mode:'navigate'},respondWith:value=>{pending=value;}});
+ assert.equal(await (await pending).text(),'CURRENT BUILD','caches.keys() lists oldest first, so the older shell must not win');
+});
