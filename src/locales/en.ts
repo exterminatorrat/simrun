@@ -284,6 +284,7 @@ export const en={
  "Estimated power":"Estimated power",
  "Even (default)":"Even (default)",
  "Expand activity panel":"Expand activity panel",
+ "Expand chart":"Expand chart",
  "Expand route tools":"Expand route tools",
  "Expand top bar":"Expand top bar",
  "Explicit search results: © OpenStreetMap contributors via Nominatim.":"Explicit search results: © OpenStreetMap contributors via Nominatim.",
