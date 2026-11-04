@@ -68,6 +68,35 @@ test('English catalog has every referenced key and no unused entries',()=>{
  assert.deepEqual([...expected].filter(key=>!used.has(key)).sort(),[],'unused English keys');
 });
 
+const placeholders=value=>[...value.matchAll(/\{(\w+)\}/g)].map(match=>match[1]).sort();
+const placeholdersMatch=(key,value)=>{
+ const expected=placeholders(key);
+ const actual=placeholders(value);
+ return expected.every(name=>actual.includes(name))&&actual.every(name=>expected.includes(name)||name==='count');
+};
+const localeFiles=(await readdir(join(root,'src/locales'))).filter(file=>file.endsWith('.ts')&&file!=='en.ts');
+const sampleCounts=[0,1,2,3,5,11,21,100,101,1000,10000];
+const pluralCategories=code=>new Set([...sampleCounts.map(count=>new Intl.PluralRules(code).select(count)),'other']);
+
+test('shipped locale catalogs cover the English catalog with matching placeholders',async()=>{
+ const {localeNames}=await import('../dist/src/i18n.js');
+ const englishKeys=Object.keys(en).sort();
+ for(const file of localeFiles){
+  const code=file.replace(/\.ts$/,'');
+  const categories=pluralCategories(code);
+  const {default:catalog}=await import(`../dist/src/locales/${code}.js`);
+  assert.ok(catalog,`${file} must default-export a catalog`);
+  assert.ok(localeNames[code],`${file} must appear in localeNames`);
+  assert.deepEqual(Object.keys(catalog).sort(),englishKeys,`${file} keys`);
+  for(const [key,value] of Object.entries(catalog)){
+   const forms=typeof value==='string'?[value]:Object.values(value);
+   if(typeof value!=='string')for(const category of categories)assert.ok(value[category],`${file} ${key} needs a ${category} form`);
+   for(const form of forms)assert.ok(placeholdersMatch(key,form),`${file} ${key} placeholders`);
+  }
+  assert.notEqual(catalog.Language,'Language',`${file} must translate visible text`);
+ }
+});
+
 test('pseudo-locales generate accented expansion and RTL direction',async()=>{
  const storage=new Map();
  const document={documentElement:{lang:'',dir:''},querySelectorAll:()=>[]};
