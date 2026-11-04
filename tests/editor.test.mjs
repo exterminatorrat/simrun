@@ -9,6 +9,19 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const provider={route:async p=>p,elevation:async p=>p};
 test('imported reverse/out-and-back and undo retain settings and geometry',()=>{const e=new Editor(provider),x=defaults();x.path=[a,b,c];x.source='imported';e.load(x);e.reverse();assert.deepEqual(e.activity.path,[c,b,a]);e.undo();assert.deepEqual(e.activity.path,[a,b,c]);e.redo();assert.deepEqual(e.activity.path,[c,b,a]);e.outAndBack();assert.equal(e.activity.path.length,5);e.clear();assert.equal(e.activity.path.length,0);e.undo();assert.equal(e.activity.path.length,5);assert.equal(e.activity.settings.pace,300);e.dispose();});
 test('route editing pushes one undo state per settled edit',()=>{const e=new Editor(provider);e.add(a);e.add(b);e.move(1,c);assert.deepEqual(e.activity.waypoints,[a,c]);e.undo();assert.deepEqual(e.activity.waypoints,[a,b]);e.redo();assert.deepEqual(e.activity.waypoints,[a,c]);e.remove(0);assert.equal(e.activity.waypoints.length,1);e.dispose();});
+test('stop names and notes follow their waypoint through reorder, reverse and undo',()=>{
+ const e=new Editor(provider);e.add(a);e.add(b);
+ e.setStop(1,{name:'  Water fountain  ',note:'Refill bottles'});
+ assert.equal(e.activity.waypoints[1].name,'Water fountain');
+ assert.equal(e.activity.waypoints[1].note,'Refill bottles');
+ e.reorder(1,-1);assert.equal(e.activity.waypoints[0].name,'Water fountain');
+ e.reverse();assert.equal(e.activity.waypoints.find(w=>w.name)?.name,'Water fountain');
+ e.undo();assert.equal(e.activity.waypoints[0].name,'Water fountain');
+ e.setStop(0,{name:'',note:''});
+ assert.equal(e.activity.waypoints[0].name,undefined);
+ assert.equal(e.activity.waypoints[0].note,undefined);
+ e.dispose();
+});
 test('closing a loop returns to the start once and ignores imported geometry',()=>{const e=new Editor(provider);e.add(a);e.add(b);e.closeLoop();assert.deepEqual(e.activity.waypoints,[a,b,a]);e.undo();assert.deepEqual(e.activity.waypoints,[a,b]);let message='';e.onMessage=m=>message=m;e.closeLoop();assert.deepEqual(e.activity.waypoints,[a,b,a]);e.closeLoop();assert.deepEqual(e.activity.waypoints,[a,b,a]);assert.match(message,/already returns/);const x=defaults();x.path=[a,b,c];x.source='imported';e.load(x);e.closeLoop();assert.equal(e.activity.path.length,3);assert.match(message,/Convert/);e.dispose();});
 const square=[{lat:0,lon:0},{lat:0,lon:.01},{lat:.01,lon:.01},{lat:.01,lon:0},{lat:0,lon:0}];
 test('loop plan sets laps, converts to distance, pins the start and survives an edit',async()=>{

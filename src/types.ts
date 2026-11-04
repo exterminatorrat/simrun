@@ -1,4 +1,5 @@
 export interface Point { lat:number; lon:number; ele?:number; time?:number; hr?:number }
+export interface Waypoint extends Point { name?:string; note?:string }
 export interface Place extends Point { name:string }
 export interface SavedPlace extends Place { id:string }
 export type Sport = 'run' | 'ride' | 'walk' | 'hike' | 'trail-run' | 'mtb';
@@ -28,7 +29,7 @@ export interface Settings {
 }
 export interface Activity {
   id:string; version:1; name:string; description?:string; createdAt:number; updatedAt:number;
-  waypoints:Point[]; path:Point[]; source:RouteSource; settings:Settings; loop?:LoopPlan; splits?:Splits; routeData?:RouteData;
+  waypoints:Waypoint[]; path:Point[]; source:RouteSource; settings:Settings; loop?:LoopPlan; splits?:Splits; routeData?:RouteData;
   workout?:Workout; pauses?:Pauses; tags?:string[]; collection?:string;
 }
 export interface Sample extends Point { time:number; distance:number; speed:number; gapPace?:number; power?:number; cad?:number }

@@ -7,6 +7,7 @@ import {exportTCX} from './tcx.js';
 import {decodeShare,shareUrl,shareWarning} from './share.js';
 import {importRouteFile} from './import.js';
 import {downloadCues} from './cues.js';
+import {downloadRouteCSV,downloadRouteGeoJSON} from './routeexport.js';
 import {cancelCorridor,clearCachedMap,deleteCorridor,offlineSupported,offlineStatus,registerOfflineCache} from './sw.js';
 import {readPreferences,writePreferences,validatePreferences,LocalStore,parseBackup,createBackup,sanitizeTags,searchActivities,sortActivities,storageUsage,collectionNames,filterActivitiesByCollection,removeActivities} from './storage.js';
 import {ValhallaProvider,resolveProfile,searchPlaces,searchPhoton} from './providers.js';
@@ -36,6 +37,7 @@ let preferences=readPreferences();document.documentElement.dataset.theme=prefere
 const routing=new ValhallaProvider(()=>preferences),store=new LocalStore(),editor=new Editor(routing);
 let initialized=false,saveTimer:ReturnType<typeof setTimeout>|undefined,sim:Simulation|null=null,lastPath:Point[]|null=null,lastSettings='',simulationError='',simulationPending=false,simulationRequest=0;
 let searchController:AbortController|null=null,searchId=0,savedPlaces:SavedPlace[]=[],searchResults:Place[]=[],activeSearchResult=-1,selectedSearchPlace:Place|null=null,locatedPoint:Point|null=null,activeCorridorDownloadId:string|null=null;
+let editingStops=false;
 let roundtripController:AbortController|null=null,roundtripActivityId='',roundtripActivityUpdatedAt=0;
 let poiController:AbortController|null=null,poiRequestId=0,poiPathKey='',poiPlaces:PointOfInterest[]=[],poiStatus='Enable optional water and toilet lookup in Settings to begin.';
 let emptyDismissed=false;
@@ -188,7 +190,9 @@ function render():void {
   const head=el('div','split-row split-head');head.append(el('span','','#'),el('span','','Split'),el('span','','Time'),el('span','',paceMode?'Pace':'Speed'),el('span','','GAP'),el('span','','Gain'));splitTable.append(head);
   splits.forEach((sp,i)=>{const row=el('div','split-row');const value=paceMode?(sp.duration>0?sp.duration/(sp.distance/(imperial?1609.344:1000)):0):sp.speed*(imperial?2.2369362920544:3.6),gapValue=sp.gapPace===undefined?'—':formatClock(sp.gapPace*(imperial?1.609344:1));row.append(el('span','',String(i+1)),el('span','',`${distanceValue(sp.distance)} ${unit}`),el('span','',sp.stopped?`${formatClock(sp.duration)} · rest`:formatClock(sp.duration)),el('span','',paceMode?formatClock(value):formatNumber(value,{maximumFractionDigits:1})),el('span','',gapValue),el('span','',sp.gain===null?'—':heightValue(sp.gain)));splitTable.append(row);});
  }
- setText('waypoint-count',String(a.waypoints.length));$('edit-import').hidden=a.source!=='imported';const list=$('waypoints');list.replaceChildren();
+ setText('waypoint-count',String(a.waypoints.length));$('edit-import').hidden=a.source!=='imported';const list=$('waypoints');
+ // Rebuilding the list while a stop field has focus would drop the caret mid-typing.
+ const keepRows=editingStops;
  const zoneBox=$('hr-zones');zoneBox.replaceChildren();
  if(sim&&s.hrEnabled){for(const z of hrZones(sim.points,preferences.hrMax)){const row=el('div','zone-row');row.append(el('span','',`Z${z.index} · ${z.min}\u2013${z.max} bpm`),el('span','',`${formatClock(z.seconds)} \u00b7 ${formatNumber(z.percent,{maximumFractionDigits:0})}%`));zoneBox.append(row);}}
  else zoneBox.append(el('p','fine-print','Enable simulated heart rate to see time in each zone.'));
@@ -196,7 +200,27 @@ function render():void {
  if(hist&&hist.bins.length){for(const b of hist.bins){if(b.seconds<=0)continue;const row=el('div','hist-row');row.append(el('span','',paceMode?`${formatClock(b.min)}\u2013${formatClock(b.max)} /${unit}`:`${b.min}\u2013${b.max} ${hist.unit}`),el('span','',formatClock(b.seconds)));histBox.append(row);}}
  else histBox.append(el('p','fine-print','A completed route is needed for the pace histogram.'));
  setText('energy-note',sim?`Estimated energy ${sim.calories??0} kcal — a simulated estimate, not a measurement.`:'');
- a.waypoints.forEach((p,i)=>{const row=el('div',`waypoint-row ${i===editor.selected?'selected':''}`);row.append(el('span','point-index',String(i+1)),button(`${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`,()=>{editor.selected=i;map.focus(p);render();},undefined,'coordinate'),button('Move earlier',()=>editor.reorder(i,-1),'up','icon-button'),button('Move later',()=>editor.reorder(i,1),'down','icon-button'),button(`Delete waypoint ${i+1}`,()=>editor.remove(i),'close','icon-button'));list.append(row);});
+ if(!keepRows){
+ list.replaceChildren();
+ a.waypoints.forEach((p,i)=>{
+  const row=el('div',`waypoint-row ${i===editor.selected?'selected':''}`);
+  row.append(el('span','point-index',String(i+1)),button(`${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`,()=>{editor.selected=i;map.focus(p);render();},undefined,'coordinate'),button('Move earlier',()=>editor.reorder(i,-1),'up','icon-button'),button('Move later',()=>editor.reorder(i,1),'down','icon-button'),button(`Delete waypoint ${i+1}`,()=>editor.remove(i),'close','icon-button'));
+  if((p.name||p.note)&&i!==editor.selected)row.append(el('span','stop-label',[p.name,p.note].filter(Boolean).join(' · ')));
+  if(i===editor.selected){
+   const fields=el('div','stop-fields'),name=el('input','stop-input'),note=el('input','stop-input');
+   for(const input of [name,note]){input.type='text';input.autocomplete='off';}
+   name.maxLength=80;name.value=p.name??'';name.placeholder=t('Stop name');name.setAttribute('aria-label',t('Stop name'));
+   note.maxLength=500;note.value=p.note??'';note.placeholder=t('Stop note');note.setAttribute('aria-label',t('Stop note'));
+   let timer:ReturnType<typeof setTimeout>|undefined;
+   const save=()=>editor.setStop(i,{name:name.value,note:note.value});
+   const queue=()=>{clearTimeout(timer);timer=setTimeout(save,300);};
+   const flush=()=>{clearTimeout(timer);save();};
+   for(const input of [name,note]){input.addEventListener('input',queue);input.addEventListener('blur',flush);}
+   fields.append(name,note);row.append(fields);
+  }
+  list.append(row);
+ });
+ }
  const closed=isClosedLoop(a.path),loopLen=closed?cumulative(a.path).at(-1)??0:0,loopMode=a.loop?.mode??'distance';
  setText('loop-count',plan?lapLabel(plan.laps):'—');
  setText('loop-summary',!closed?'Close the loop — the route must return to its start — to plan laps or a target distance.':plan?`Loop ${distanceValue(plan.loopLength)} ${unit} · ${lapLabel(plan.laps)} · ${distanceValue(plan.distance)} ${unit} to the finish${plan.capped?' · laps reduced to stay within export limits':''}`:`Loop ${distanceValue(loopLen)} ${unit} long. Set laps or a target distance to place the finish.`);
@@ -209,6 +233,10 @@ function render():void {
   const current=a.loop?.start??0;if(!seen.some(v=>Math.abs(v-current)<1e-6)){const o=el('option');o.value=String(current);o.textContent=t('{label} · {distance} {unit} in',{label:t(Math.abs(current)<1e-9?"Route's first point":'Custom start'),distance:distanceValue(current*loopLen),unit});startSelect.append(o);}startSelect.value=String(current);}
  if(initialized){clearTimeout(saveTimer);const snapshot=structuredClone(a);saveTimer=setTimeout(()=>{void store.saveDraft(snapshot).then(()=>{setDraftSavedStatus();void refreshStorageIndicator();}).catch(error=>{const message=failureMessage(error,'Draft not saved — check browser storage and retry.');setText('storage-state','Save failed');$('storage-state').classList.add('warning');setText('draft-save-state',message);toast(message);});},350);}
 }
+const waypointList=$('waypoints');
+waypointList.addEventListener('focusin',event=>{if((event.target as HTMLElement).classList.contains('stop-input'))editingStops=true;});
+// Focus can move between the name and note fields; only a focus target outside them rebuilds the list.
+waypointList.addEventListener('focusout',()=>{queueMicrotask(()=>{editingStops=document.activeElement instanceof HTMLElement&&document.activeElement.classList.contains('stop-input');});});
 editor.onChange=()=>{if(roundtripController&&(editor.activity.id!==roundtripActivityId||editor.activity.updatedAt!==roundtripActivityUpdatedAt))roundtripController.abort();render();};editor.onMessage=toast;
 // Fixed UTC offsets are explicit, so serialized UTC never silently shifts with the machine's timezone.
 for(let offset=-720;offset<=840;offset+=15){const option=el('option');option.value=String(offset);option.textContent=t('UTC{sign}{hours}:{minutes}',{sign:offset<0?'−':'+',hours:formatNumber(Math.floor(Math.abs(offset)/60),{minimumIntegerDigits:2}),minutes:formatNumber(Math.abs(offset)%60,{minimumIntegerDigits:2})});$('offset').append(option);}
@@ -339,6 +367,8 @@ change('splits-auto',e=>{if(e.value.trim()===''){editor.setSplits({auto:0});retu
 change('splits-markers',e=>{const markers=e.value.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{const n=Number(v);if(!Number.isFinite(n)||n<=0)throw Error(`Invalid split marker: ${v}`);return n*(preferences.units==='imperial'?1609.344:1000);});editor.setSplits({markers});});
 on('save',async()=>{validRoute();await store.save(editor.activity);toast(store.available?'Saved to your local route library.':'Kept for this session only. Export a backup before closing.');});
 on('cues',()=>{validRoute();if(!sim)throw Error('Create a route before exporting a cue sheet.');downloadCues(editor.activity,sim,preferences.units);toast('Cue sheet downloaded. Turns come from the route geometry, not street names.');});
+on('send-geojson',()=>{validRoute();downloadRouteGeoJSON(editor.activity);setText('send-status','Route GeoJSON downloaded.');});
+on('send-route-csv',()=>{validRoute();downloadRouteCSV(editor.activity);setText('send-status','Route CSV downloaded.');});
 on('export',async()=>{validRoute();downloadActivity(editor.activity,sim!);try{await store.save(editor.activity);toast(store.available?'GPX downloaded. Activity saved locally.':'GPX downloaded. History is session-only in this browser.');}catch{toast('GPX downloaded. Local history was not saved — check browser storage before closing.');}});
 on('edit-import',()=>{if(!confirm('Replace the imported geometry with a freshly routed path through up to 8 waypoints? Undo restores the original geometry.'))return;editor.edit(resample(editor.activity.path,Math.min(8,editor.activity.path.length)));editor.drawing=true;render();});
 const upload=()=>{$<HTMLInputElement>('gpx-file').value='';$('gpx-file').click();};on('import',upload);on('empty-import',upload);on('empty-search',()=>$<HTMLInputElement>('search').focus());on('empty-close',()=>{emptyDismissed=true;render();});on('dismiss-first-run-tip',()=>{preferences={...preferences,tipsDismissed:true};try{writePreferences(preferences);}catch{toast('Tip preference could not be saved — allow browser storage and retry.');}render();});

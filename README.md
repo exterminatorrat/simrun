@@ -34,7 +34,7 @@ Draw pedestrian or bicycle routes, import GPX, KML or GeoJSON, adjust timing, pr
 
 - **Routing:** cancellable, throttled Valhalla requests (never automobile costing) with **walk**, **hike**, **road** and **mountain-bike** profiles; over-long routes get a clear public-limit message (about 100 km on foot, 150 km by bike) that points at self-hosting. Waypoint editing, shaping handles, undo/redo, reverse, out-and-back, close-loop, and loop planning by lap count or target distance.
 - **Simulation:** deterministic and seeded; terrain-aware pacing from a centered 30 m smoothed grade with asymmetric uphill/downhill cost; weather presets that scale duration and deepen cardiac drift; estimated power, cadence and fatigue; optional synthetic heart rate with warm-up and drift; distance-anchored rest stops with elapsed-vs-moving time; structured interval workouts; simulated GPS noise and signal dropout; custom splits and workout-step boundaries with a per-segment table.
-- **Import/export:** GPX, KML and GeoJSON in; GPX (with opt-in power/cadence/temperature extensions), TCX, turn-by-turn cue-sheet CSV, SVG profiles and JSON backup out.
+- **Import/export:** GPX, KML and GeoJSON in; GPX (with opt-in power/cadence/temperature extensions), TCX, turn-by-turn cue-sheet CSV, route geometry as GeoJSON or CSV for GIS and spreadsheet tools, SVG profiles and JSON backup out.
 - **Analysis and library:** heart-rate zones, a pace/speed histogram and per-unit split charts; tags, search, sort, drag-and-drop import and a storage estimate.
 - **Local-first:** IndexedDB history and drafts with an explicitly labeled **Session only** fallback; offline app shell via service worker.
 - **UI:** MapLibre/OpenFreeMap basemap with a labeled coordinate-canvas fallback; metric/imperial units; light/dark appearance; mobile settings sheet.
@@ -105,7 +105,7 @@ flowchart LR
   Editor --> Providers[providers.ts<br/>route, elevation, search]
   Editor --> Model[model.ts / geometry.ts<br/>deterministic simulation]
   UI --> Map[map.ts<br/>MapLibre or canvas fallback]
-  Model --> Export[gpx.ts / cues.ts / charts.ts]
+  Model --> Export[gpx.ts / cues.ts / routeexport.ts / charts.ts]
   Import[gpx.ts / import.ts] --> Editor
   UI --> Storage[storage.ts<br/>IndexedDB, backups]
   Providers -. HTTPS .-> Ext[(OpenFreeMap, FOSSGIS Valhalla, Nominatim opt-in)]
@@ -121,6 +121,7 @@ flowchart LR
 | `src/gpx.ts` | Browser-local XML parsing and GPX serialization |
 | `src/import.ts` | KML and GeoJSON parsing onto the shared import pipeline |
 | `src/cues.ts` | Cue-sheet CSV generation |
+| `src/routeexport.ts`, `src/csv.ts` | Route GeoJSON and vertex CSV export, shared CSV quoting |
 | `src/storage.ts` | Versioned IndexedDB, preferences and validated backups |
 | `src/charts.ts`, `src/ui.ts` | Responsive SVG profiles and DOM primitives |
 | `src/sw.ts` | Service worker: app-shell precache and basemap cache |
@@ -162,7 +163,9 @@ npm run build
 
 The OpenFreeMap Liberty style, and the OpenFreeMap dark style that is selected automatically in dark appearance, keep their vector tiles, sprites and glyphs external. Both style URLs are replaceable in Settings. If WebGL or all basemap resources fail, the app shows a labeled coordinate canvas and keeps route editing usable. A single failed tile or glyph does not immediately disable the map.
 
-Cue-sheet export writes a CSV with start, turn and finish rows. Turns are read from the exported route geometry rather than from street names, so routed, imported and loop-planned routes all produce one.
+Cue-sheet export writes a CSV with start, turn and finish rows, plus a Name and Note column fed by the stops you name in the waypoint list. Turns are read from the exported route geometry rather than from street names, so routed, imported and loop-planned routes all produce one. A named stop that lands on a turn shares that turn's row instead of printing a second instruction at the same point.
+
+The send dialog also exports the planned route itself: GeoJSON for QGIS and other GIS tools, and a vertex CSV (`seq,latitude,longitude,elevation_m,distance_m`) for spreadsheets. Both describe the same route the simulation and cue sheet use, so loop plans and rotated starts export what the map shows. GeoJSON named stops are read back on import, so a route keeps its stops when it round-trips through another tool.
 
 Optional services, all off by default: Nominatim place search, Photon suggestions as you type, Overpass points of interest, Valhalla `trace_attributes` surface data, OpenTopoMap and Waymarked Trails tiles, and the one-shot browser location request. Each sends only what its Settings text states; see the [privacy page](public/privacy.html).
 
