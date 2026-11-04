@@ -69,7 +69,6 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 @media (pointer:coarse){.waypoint.plan-start{min-width:44px;min-height:44px}#map .maplibregl-canvas-container,#map .maplibregl-canvas{touch-action:none}}
 
 #map,.maplibregl-control-container{direction:ltr}
-[dir=rtl] #map{inset-inline-start:var(--panel);inset-inline-end:var(--rail)}
 :root[data-theme=dark] .primary,:root[data-theme=dark] button.primary,:root[data-theme=dark] input.primary{color:#282b29}
 @media (prefers-contrast: more){
  :root{--muted:#454b46;--field:#69736b;--line:#69736b;--grid:#69736b;--accent:#982f10}
@@ -149,6 +148,7 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 .workspace{--rail:48px;--panel:340px}
 @media(min-width:761px){
 #map{inset-inline-start:var(--rail);inset-inline-end:var(--panel)}
+[dir=rtl] #map{inset-inline-start:var(--panel);inset-inline-end:var(--rail)}
 .map-tools{inset-block:0;inset-inline-start:0;width:var(--rail);max-height:none;padding:8px 0;gap:2px;align-items:center;border:0;border-inline-end:1px solid var(--line);border-radius:0;box-shadow:none;background:var(--bg)}
 .map-tools button{width:36px;height:36px;flex:none;border-radius:8px}
 .map-tools .tool-divider{width:20px;margin:6px 0;flex:none}
