@@ -11,6 +11,7 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 - The collapsed-panel and chart choice is remembered across reloads and travels with a backup.
 - Export the planned route as GeoJSON or a vertex CSV from the send dialog, for QGIS, spreadsheets and other tools.
 - Name and note each waypoint stop; named stops reach the cue sheet as their own rows with Name and Note columns, sharing a row when they land on a turn.
+- Interface catalogs for Arabic, Simplified Chinese, French, Hindi, Japanese, Brazilian Portuguese, Russian, Spanish and Urdu, listed in the language setting, with Arabic and Urdu rendering right-to-left, and covered by catalog-completeness and plural-category tests.
 
 ### Fixed
 
