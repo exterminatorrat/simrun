@@ -7,6 +7,7 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 ### Added
 
 - Collapse the route tool rail, the activity panel and the top bar, each with an edge tab that restores it; the skip link reopens a collapsed activity panel.
+- Interface catalogs for Arabic, Simplified Chinese, French, Hindi, Japanese, Brazilian Portuguese, Russian, Spanish and Urdu, listed in the language setting, with Arabic and Urdu rendering right-to-left, and covered by catalog-completeness and plural-category tests.
 
 ## [1.0.0] - 2026-11-03
 
