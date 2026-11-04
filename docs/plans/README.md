@@ -22,6 +22,8 @@ Baseline for everything below: `npm ci && npm test` on this checkout is green at
 Rollup: roughly **37–47 dev-days**. Features are independently shippable; the sequencing
 below is a recommendation, not a hard block.
 
+Follow-up work already implemented is recorded in [06 — route geometry export and named stops](impl-06-route-export-and-named-stops.md).
+
 ## Consolidated data-model impact
 
 Every addition is an **optional field**, so `Activity.version` stays `1` and existing

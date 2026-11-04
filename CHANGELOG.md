@@ -8,6 +8,13 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 
 - Collapse the route tool rail, the activity panel and the top bar, each with an edge tab that restores it; the skip link reopens a collapsed activity panel.
 - Multi-day plan: split a resolved route into 2–31 stages by even day count or daily distance, preview per-day distance, climb and time, save every stage to the local library, and export one GPX, TCX and FIT per day in a single ZIP. Stages carry a tour reference so the days stay grouped; workouts, split plans and rest stops outside a day are dropped with a visible notice.
+- The collapsed-panel and chart choice is remembered across reloads and travels with a backup.
+- Export the planned route as GeoJSON or a vertex CSV from the send dialog, for QGIS, spreadsheets and other tools.
+- Name and note each waypoint stop; named stops reach the cue sheet as their own rows with Name and Note columns, sharing a row when they land on a turn.
+
+### Fixed
+
+- Right-to-left layouts no longer place the route tool rail beneath the activity panel; search, zoom and map edges mirror correctly.
 
 ## [1.0.0] - 2026-11-03
 

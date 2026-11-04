@@ -135,6 +135,18 @@ test('backup JSON includes preferences and collection and old backups remain com
  assert.deepEqual(old.preferences,defaultPreferences);
  assert.throws(()=>parseBackup(JSON.stringify({product:'SimRun',version:1,activities:[{...current,collection:'x'.repeat(41)}],preferences:defaultPreferences})),/40 characters/);
 });
+test('collapsed-panel preferences default to expanded and accept only true',async()=>{
+ const {validatePreferences}=await import('../dist/src/storage.js');
+ const {defaultPreferences}=await import('../dist/src/model.js');
+ const keys=['collapseTools','collapseInspector','collapseTopbar','collapseChart'];
+ const legacy=validatePreferences({units:'imperial'});
+ for(const key of keys)assert.equal(legacy[key],false,`${key} should default to expanded`);
+ const stored=validatePreferences(Object.fromEntries(keys.map(key=>[key,true])));
+ for(const key of keys)assert.equal(stored[key],true,`${key} should survive a reload`);
+ const junk=validatePreferences({collapseTools:'yes',collapseInspector:1,collapseTopbar:{},collapseChart:null});
+ for(const key of keys)assert.equal(junk[key],false,`${key} should reject a non-boolean`);
+ assert.deepEqual(validatePreferences(defaultPreferences),defaultPreferences);
+});
 test('bulk deletion removes only selected existing activities once',async()=>{
  const {LocalStore,removeActivities}=await import('../dist/src/storage.js');
  const store=new LocalStore(),one=act('One',[],100),two=act('Two',[],90);

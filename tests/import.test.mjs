@@ -21,6 +21,20 @@ test('route file dispatch uses the extension and sniffs unknown names',()=>{
  assert.equal(importRouteFile(JSON.stringify(feature([[0,0],[0,.01]])),'route.geojson').activity.source,'imported');
  assert.throws(()=>importRouteFile('mystery','route.txt'),/Unsupported route file/);
 });
+test('GeoJSON Point features import as named stops without renaming the activity',()=>{
+ const collection={type:'FeatureCollection',name:'River loop',features:[
+  {type:'Feature',properties:{role:'stop',name:'Water fountain',note:'Refill bottles'},geometry:{type:'Point',coordinates:[0,.005]}},
+  feature([[0,0],[0,.01]],{name:'River loop'})
+ ]};
+ const r=importGeoJSON(JSON.stringify(collection));
+ assert.equal(r.activity.name,'River loop');
+ assert.equal(r.activity.path.length,2);
+ assert.equal(r.activity.waypoints.length,1);
+ assert.equal(r.activity.waypoints[0].name,'Water fountain');
+ assert.equal(r.activity.waypoints[0].note,'Refill bottles');
+ assert.equal(r.activity.waypoints[0].lat,.005);
+ assert.equal(r.activity.waypoints[0].lon,0);
+});
 test('KML coordinate tuples parse lon,lat and optional altitude',()=>{
  const pts=parseKmlCoordinates('121.47,31.23,15\n 121.48,31.24,20 121.49,31.25');
  assert.equal(pts.length,3);assert.equal(pts[0].ele,15);assert.equal(pts[2].ele,undefined);assert.equal(pts[1].lat,31.24);
