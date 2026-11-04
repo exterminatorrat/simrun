@@ -1,4 +1,4 @@
-import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preferences,Split,Splits,WeatherPreset,WeatherSim,PowerSim,CadenceSim,FatigueSim,Workout,WorkoutStep,Pauses,RestStop,RouteData,RouteSurfaceEdge,StreetNameSpan} from './types.js';
+import type {Activity,LoopPlan,Point,Settings,Simulation,Sport,Sample,Preferences,Split,Splits,WeatherPreset,WeatherSim,PowerSim,CadenceSim,FatigueSim,Workout,WorkoutStep,Pauses,RestStop,RouteData,RouteSurfaceEdge,StreetNameSpan,StageRef} from './types.js';
 import {atDistance,clamp,cumulative,elevationStats,isClosedLoop,loopPath,lowerBound,rotatedLoop,validPoint,wrapLon} from './geometry.js';
 import {newId} from './id.js';
 import {expandWorkout,stepAt} from './workout.js';
@@ -149,10 +149,16 @@ export function validateActivity(value:unknown):Activity {
   if(typeof v!=='object'||!Array.isArray(v.rests)||v.rests.length>200)throw Error('Invalid pauses.');
   return {rests:v.rests.map(r=>{if(typeof r!=='object'||!Number.isFinite(r.distance)||r.distance<0||!Number.isFinite(r.seconds)||r.seconds<=0||r.seconds>86400)throw Error('Invalid rest stop.');return {distance:r.distance,seconds:r.seconds};})};
  };
- const power=cleanPower(s.power)||undefined,cadence=cleanCadence(s.cadence)||undefined,fatigue=cleanFatigue(s.fatigue)||undefined,weather=cleanWeather(s.weather)||undefined,workout=cleanWorkout(a.workout),pauses=cleanPauses(a.pauses),tags=cleanTags(a.tags),collection=sanitizeCollection(a.collection);
+ const cleanStage=(v:StageRef|undefined):StageRef|undefined=>{
+  if(v===undefined||v===null)return undefined;
+  if(typeof v!=='object'||typeof v.tourId!=='string'||!v.tourId||v.tourId.length>80)throw Error('Invalid stage reference.');
+  if(!Number.isInteger(v.index)||!Number.isInteger(v.total)||v.total<2||v.total>31||v.index<1||v.index>v.total)throw Error('Invalid stage reference.');
+  return {tourId:v.tourId,index:v.index,total:v.total};
+ };
+ const power=cleanPower(s.power)||undefined,cadence=cleanCadence(s.cadence)||undefined,fatigue=cleanFatigue(s.fatigue)||undefined,weather=cleanWeather(s.weather)||undefined,workout=cleanWorkout(a.workout),pauses=cleanPauses(a.pauses),tags=cleanTags(a.tags),stage=cleanStage(a.stage),collection=sanitizeCollection(a.collection);
  const path=a.path.map(clean),routeData=cleanRouteData(a.routeData,cumulative(path).at(-1)??0);
  // Explicitly select fields; never merge untrusted objects into app state.
- return {id:a.id,version:1,name:a.name,...(a.description!==undefined?{description:a.description.slice(0,2000)}:{}),createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path,waypoints:a.waypoints.map(clean),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,paceStrategy:s.paceStrategy??'even',...(s.paceSegments?{paceSegments:[...s.paceSegments]}:{}),hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{}),...(power?{power}:{}),...(cadence?{cadence}:{}),...(fatigue?{fatigue}:{}),...(weather?{weather}:{})},...(loop?{loop}:{}),...(splits?{splits}:{}),...(routeData?{routeData}:{}),...(workout?{workout}:{}),...(pauses?{pauses}:{}),...(tags?{tags}:{}),...(collection?{collection}:{})};
+ return {id:a.id,version:1,name:a.name,...(a.description!==undefined?{description:a.description.slice(0,2000)}:{}),createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path,waypoints:a.waypoints.map(clean),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,paceStrategy:s.paceStrategy??'even',...(s.paceSegments?{paceSegments:[...s.paceSegments]}:{}),hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{}),...(power?{power}:{}),...(cadence?{cadence}:{}),...(fatigue?{fatigue}:{}),...(weather?{weather}:{})},...(loop?{loop}:{}),...(splits?{splits}:{}),...(routeData?{routeData}:{}),...(workout?{workout}:{}),...(pauses?{pauses}:{}),...(tags?{tags}:{}),...(stage?{stage}:{}),...(collection?{collection}:{})};
 }
 /** Resolves a lap plan against the current closed route, or null when it cannot apply. */
 export function loopPlan(a:Activity):LoopResult|null {

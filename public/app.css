@@ -29,6 +29,8 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 .split-head{font-size:11px;color:var(--muted);border-top:0}
 .split-row span{text-align:end}
 .split-row span:first-child{text-align:start;color:var(--muted)}
+.stage-row{grid-template-columns:20px minmax(0,1.3fr) .9fr .9fr}
+.stage-actions{display:flex;gap:14px;flex-wrap:wrap}
 
 .zone-list,.hist-list{display:grid;gap:4px;margin-top:6px}
 .zone-row,.hist-row{display:flex;justify-content:space-between;gap:8px;font-size:13px;opacity:.85}

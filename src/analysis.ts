@@ -136,7 +136,7 @@ function caloriesFor(sport:Sport,speed:number,duration:number):number|null {
   return Math.round(met*70*duration/3600);
 }
 
-function statsFor(entry:{activity:Activity;sim:Simulation},heartRates:TrimpHeartRates):ActivityStats {
+export function activityStats(entry:{activity:Activity;sim:Simulation},heartRates:TrimpHeartRates={}):ActivityStats {
   const {activity,sim}=entry;
   const distance=sim.distance,duration=sim.duration;
   const avgSpeed=duration>0?distance/duration:0;
@@ -156,7 +156,7 @@ function statsFor(entry:{activity:Activity;sim:Simulation},heartRates:TrimpHeart
 }
 
 export function compareActivities(left:{activity:Activity;sim:Simulation},right:{activity:Activity;sim:Simulation},heartRates:TrimpHeartRates={}):{left:ActivityStats;right:ActivityStats;delta:ActivityStats} {
-  const a=statsFor(left,heartRates),b=statsFor(right,heartRates);
+ const a=activityStats(left,heartRates),b=activityStats(right,heartRates);
   const diff=(x:number|null,y:number|null):number|null=>x===null||y===null?null:y-x;
   return {
     left:a,

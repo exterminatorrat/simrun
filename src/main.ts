@@ -1,5 +1,5 @@
 import type {Activity,Place,Point,Preferences,RouteProfile,SavedPlace,Settings,Simulation,WeatherPreset,Sport,PaceStrategy} from './types.js';
-import {defaults,clock,parseClock,validateSettings,loopPlan,plannedPath,mapStyleFor,computeSplits,WEATHER_PRESETS,importedActivity,sanitizeCollection} from './model.js';
+import {defaults,clock,parseClock,validateSettings,loopPlan,plannedPath,mapStyleFor,computeSplits,WEATHER_PRESETS,importedActivity,sanitizeCollection,simulate} from './model.js';
 import {simulateInWorker} from './simulation.js';
 import {atDistance,cumulative,elevationStats,isClosedLoop,resample} from './geometry.js';
 import {download,downloadActivity,safeFilename} from './gpx.js';
@@ -15,11 +15,12 @@ import {fetchPois,poiRouteHash,type PointOfInterest} from './poi.js';
 import {Editor} from './editor.js';
 import {RouteMap} from './map.js';
 import {Charts,type ChartMode} from './charts.js';
-import {hrZones,paceHistogram,compareActivities,surfaceBreakdown,roadClassBreakdown} from './analysis.js';
+import {hrZones,paceHistogram,compareActivities,surfaceBreakdown,roadClassBreakdown,activityStats} from './analysis.js';
 import {usesPace,sportLabel} from './sports.js';
 import {averageGapPace} from './gap.js';
 import {calculateTrimp} from './trimp.js';
 import {generateBatch} from './batch.js';
+import {evenStageBoundaries,dailyStageBoundaries,stageActivities,type StageResult} from './tour.js';
 import {corridorBounds,corridorTiles,resolveTileTemplates} from './offline.js';
 import {downloadCorridor} from './sw.js';
 import {exportFIT} from './fit.js';
@@ -38,6 +39,7 @@ let initialized=false,saveTimer:ReturnType<typeof setTimeout>|undefined,sim:Simu
 let searchController:AbortController|null=null,searchId=0,savedPlaces:SavedPlace[]=[],searchResults:Place[]=[],activeSearchResult=-1,selectedSearchPlace:Place|null=null,locatedPoint:Point|null=null,activeCorridorDownloadId:string|null=null;
 let roundtripController:AbortController|null=null,roundtripActivityId='',roundtripActivityUpdatedAt=0;
 let poiController:AbortController|null=null,poiRequestId=0,poiPathKey='',poiPlaces:PointOfInterest[]=[],poiStatus='Enable optional water and toilet lookup in Settings to begin.';
+let stageMode:'days'|'distance'='days';
 let emptyDismissed=false;
 let visibleHistory:Activity[]=[],selectedHistory=new Set<string>(),sendFiles:SendFile[]=[];
 const map=new RouteMap($('map'),{add:p=>{if(editor.activity.source==='imported'){toast('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}editor.add(p);},move:(i,p)=>editor.move(i,p),insert:(i,p)=>{editor.insert(i,p);if(window.matchMedia('(max-width:760px)').matches){$('waypoint-details').setAttribute('open','');$('inspector').classList.add('open');}},select:i=>{editor.selected=i;render();$('waypoint-details').setAttribute('open','');if(window.matchMedia('(max-width:760px)').matches)$('inspector').classList.add('open');},message:toast,loopStart:f=>editor.setLoop({start:f}),freehand:points=>editor.drawFreehand(points)});
@@ -158,6 +160,9 @@ function render():void {
  setInput('activity-name',a.name);setInput('activity-description',a.description??'');setInput('sport-type',s.sport);setInput('start',s.start);setInput('offset',s.utcOffset);setInput('target',paceMode?clock(pace):speed.toFixed(2));setInput('duration',sim?clock(sim.duration):'0:00');setInput('sample',s.sample);$<HTMLSelectElement>('profile').value=resolveProfile(s.sport,s.profile);setInput('variation',s.variation*100);setInput('pace-strategy',s.paceStrategy??'even');const segmented=(s.paceStrategy??'even')==='segments';$('pace-segments-wrap').hidden=!segmented;setText('pace-segments-label',paceMode?`Equal-distance targets (${imperial?'mm:ss/mi':'mm:ss/km'})`:`Equal-distance targets (${imperial?'mph':'km/h'})`);setInput('pace-segments',(s.paceSegments??[]).map(value=>paceMode?clock(value*(imperial?1.609344:1)):(value/(imperial?1.609344:1)).toFixed(1)).join(', '));setInput('hr-average',s.hrAverage);setInput('hr-variation',s.hrVariation);setInput('gps-noise',s.gps?.noise??0);setInput('gps-dropout',Math.round((s.gps?.dropout??0)*100));
  $<HTMLInputElement>('hr-enabled').checked=s.hrEnabled;$('hr-fields').hidden=!s.hrEnabled;$('variation-wrap').hidden=s.mode!=='natural';setText('variation-value',`${Math.round(s.variation*100)}%`);
  $<HTMLSelectElement>('weather').value=s.weather?.preset??'';$('weather-fields').hidden=!s.weather;$('weather-wind-wrap').hidden=!s.weather;setInput('weather-temp',s.weather?.tempC??15);setInput('weather-humidity',s.weather?.humidity??50);setInput('weather-wind',s.weather?.headwindKph??0);$<HTMLInputElement>('power-enabled').checked=!!s.power?.enabled;$('power-fields').hidden=!s.power?.enabled;setInput('power-weight',s.power?.weightKg??70);$<HTMLInputElement>('cadence-enabled').checked=!!s.cadence?.enabled;setInput('fatigue',s.fatigue?.percent??0);setText('fatigue-value',`${Math.round(s.fatigue?.percent??0)}%`);
+ mark('stages-mode-days',stageMode==='days');mark('stages-mode-distance',stageMode==='distance');
+ $('stages-days-field').hidden=stageMode!=='days';$('stages-distance-field').hidden=stageMode!=='distance';setText('stages-unit',unit);
+ setText('stages-count',a.stage?t('Day {index} of {total}',{index:a.stage.index,total:a.stage.total}):'—');
  mark('run',s.sport==='run');mark('ride',s.sport==='ride');mark('constant',s.mode==='constant');mark('natural',s.mode==='natural');mark('draw',editor.drawing&&!freehandEnabled);mark('pan',!editor.drawing&&!freehandEnabled);mark('freehand',freehandEnabled);
  $<HTMLButtonElement>('undo').disabled=!editor.canUndo;$<HTMLButtonElement>('redo').disabled=!editor.canRedo;
  setText('source-label',a.source==='imported'?'Imported geometry':a.source==='draft'&&a.path.length?'Last route · changes pending':'Route planning');
@@ -240,6 +245,24 @@ async function applyMerge():Promise<void> {
  const other=(await store.list()).find(a=>a.id===id);if(!other)throw Error('That saved activity is no longer available.');
  await editor.merge(other);$<HTMLDialogElement>('merge-dialog').close();map.fit();toast('Routes merged.');
 }
+function stageBoundaries():number[] {
+ const total=cumulative(plannedPath(editor.activity)).at(-1)??0;
+ if(stageMode==='days')return evenStageBoundaries(total,Number($<HTMLInputElement>('stages-days').value));
+ return dailyStageBoundaries(total,Number($<HTMLInputElement>('stages-distance').value)*(preferences.units==='imperial'?1609.344:1000));
+}
+function buildStages():StageResult {validRoute();return stageActivities(editor.activity,stageBoundaries(),newId());}
+function clearStagePreview():void {$('stages-table').replaceChildren();}
+function previewStages():void {
+ const {stages,notices}=buildStages(),table=$('stages-table'),unit=distanceUnit(),climbUnit=preferences.units==='imperial'?'ft':'m';
+ table.replaceChildren();
+ const head=el('div','split-row stage-row split-head');head.append(el('span','','#'),el('span','','Distance'),el('span','','Climb'),el('span','','Time'));table.append(head);
+ stages.forEach(stage=>{
+  const stats=activityStats({activity:stage,sim:simulate(stage)}),row=el('div','split-row stage-row');
+  row.append(el('span','',String(stage.stage?.index??0),false),el('span','',`${distanceValue(stats.distance)} ${unit}`,false),el('span','',stats.elevationGain===null?'—':`${heightValue(stats.elevationGain)} ${climbUnit}`,false),el('span','',formatClock(stats.duration),false));
+  table.append(row);
+ });
+ setText('stages-status',notices.length?notices.join(' '):'Days are simulated estimates. Each day exports as its own file.');
+}
 on('draw',()=>{disableFreehand();editor.drawing=true;render();});on('pan',()=>{disableFreehand();editor.drawing=false;render();});
 on('freehand',()=>{freehandEnabled=!freehandEnabled;map.setFreehand(freehandEnabled);editor.drawing=false;render();});on('trim',()=>openRangeDialog('trim'));on('split',()=>openRangeDialog('split'));on('range-apply',applyRangeAction);on('merge',openMergeDialog);on('merge-apply',applyMerge);
 for(const [id,fn] of Object.entries({undo:()=>editor.undo(),redo:()=>editor.redo(),reverse:()=>editor.reverse(),'out-back':()=>editor.outAndBack(),loop:()=>editor.closeLoop(),clear:()=>editor.clear(),fit:()=>map.fit(),retry:()=>editor.recalculate(),'zoom-in':()=>map.zoom(1),'zoom-out':()=>map.zoom(-1)}))on(id,fn);
@@ -270,6 +293,23 @@ on('poi-cancel',()=>poiController?.abort());
 on('new',async()=>{const previous=editor.activity;if(previous.path.length>1||previous.waypoints.length){await store.save(previous);}editor.load(defaults());toast(store.available?'New activity. The previous project remains in local history.':'New activity. History lasts for this session only.');});
 on('constant',()=>updateSettings({mode:'constant'}));on('natural',()=>updateSettings({mode:'natural'}));
 on('loop-mode-laps',()=>editor.setLoopMode('laps'));on('loop-mode-distance',()=>editor.setLoopMode('distance'));on('loop-clear',()=>editor.setLoop(null));on('splits-clear',()=>editor.setSplits(null));
+on('stages-mode-days',()=>{stageMode='days';clearStagePreview();render();});
+on('stages-mode-distance',()=>{stageMode='distance';clearStagePreview();render();});
+on('stages-preview',previewStages);
+on('stages-save',async()=>{
+ const {stages,notices}=buildStages();
+ await Promise.all(stages.map(stage=>store.save(stage)));
+ setText('stages-status',notices.length?notices.join(' '):'Saved each day to the local activity library.');
+ toast('Day activities saved to your local activity library.');
+});
+on('stages-export',async()=>{
+ const {stages,notices}=buildStages(),simulations=new Map<string,Simulation>();
+ for(const stage of stages)simulations.set(stage.id,await simulateInWorker(stage));
+ const bytes=zipActivities(stages,undefined,[],simulations);
+ downloadFiles([{name:`${editor.activity.settings.start.slice(0,10)}-${safeFilename(editor.activity.name)}-days.zip`,type:'application/zip',data:bytes}]);
+ setText('stages-status',notices.length?notices.join(' '):'Exported one file set per day.');
+});
+for(const id of ['stages-days','stages-distance'])$(id).addEventListener('input',()=>clearStagePreview());
 const change=(id:string,fn:(input:HTMLInputElement)=>void)=>$(id).addEventListener('change',guarded(()=>{try{fn($<HTMLInputElement>(id));}catch(e){($<HTMLInputElement>(id)).blur();render();throw e;}}));
 change('activity-name',e=>{editor.activity.name=e.value.trim()||'Untitled activity';editor.activity.updatedAt=Date.now();render();});
 change('activity-description',e=>{const description=e.value.slice(0,2000);if(description)editor.activity.description=description;else delete editor.activity.description;editor.activity.updatedAt=Date.now();render();});
