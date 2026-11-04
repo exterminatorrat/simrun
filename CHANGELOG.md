@@ -7,6 +7,11 @@ All notable changes to SimRun are documented here. This changelog follows [Keep 
 ### Added
 
 - Collapse the route tool rail, the activity panel and the top bar, each with an edge tab that restores it; the skip link reopens a collapsed activity panel.
+- The collapsed-panel and chart choice is remembered across reloads and travels with a backup.
+
+### Fixed
+
+- Right-to-left layouts no longer place the route tool rail beneath the activity panel; search, zoom and map edges mirror correctly.
 
 ## [1.0.0] - 2026-11-03
 

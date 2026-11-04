@@ -152,6 +152,23 @@ with sync_playwright() as p:
  assert not overflow,'ar-XB layout has horizontal overflow'
  layout=page.evaluate('''()=>{const brand=document.querySelector('.brand').getBoundingClientRect(),actions=document.querySelector('.top-actions').getBoundingClientRect();return {brand:brand.left,brandRight:brand.right,actions:actions.left,actionsRight:actions.right}}''')
  assert layout['brand']>layout['actions'],'RTL header did not mirror its navigation order'
+ page.set_viewport_size({'width':1440,'height':900});page.wait_for_timeout(200)
+ rails=page.evaluate('''()=>{const rail=document.querySelector('.map-tools').getBoundingClientRect(),inspector=document.querySelector('.inspector').getBoundingClientRect(),map=document.querySelector('#map').getBoundingClientRect();const hit=(selector)=>{const box=document.querySelector(selector).getBoundingClientRect();const top=document.elementsFromPoint(box.left+box.width/2,box.top+box.height/2)[0];return Boolean(top&&top.closest('.map-tools'))};return {railLeft:rail.left,railRight:rail.right,inspectorRight:inspector.right,mapLeft:map.left,mapRight:map.right,draw:hit('#draw'),clear:hit('#clear')}}''')
+ assert rails['railLeft']>=rails['inspectorRight']-1,'RTL rail overlaps the activity panel'
+ assert rails['draw'] and rails['clear'],'RTL rail buttons are covered by another layer'
+ assert rails['mapLeft']>=rails['inspectorRight']-1 and rails['mapRight']<=rails['railLeft']+1,'RTL map does not span between panel and rail'
+ page.locator('#collapse-tools').click();page.wait_for_timeout(150)
+ assert page.locator('#route-tools').is_hidden() and page.locator('#show-tools').is_visible(),'RTL rail collapse did not swap in its restore tab'
+ assert page.locator('#collapse-tools').get_attribute('aria-controls')=='route-tools'
+ assert page.locator('#show-tools').get_attribute('aria-expanded')=='false'
+ page.locator('#show-tools').click();page.wait_for_timeout(150)
+ assert page.locator('#route-tools').is_visible() and page.locator('#collapse-tools').get_attribute('aria-expanded')=='true','rail restore tab did not restore the rail'
+ for toggle,tab in [('#collapse-inspector','#show-inspector'),('#collapse-topbar','#show-topbar')]:
+  assert page.locator(toggle).get_attribute('aria-expanded')=='true',f'{toggle} does not report its state'
+ page.locator(toggle).click();page.wait_for_timeout(150)
+ assert page.locator(tab).is_visible() and page.locator(tab).get_attribute('aria-expanded')=='false',f'{tab} did not report the collapsed state'
+ page.locator(tab).click();page.wait_for_timeout(150)
+ page.set_viewport_size({'width':390,'height':844})
  serious=[]
  other={}
  for label,result in results:

@@ -68,7 +68,8 @@ dialog{border:1px solid var(--line);background:var(--bg);color:var(--text);borde
 @media (max-width:760px){.save-indicator{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;max-width:112px;font-size:11px}.save-indicator #storage-history{min-height:30px;padding:4px 6px}.first-run-tip{font-size:11px}.shortcut-row{font-size:12px}}
 @media (pointer:coarse){.waypoint.plan-start{min-width:44px;min-height:44px}#map .maplibregl-canvas-container,#map .maplibregl-canvas{touch-action:none}}
 
-#map,.maplibregl-control-container,.search-wrap,.map-tools,.zoom-tools{direction:ltr}
+#map,.maplibregl-control-container{direction:ltr}
+[dir=rtl] #map{inset-inline-start:var(--panel);inset-inline-end:var(--rail)}
 :root[data-theme=dark] .primary,:root[data-theme=dark] button.primary,:root[data-theme=dark] input.primary{color:#282b29}
 @media (prefers-contrast: more){
  :root{--muted:#454b46;--field:#69736b;--line:#69736b;--grid:#69736b;--accent:#982f10}
