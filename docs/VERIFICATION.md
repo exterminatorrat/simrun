@@ -5,7 +5,7 @@ Last measured: 2026-11-05 on `main` (`9dea8f8`), Node 24.22.0, TypeScript 5.8.3.
 ## Current results
 
 - `npm test` (build, strict TypeScript, Node suite): **298 tests, 0 failures**.
-- `npm run lint`: **0 errors, 41 warnings**. The warnings are tracked in the lint cleanup work; they are not suppressed errors.
+- `npm run lint`: **0 errors, 41 warnings** on `9dea8f8`. A separate lint cleanup removes the remaining warnings; they are not suppressed errors.
 - `python tests/browser.py --url http://127.0.0.1:5173 --chromium /usr/local/bin/google-chrome`: **29 checks passed** in Chromium with mocked providers. The harness also runs in Firefox and WebKit in CI; Chromium-only checks are skipped elsewhere with a printed reason.
 - `python tests/a11y.py --url http://127.0.0.1:5173 --chromium /usr/local/bin/google-chrome`: **4 of 4 checks passed** over 54 states (empty, routed, every dialog and settings section, light and dark, 1440x900 and 390x844). axe-core 4.14.0 reports no violations; 76 checks stay "incomplete" (translucent map and glass contrast, a collapsed combobox, and similar) and were checked by hand. The script also covers 320 px reflow, reduced-motion and high-contrast preferences, dialog focus entry, containment and return, keyboard waypoint add, move and delete, chart arrow scrubbing, and the accented and right-to-left pseudo-locales.
 - CI (`.github/workflows/verify.yml`) runs lint, coverage, the Chromium harness and the accessibility script on every pull request, plus a `cross-browser` job for Firefox and WebKit.
