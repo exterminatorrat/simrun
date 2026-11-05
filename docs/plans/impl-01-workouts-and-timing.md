@@ -2,8 +2,8 @@
 
 Planning artifact for the SimRun repository (`/tmp/hoplite/workspace`). This
 document plans implementation only; no file under `src/`, `tests/`, or
-`public/` is changed this round. Baseline: `npm ci && npm test` passes 52/52
-Node tests.
+`public/` is changed this round. Baseline at the time of writing: `npm ci && npm
+test` passed 52/52 Node tests; the current suite is 298 tests.
 
 ## 1. Goal
 

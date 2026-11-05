@@ -5,8 +5,9 @@ features. It is a planning artifact: no product code changed to produce it. Each
 plan is self-contained, cites real files/functions from this repository, and ends in
 ordered milestones that each have a concrete verification step.
 
-Baseline for everything below: `npm ci && npm test` on this checkout is green at
-**52/52 Node tests** (Node 24.21.0; the only installed dependency is `typescript@5.8.3`).
+Baseline when these plans were written: `npm ci && npm test` was green at **52/52
+Node tests** (Node 24.21.0; the only installed dependency was `typescript@5.8.3`).
+The current suite is **298 tests**; see [../VERIFICATION.md](../VERIFICATION.md).
 
 ## Feature inventory
 

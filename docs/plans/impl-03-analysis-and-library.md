@@ -1,6 +1,6 @@
 # Implementation Plan 03 — Analysis charts and library ergonomics
 
-Concrete implementation plan for the scope in `docs/plans/03-analysis-and-library.md`. Baseline: `npm test` passes 52/52 Node tests on Node 24.21.0 with TypeScript 5.8.3; `npm run typecheck` is clean. Constraints inherited from `docs/plans/README.md`: strict TypeScript, native DOM, ES modules, zero new runtime dependencies, deterministic seeded simulation, `Activity.version` stays 1, and all derived numbers keep the simulated/estimated labeling. This round changes only `src/`, `tests/`, `public/`, and this plan document.
+Concrete implementation plan for the scope in `docs/plans/03-analysis-and-library.md`. Baseline at the time of writing: `npm test` passed 52/52 Node tests on Node 24.21.0 with TypeScript 5.8.3; the current suite is 298 tests. `npm run typecheck` is clean. Constraints inherited from `docs/plans/README.md`: strict TypeScript, native DOM, ES modules, zero new runtime dependencies, deterministic seeded simulation, `Activity.version` stays 1, and all derived numbers keep the simulated/estimated labeling. This round changes only `src/`, `tests/`, `public/`, and this plan document.
 
 ## 1. Goal
 
