@@ -31,7 +31,8 @@ function fitFile(body:Buf):Uint8Array {
 function validated(s:Simulation):Sample[] {
  if(s.points.length<2)throw Error('Route needs at least two points.');
  let previous=-Infinity;
- for(const p of s.points){if(!validPoint(p)||!Number.isFinite(p.time)||p.time<=previous||!Number.isFinite(new Date(p.time).getTime()))throw Error('Export needs valid coordinates and strictly increasing timestamps.');if(p.ele!==undefined&&!Number.isFinite(p.ele))throw Error('Invalid elevation.');if(p.hr!==undefined&&(!Number.isInteger(p.hr)||p.hr<0||p.hr>255))throw Error('Invalid heart-rate data.');previous=p.time;}
+ for(const p of s.points){if(!validPoint(p)||!Number.isFinite(p.time)||p.time<=previous||!Number.isFinite(new Date(p.time).getTime()))throw Error('Export needs valid coordinates and strictly increasing timestamps.');
+ if(p.ele!==undefined&&!Number.isFinite(p.ele))throw Error('Invalid elevation.');if(p.hr!==undefined&&(!Number.isInteger(p.hr)||p.hr<0||p.hr>255))throw Error('Invalid heart-rate data.');previous=p.time;}
  return s.points;
 }
 

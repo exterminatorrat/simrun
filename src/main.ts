@@ -44,10 +44,37 @@ let poiController:AbortController|null=null,poiRequestId=0,poiPathKey='',poiPlac
 let stageMode:'days'|'distance'='days';
 let emptyDismissed=false;
 let visibleHistory:Activity[]=[],selectedHistory=new Set<string>(),sendFiles:SendFile[]=[];
-const map=new RouteMap($('map'),{add:p=>{if(editor.activity.source==='imported'){toast('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');return;}editor.add(p);},move:(i,p)=>editor.move(i,p),insert:(i,p)=>{editor.insert(i,p);if(window.matchMedia('(max-width:760px)').matches){$('waypoint-details').setAttribute('open','');$('inspector').classList.add('open');}},select:i=>{editor.selected=i;render();$('waypoint-details').setAttribute('open','');if(window.matchMedia('(max-width:760px)').matches)$('inspector').classList.add('open');},message:toast,loopStart:f=>editor.setLoop({start:f}),freehand:points=>editor.drawFreehand(points)});
+const map=new RouteMap($('map'),{
+ add:p=>{
+  if(editor.activity.source==='imported'){
+   toast('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.');
+   return;
+  }
+  editor.add(p);
+ },move:(i,p)=>editor.move(i,p),insert:(i,p)=>{
+  editor.insert(i,p);
+  if(window.matchMedia('(max-width:760px)').matches){
+   $('waypoint-details').setAttribute('open','');
+   $('inspector').classList.add('open');
+  }
+ },select:i=>{
+  editor.selected=i;
+  render();
+  $('waypoint-details').setAttribute('open','');
+  if(window.matchMedia('(max-width:760px)').matches)$('inspector').classList.add('open');
+ },message:toast,loopStart:f=>editor.setLoop({start:f}),freehand:points=>editor.drawFreehand(points)
+});
 const charts=new Charts($('chart'),p=>map.hover(p),p=>map.scrub(p));
 editor.alternatesEnabled=preferences.alternates;
-function guarded(fn:()=>void|Promise<void>):()=>void{return ()=>{try{Promise.resolve(fn()).catch(error=>toast(failureMessage(error,'The action could not be completed — check the details and retry.')));}catch(error){toast(failureMessage(error,'The action could not be completed — check the details and retry.'));}};}
+function guarded(fn:()=>void|Promise<void>):()=>void{
+ return ()=>{
+  try{
+   Promise.resolve(fn()).catch(error=>toast(failureMessage(error,'The action could not be completed — check the details and retry.')));
+  }catch(error){
+   toast(failureMessage(error,'The action could not be completed — check the details and retry.'));
+  }
+ };
+}
 function on(id:string,fn:()=>void|Promise<void>):void{$(id).addEventListener('click',guarded(fn));}
 on('map-center-add',()=>{if(editor.activity.source==='imported'){toast(t('Imported geometry is preserved. Use Waypoints → Convert to edit its road route.'));return;}const selected=editor.activity.waypoints.length;editor.add(map.centerPoint());editor.selected=selected;render();});
 function distanceValue(m:number):string{return formatNumber(m/(preferences.units==='imperial'?1609.344:1000),{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -56,7 +83,16 @@ function distanceInputValue(m:number):string{return (m/(preferences.units==='imp
 function lapLabel(n:number):string{return t('lap',{count:Number(n.toFixed(2))});}
 function heightValue(v:number|null):string{return v===null?'—':formatNumber(Math.round(v*(preferences.units==='imperial'?3.28084:1)));}
 function stat(id:string,value:string,unit=''):void{const e=$(id);e.replaceChildren(document.createTextNode(t(value)));if(unit)e.append(document.createTextNode(' '),el('small','',t(unit)));}
-function mark(id:string,on:boolean):void{const button=$(id);button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));const group=button.closest<HTMLElement>('.segmented,.sport-switch');if(group){const index=[...group.querySelectorAll('button')].findIndex(item=>item.classList.contains('active'));if(index>=0)group.style.setProperty('--seg-index',String(index));}}
+function mark(id:string,on:boolean):void{
+ const button=$(id);
+ button.classList.toggle('active',on);
+ button.setAttribute('aria-pressed',String(on));
+ const group=button.closest<HTMLElement>('.segmented,.sport-switch');
+ if(group){
+  const index=[...group.querySelectorAll('button')].findIndex(item=>item.classList.contains('active'));
+  if(index>=0)group.style.setProperty('--seg-index',String(index));
+ }
+}
 function setDraftSavedStatus():void {
  if(!store.available){setText('draft-save-state','Session only — not saved');return;}
  const time=formatTime(new Date());
@@ -78,7 +114,12 @@ function openShortcutHelp():void {
 }
 function updateProvidersPrivacySummary():void {
  const enabled=(id:string)=>$<HTMLInputElement>(id).checked;
- const lines=[t('Map, routing and elevation requests go to the selected providers when used.'),enabled('geocoding-enabled')?t('Submitted place searches send query text to Nominatim.'):t('Nominatim place search is off.'),enabled('search-suggestions')?t('Typed search text is sent to Photon after a pause.'):t('Photon search suggestions are off.'),enabled('poi-enabled')?t('Find places sends up to 64 route-corridor coordinates to Overpass.'):t('Water and toilet lookup is off.'),enabled('surface-data-enabled')?t('Route geometry is sent to Valhalla for surface and road details.'):t('Surface and road-detail requests are off.'),enabled('offline-routing')?t('Routing and elevation may use this device’s cache; cache misses still use the network.'):t('Routing and elevation use the network without an offline response cache.')];
+ const lines=[t('Map, routing and elevation requests go to the selected providers when used.'),
+ enabled('geocoding-enabled')?t('Submitted place searches send query text to Nominatim.'):t('Nominatim place search is off.'),
+ enabled('search-suggestions')?t('Typed search text is sent to Photon after a pause.'):t('Photon search suggestions are off.'),
+ enabled('poi-enabled')?t('Find places sends up to 64 route-corridor coordinates to Overpass.'):t('Water and toilet lookup is off.'),
+ enabled('surface-data-enabled')?t('Route geometry is sent to Valhalla for surface and road details.'):t('Surface and road-detail requests are off.'),
+ enabled('offline-routing')?t('Routing and elevation may use this device’s cache; cache misses still use the network.'):t('Routing and elevation use the network without an offline response cache.')];
  setText('providers-summary',lines.join(' '));
 }
 window.setInterval(()=>{if(initialized)void refreshStorageIndicator();},60_000);
@@ -92,7 +133,16 @@ function searchNotice(kind:'offline'|'typing'|'photon'|'nominatim'):string {
 }
 function showSearchResults(places:Place[],kind:'offline'|'typing'|'photon'|'nominatim'):void {
  const input=$<HTMLInputElement>('search'),list=$('search-results');searchResults=places;activeSearchResult=-1;list.replaceChildren();
- places.forEach((place,index)=>{const option=el('button','search-option',place.name,false);option.type='button';option.id=`search-result-${index}`;option.setAttribute('role','option');option.setAttribute('aria-selected','false');option.tabIndex=-1;option.onclick=()=>selectSearchResult(index);list.append(option);});
+ places.forEach((place,index)=>{
+  const option=el('button','search-option',place.name,false);
+  option.type='button';
+  option.id=`search-result-${index}`;
+  option.setAttribute('role','option');
+  option.setAttribute('aria-selected','false');
+  option.tabIndex=-1;
+  option.onclick=()=>selectSearchResult(index);
+  list.append(option);
+ });
  list.hidden=!places.length;input.setAttribute('aria-expanded',String(places.length>0));input.removeAttribute('aria-activedescendant');
  const disclosure=$('search-disclosure');disclosure.textContent=searchNotice(kind);disclosure.hidden=!places.length&&kind==='offline';
 }
@@ -113,13 +163,26 @@ function mergeSearchPlaces(...groups:Place[][]):Place[] {
 }
 function renderSavedPlaces():void {
  const list=$('saved-places');list.replaceChildren();setText('saved-place-count',savedPlaces.length?`${savedPlaces.length} of 100 places saved on this device.`:'No saved places.');
- for(const place of savedPlaces){const row=el('div','saved-place-row'),open=button(place.name,()=>map.focus(place),undefined,'saved-place-open',false),remove=button(`Remove ${place.name}`,guarded(async()=>{await store.removeSavedPlace(place.id);savedPlaces=await store.listSavedPlaces();renderSavedPlaces();await refreshStorageUsage();}),undefined,'saved-place-remove');row.append(open,remove);list.append(row);}
+ for(const place of savedPlaces){
+  const row=el('div','saved-place-row'),open=button(place.name,()=>map.focus(place),undefined,'saved-place-open',false),remove=button(`Remove ${place.name}`,guarded(async()=>{
+   await store.removeSavedPlace(place.id);
+   savedPlaces=await store.listSavedPlaces();
+   renderSavedPlaces();
+   await refreshStorageUsage();
+  }),undefined,'saved-place-remove');
+  row.append(open,remove);
+  list.append(row);
+ }
 }
 function formatBytes(bytes:number):string {return bytes>=1048576?`${formatNumber(bytes/1048576,{maximumFractionDigits:1})} ${t('MB')}`:bytes>=1024?`${formatNumber(Math.round(bytes/1024))} ${t('KB')}`:`${formatNumber(Math.max(0,Math.round(bytes)))} ${t('B')}`;}
 function renderCorridors(records:NonNullable<Awaited<ReturnType<typeof offlineStatus>>>['corridors']):void {
  const list=$('offline-corridors');list.replaceChildren();
  for(const record of records){
-  const row=el('li','offline-corridor'),detail=el('span','offline-corridor-detail'),remove=button(`Delete ${record.name}`,guarded(async()=>{const result=await deleteCorridor(record.id);if(!result?.deleted)throw Error('The downloaded corridor could not be removed.');await refreshOfflineStatus();}),undefined,'offline-corridor-remove');
+  const row=el('li','offline-corridor'),detail=el('span','offline-corridor-detail'),remove=button(`Delete ${record.name}`,guarded(async()=>{
+   const result=await deleteCorridor(record.id);
+   if(!result?.deleted)throw Error('The downloaded corridor could not be removed.');
+   await refreshOfflineStatus();
+  }),undefined,'offline-corridor-remove');
   const b=record.bounds,bounds=`${formatNumber(b.minLat,{maximumFractionDigits:3})}, ${formatNumber(b.minLon,{maximumFractionDigits:3})} – ${formatNumber(b.maxLat,{maximumFractionDigits:3})}, ${formatNumber(b.maxLon,{maximumFractionDigits:3})}`,date=formatDate(record.createdAt);
   detail.textContent=t('{name} · {bounds} · {tileCount} tiles · about {size} · {date}',{name:record.name,bounds,tileCount:formatNumber(record.tileCount),size:formatBytes(record.estimatedBytes),date});row.append(detail,remove);list.append(row);
  }
@@ -133,9 +196,33 @@ async function saveNamedPlace(place:Place):Promise<void> {
  const name=input.trim().slice(0,80);if(!name)throw Error('Enter a name of up to 80 characters.');
  await store.saveSavedPlace({id:newId(),name,lat:place.lat,lon:place.lon});savedPlaces=await store.listSavedPlaces();renderSavedPlaces();await refreshStorageUsage();toast('Place saved on this device.');
 }
-function validRoute():void{if(editor.activity.path.length<2)throw Error('Draw or import a route first.');if(editor.activity.source==='draft')throw Error(editor.pending?'Routing is still in progress.':'Resolve the route before saving or exporting. A dashed line is only a waypoint preview.');if(simulationPending)throw Error('Simulation is still in progress.');if(!sim)throw Error(simulationError||'Check activity settings before exporting.');}
-function updateSettings(p:Partial<Settings>):void {if(p.sport){const title=/^(Morning|Afternoon|Evening) (run|ride|walk|hike|trail run|mountain bike)$/.exec(editor.activity.name);if(title)editor.activity.name=`${title[1]} ${sportLabel(p.sport).toLowerCase()}`;}const s={...editor.activity.settings,...p};validateSettings(s);editor.changeSettings(p);}
-function chooseSport(sport:Sport):void {const current=editor.activity.settings;let pace=current.pace,speed=current.speed;if(sport==='walk')pace=600;else if(sport==='hike')pace=720;else if(sport==='trail-run')pace=360;else if(sport==='mtb')speed=14;const paceSegments=current.paceStrategy==='segments'?Array.from({length:Math.max(2,current.paceSegments?.length??3)},()=>usesPace(sport)?pace:speed):undefined;updateSettings({sport,...(sport!=='run'&&sport!=='ride'?usesPace(sport)?{pace}:{speed}:{}),...(sport!=='run'&&sport!=='ride'?{profile:undefined}:{}),...(paceSegments?{paceSegments}:{})});}
+function validRoute():void{
+ if(editor.activity.path.length<2)throw Error('Draw or import a route first.');
+ if(editor.activity.source==='draft')throw Error(editor.pending?'Routing is still in progress.':'Resolve the route before saving or exporting. A dashed line is only a waypoint preview.');
+ if(simulationPending)throw Error('Simulation is still in progress.');
+ if(!sim)throw Error(simulationError||'Check activity settings before exporting.');
+}
+function updateSettings(p:Partial<Settings>):void {
+ if(p.sport){
+  const title=/^(Morning|Afternoon|Evening) (run|ride|walk|hike|trail run|mountain bike)$/.exec(editor.activity.name);
+  if(title)editor.activity.name=`${title[1]} ${sportLabel(p.sport).toLowerCase()}`;
+ }
+ const s={...editor.activity.settings,...p};
+ validateSettings(s);
+ editor.changeSettings(p);
+}
+function chooseSport(sport:Sport):void {
+ const current=editor.activity.settings;
+ let pace=current.pace,speed=current.speed;
+ if(sport==='walk')pace=600;
+ else if(sport==='hike')pace=720;
+ else if(sport==='trail-run')pace=360;
+ else if(sport==='mtb')speed=14;
+ const paceSegments=current.paceStrategy==='segments'?Array.from({length:Math.max(2,current.paceSegments?.length??3)},()=>usesPace(sport)?pace:speed):undefined;
+ updateSettings({
+  sport,...(sport!=='run'&&sport!=='ride'?usesPace(sport)?{pace}:{speed}:{}),...(sport!=='run'&&sport!=='ride'?{profile:undefined}:{}),...(paceSegments?{paceSegments}:{})
+ });
+}
 let freehandEnabled=false;
 editor.onSplitOutputsChange=(outputs,previous,committed)=>{
  if(committed)return;
@@ -149,19 +236,78 @@ function render():void {
  const nextPoiPathKey=a.source==='draft'||a.path.length<2?'':poiRouteHash(a.path);
  if(nextPoiPathKey!==poiPathKey){poiController?.abort();poiController=null;poiRequestId++;poiPlaces=[];poiPathKey=nextPoiPathKey;poiStatus=nextPoiPathKey?'Find nearby water and toilets along this route.':'A resolved route is needed to find nearby places.';map.setPois([]);}
  const start=a.path[0]??a.waypoints[0];if(start&&!$<HTMLInputElement>('roundtrip-lat').value){setInput('roundtrip-lat',start.lat);setInput('roundtrip-lon',start.lon);}
- if(lastPath!==a.path||lastSettings!==key){lastPath=a.path;lastSettings=key;sim=null;simulationError='';simulationPending=false;const request=++simulationRequest;if(a.path.length>1)try{const result=simulateInWorker(a);if(result instanceof Promise){simulationPending=true;const isCurrent=()=>request===simulationRequest&&editor.activity.id===a.id&&editor.activity.path===a.path&&JSON.stringify([editor.activity.settings,editor.activity.loop,editor.activity.pauses,editor.activity.workout])===key;void result.then(value=>{if(!isCurrent())return;sim=value;simulationPending=false;render();}).catch(error=>{if(!isCurrent())return;simulationError=error instanceof Error?error.message:'Invalid simulation.';simulationPending=false;render();});}else sim=result;}catch(error){simulationError=failureMessage(error,'Simulation could not be created — review the activity settings.');}}
+ if(lastPath!==a.path||lastSettings!==key){
+  lastPath=a.path;
+  lastSettings=key;
+  sim=null;
+  simulationError='';
+  simulationPending=false;
+  const request=++simulationRequest;
+  if(a.path.length>1)try{
+   const result=simulateInWorker(a);
+   if(result instanceof Promise){
+    simulationPending=true;
+    const isCurrent=()=>request===simulationRequest&&editor.activity.id===a.id&&editor.activity.path===a.path&&JSON.stringify([editor.activity.settings,editor.activity.loop,editor.activity.pauses,editor.activity.workout])===key;
+    void result.then(value=>{
+     if(!isCurrent())return;
+     sim=value;
+     simulationPending=false;
+     render();
+    }).catch(error=>{
+     if(!isCurrent())return;
+     simulationError=error instanceof Error?error.message:'Invalid simulation.';
+     simulationPending=false;
+     render();
+    });
+   }else sim=result;
+  }catch(error){
+   simulationError=failureMessage(error,'Simulation could not be created — review the activity settings.');
+  }
+ }
  const plan=loopPlan(a),route=plan?plan.path:a.path;
  map.update(a,editor.selected,editor.drawing,plan?{start:route[0],end:route[route.length-1]}:undefined);charts.render(a,sim,preferences);
  const routeEmpty=a.path.length===0&&a.waypoints.length===0;$('empty').hidden=emptyDismissed||!routeEmpty;$('first-run-tip').hidden=preferences.tipsDismissed||!routeEmpty;
  const meters=sim?.distance||cumulative(route).at(-1)||0,imperial=preferences.units==='imperial',unit=distanceUnit(),heights=elevationStats(route),pace=s.pace*(imperial?1.609344:1),speed=s.speed/(imperial?1.609344:1),paceMode=usesPace(s.sport);
- stat('distance',distanceValue(meters),unit);stat('duration-stat',sim?formatClock(sim.duration):simulationPending?'…':'0:00');stat('pace-stat',paceMode?formatClock(pace):formatNumber(speed,{maximumFractionDigits:1}),paceMode?`/${unit}`:imperial?'mph':'km/h');stat('elevation-stat',heightValue(heights.gain),imperial?'ft':'m');
+ stat('distance',distanceValue(meters),unit);
+ stat('duration-stat',sim?formatClock(sim.duration):simulationPending?'…':'0:00');
+ stat('pace-stat',paceMode?formatClock(pace):formatNumber(speed,{maximumFractionDigits:1}),paceMode?`/${unit}`:imperial?'mph':'km/h');
+ stat('elevation-stat',heightValue(heights.gain),imperial?'ft':'m');
  setText('moving-stat',sim?formatClock(Math.max(0,sim.duration-(a.pauses?.rests??[]).reduce((n,r)=>n+r.seconds,0))):simulationPending?'…':'0:00');
  setText('pace-stat-label',paceMode?'Avg. pace':'Avg. speed');setText('target-label',paceMode?`Target pace /${unit}`:`Target speed ${imperial?'mph':'km/h'}`);
  const gap=sim&&paceMode?averageGapPace(sim.points):null,trimp=sim?calculateTrimp(sim.points,{restingHr:preferences.trimpRestingHr??60,maxHr:preferences.trimpMaxHr??preferences.hrMax}):null;
  stat('gap-stat',gap===null?'—':formatClock(gap*(imperial?1.609344:1)),gap===null?'':`/${unit}`);stat('trimp-stat',trimp===null?'—':formatNumber(trimp,{maximumFractionDigits:1}));
- setInput('activity-name',a.name);setInput('activity-description',a.description??'');setInput('sport-type',s.sport);setInput('start',s.start);setInput('offset',s.utcOffset);setInput('target',paceMode?clock(pace):speed.toFixed(2));setInput('duration',sim?clock(sim.duration):'0:00');setInput('sample',s.sample);$<HTMLSelectElement>('profile').value=resolveProfile(s.sport,s.profile);setInput('variation',s.variation*100);setInput('pace-strategy',s.paceStrategy??'even');const segmented=(s.paceStrategy??'even')==='segments';$('pace-segments-wrap').hidden=!segmented;setText('pace-segments-label',paceMode?`Equal-distance targets (${imperial?'mm:ss/mi':'mm:ss/km'})`:`Equal-distance targets (${imperial?'mph':'km/h'})`);setInput('pace-segments',(s.paceSegments??[]).map(value=>paceMode?clock(value*(imperial?1.609344:1)):(value/(imperial?1.609344:1)).toFixed(1)).join(', '));setInput('hr-average',s.hrAverage);setInput('hr-variation',s.hrVariation);setInput('gps-noise',s.gps?.noise??0);setInput('gps-dropout',Math.round((s.gps?.dropout??0)*100));
+ setInput('activity-name',a.name);
+ setInput('activity-description',a.description??'');
+ setInput('sport-type',s.sport);
+ setInput('start',s.start);
+ setInput('offset',s.utcOffset);
+ setInput('target',paceMode?clock(pace):speed.toFixed(2));
+ setInput('duration',sim?clock(sim.duration):'0:00');
+ setInput('sample',s.sample);
+ $<HTMLSelectElement>('profile').value=resolveProfile(s.sport,s.profile);
+ setInput('variation',s.variation*100);
+ setInput('pace-strategy',s.paceStrategy??'even');
+ const segmented=(s.paceStrategy??'even')==='segments';
+ $('pace-segments-wrap').hidden=!segmented;
+ setText('pace-segments-label',paceMode?`Equal-distance targets (${imperial?'mm:ss/mi':'mm:ss/km'})`:`Equal-distance targets (${imperial?'mph':'km/h'})`);
+ setInput('pace-segments',(s.paceSegments??[]).map(value=>paceMode?clock(value*(imperial?1.609344:1)):(value/(imperial?1.609344:1)).toFixed(1)).join(', '));
+ setInput('hr-average',s.hrAverage);
+ setInput('hr-variation',s.hrVariation);
+ setInput('gps-noise',s.gps?.noise??0);
+ setInput('gps-dropout',Math.round((s.gps?.dropout??0)*100));
  $<HTMLInputElement>('hr-enabled').checked=s.hrEnabled;$('hr-fields').hidden=!s.hrEnabled;$('variation-wrap').hidden=s.mode!=='natural';setText('variation-value',`${Math.round(s.variation*100)}%`);
- $<HTMLSelectElement>('weather').value=s.weather?.preset??'';$('weather-fields').hidden=!s.weather;$('weather-wind-wrap').hidden=!s.weather;setInput('weather-temp',s.weather?.tempC??15);setInput('weather-humidity',s.weather?.humidity??50);setInput('weather-wind',s.weather?.headwindKph??0);$<HTMLInputElement>('power-enabled').checked=!!s.power?.enabled;$('power-fields').hidden=!s.power?.enabled;setInput('power-weight',s.power?.weightKg??70);$<HTMLInputElement>('cadence-enabled').checked=!!s.cadence?.enabled;setInput('fatigue',s.fatigue?.percent??0);setText('fatigue-value',`${Math.round(s.fatigue?.percent??0)}%`);
+ $<HTMLSelectElement>('weather').value=s.weather?.preset??'';
+ $('weather-fields').hidden=!s.weather;
+ $('weather-wind-wrap').hidden=!s.weather;
+ setInput('weather-temp',s.weather?.tempC??15);
+ setInput('weather-humidity',s.weather?.humidity??50);
+ setInput('weather-wind',s.weather?.headwindKph??0);
+ $<HTMLInputElement>('power-enabled').checked=!!s.power?.enabled;
+ $('power-fields').hidden=!s.power?.enabled;
+ setInput('power-weight',s.power?.weightKg??70);
+ $<HTMLInputElement>('cadence-enabled').checked=!!s.cadence?.enabled;
+ setInput('fatigue',s.fatigue?.percent??0);
+ setText('fatigue-value',`${Math.round(s.fatigue?.percent??0)}%`);
  mark('stages-mode-days',stageMode==='days');mark('stages-mode-distance',stageMode==='distance');
  $('stages-days-field').hidden=stageMode!=='days';$('stages-distance-field').hidden=stageMode!=='distance';setText('stages-unit',unit);
  setText('stages-count',a.stage?t('Day {index} of {total}',{index:a.stage.index,total:a.stage.total}):'—');
@@ -185,31 +331,90 @@ function render():void {
  else alts.hidden=true;setText('workout-unit',unit);setInput('workout-steps',wsteps.map(st=>`${distanceInputValue(st.distance)}:${usesPace(s.sport)?(st.pace!==undefined?clock(st.pace):''):(st.speed!==undefined?st.speed:'')}`).join(', '));$('workout-clear').hidden=!wsteps.length;
  setInput('tags',(a.tags??[]).join(', '));setInput('collection',a.collection??'');
  const routeEdges=a.routeData?.surfaceEdges??[],surfaceRows=surfaceBreakdown(routeEdges),roadRows=roadClassBreakdown(routeEdges),surfaceList=$('surface-summary');surfaceList.replaceChildren();
- for(const [title,rows] of [['Surface',surfaceRows],['Road type',roadRows]] as const){if(!rows.length)continue;surfaceList.append(el('strong','route-data-heading',`By ${title.toLowerCase()}`));rows.forEach(row=>{const item=el('div','route-data-row');item.append(el('span','',row.name,false),el('span','',`${distanceValue(row.distance)} ${unit}`));surfaceList.append(item);});}
- setText('surface-note',surfaceRows.length||roadRows.length?'Classified edge distances supplied by the routing service; unclassified edges are omitted.':a.path.length<2||a.source==='draft'?'Resolve a road route before requesting surface or road-type details.':preferences.surfaceDataEnabled?'This routing service did not return surface or road-type details for this route.':'Optional and off by default. Enable surface and road-type details in Settings to request them from the routing service.');
- const poiList=$('poi-results');poiList.replaceChildren();poiPlaces.forEach(place=>{const item=el('div','poi-result'),kind=place.kind==='water'?'Water':'Toilets';item.append(el('span','poi-kind',kind),el('span','',place.name||`${place.lat.toFixed(5)}, ${place.lon.toFixed(5)}`,false));poiList.append(item);});
+ for(const [title,rows] of [['Surface',surfaceRows],['Road type',roadRows]] as const){
+  if(!rows.length)continue;
+  surfaceList.append(el('strong','route-data-heading',`By ${title.toLowerCase()}`));
+  rows.forEach(row=>{
+   const item=el('div','route-data-row');
+   item.append(el('span','',row.name,false),el('span','',`${distanceValue(row.distance)} ${unit}`));
+   surfaceList.append(item);
+  });
+ }
+ setText('surface-note',
+ surfaceRows.length||roadRows.length
+  ?'Classified edge distances supplied by the routing service; unclassified edges are omitted.'
+  :a.path.length<2||a.source==='draft'
+   ?'Resolve a road route before requesting surface or road-type details.'
+   :preferences.surfaceDataEnabled
+    ?'This routing service did not return surface or road-type details for this route.'
+    :'Optional and off by default. Enable surface and road-type details in Settings to request them from the routing service.');
+ const poiList=$('poi-results');
+ poiList.replaceChildren();
+ poiPlaces.forEach(place=>{
+  const item=el('div','poi-result'),kind=place.kind==='water'?'Water':'Toilets';
+  item.append(el('span','poi-kind',kind),el('span','',place.name||`${place.lat.toFixed(5)}, ${place.lon.toFixed(5)}`,false));
+  poiList.append(item);
+ });
  setText('poi-status',poiStatus);$<HTMLButtonElement>('poi-find').disabled=!preferences.poiEnabled||a.path.length<2||a.source==='draft'||poiController!==null;$('poi-cancel').hidden=poiController===null;
  $('splits-clear').hidden=!hasSplits;
  const splitTable=$('splits-table');splitTable.replaceChildren();
  if(sim&&hasSplits){
   const head=el('div','split-row split-head');head.append(el('span','','#'),el('span','','Split'),el('span','','Time'),el('span','',paceMode?'Pace':'Speed'),el('span','','GAP'),el('span','','Gain'));splitTable.append(head);
-  splits.forEach((sp,i)=>{const row=el('div','split-row');const value=paceMode?(sp.duration>0?sp.duration/(sp.distance/(imperial?1609.344:1000)):0):sp.speed*(imperial?2.2369362920544:3.6),gapValue=sp.gapPace===undefined?'—':formatClock(sp.gapPace*(imperial?1.609344:1));row.append(el('span','',String(i+1)),el('span','',`${distanceValue(sp.distance)} ${unit}`),el('span','',sp.stopped?`${formatClock(sp.duration)} · rest`:formatClock(sp.duration)),el('span','',paceMode?formatClock(value):formatNumber(value,{maximumFractionDigits:1})),el('span','',gapValue),el('span','',sp.gain===null?'—':heightValue(sp.gain)));splitTable.append(row);});
+  splits.forEach((sp,i)=>{
+   const row=el('div','split-row');
+   const value=paceMode?(sp.duration>0?sp.duration/(sp.distance/(imperial?1609.344:1000)):0):sp.speed*(imperial?2.2369362920544:3.6),
+   gapValue=sp.gapPace===undefined?'—':formatClock(sp.gapPace*(imperial?1.609344:1));
+   row.append(el('span','',String(i+1)),
+   el('span','',`${distanceValue(sp.distance)} ${unit}`),
+   el('span',
+   '',
+   sp.stopped?`${formatClock(sp.duration)} · rest`:formatClock(sp.duration)),
+   el('span',
+   '',
+   paceMode?formatClock(value):formatNumber(value,{maximumFractionDigits:1})),
+   el('span','',gapValue),
+   el('span','',sp.gain===null?'—':heightValue(sp.gain)));
+   splitTable.append(row);
+  });
  }
  setText('waypoint-count',String(a.waypoints.length));$('edit-import').hidden=a.source!=='imported';const list=$('waypoints');
  // Rebuilding the list while a stop field has focus would drop the caret mid-typing.
  const keepRows=editingStops;
  const zoneBox=$('hr-zones');zoneBox.replaceChildren();
- if(sim&&s.hrEnabled){for(const z of hrZones(sim.points,preferences.hrMax)){const row=el('div','zone-row');row.append(el('span','',`Z${z.index} · ${z.min}\u2013${z.max} bpm`),el('span','',`${formatClock(z.seconds)} \u00b7 ${formatNumber(z.percent,{maximumFractionDigits:0})}%`));zoneBox.append(row);}}
+ if(sim&&s.hrEnabled){
+  for(const z of hrZones(sim.points,preferences.hrMax)){
+   const row=el('div','zone-row');
+   row.append(el('span','',`Z${z.index} · ${z.min}\u2013${z.max} bpm`),el('span','',`${formatClock(z.seconds)} \u00b7 ${formatNumber(z.percent,{maximumFractionDigits:0})}%`));
+   zoneBox.append(row);
+  }
+ }
  else zoneBox.append(el('p','fine-print','Enable simulated heart rate to see time in each zone.'));
  const hist=sim?paceHistogram(sim.points,s.sport,preferences.units)[0]:null,histBox=$('pace-hist');histBox.replaceChildren();
- if(hist&&hist.bins.length){for(const b of hist.bins){if(b.seconds<=0)continue;const row=el('div','hist-row');row.append(el('span','',paceMode?`${formatClock(b.min)}\u2013${formatClock(b.max)} /${unit}`:`${b.min}\u2013${b.max} ${hist.unit}`),el('span','',formatClock(b.seconds)));histBox.append(row);}}
+ if(hist&&hist.bins.length){
+  for(const b of hist.bins){
+   if(b.seconds<=0)continue;
+   const row=el('div','hist-row');
+   row.append(el('span','',paceMode?`${formatClock(b.min)}\u2013${formatClock(b.max)} /${unit}`:`${b.min}\u2013${b.max} ${hist.unit}`),el('span','',formatClock(b.seconds)));
+   histBox.append(row);
+  }
+ }
  else histBox.append(el('p','fine-print','A completed route is needed for the pace histogram.'));
  setText('energy-note',sim?`Estimated energy ${sim.calories??0} kcal — a simulated estimate, not a measurement.`:'');
  if(!keepRows){
  list.replaceChildren();
  a.waypoints.forEach((p,i)=>{
   const row=el('div',`waypoint-row ${i===editor.selected?'selected':''}`);
-  row.append(el('span','point-index',String(i+1)),button(`${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`,()=>{editor.selected=i;map.focus(p);render();},undefined,'coordinate'),button('Move earlier',()=>editor.reorder(i,-1),'up','icon-button'),button('Move later',()=>editor.reorder(i,1),'down','icon-button'),button(`Delete waypoint ${i+1}`,()=>editor.remove(i),'close','icon-button'));
+  row.append(el('span','point-index',String(i+1)),
+  button(`${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`,
+  ()=>{editor.selected=i;map.focus(p);render();},
+  undefined,
+  'coordinate'),
+  button('Move earlier',()=>editor.reorder(i,-1),'up','icon-button'),
+  button('Move later',()=>editor.reorder(i,1),'down','icon-button'),
+  button(`Delete waypoint ${i+1}`,
+  ()=>editor.remove(i),
+  'close',
+  'icon-button'));
   if((p.name||p.note)&&i!==editor.selected)row.append(el('span','stop-label',[p.name,p.note].filter(Boolean).join(' · ')));
   if(i===editor.selected){
    const fields=el('div','stop-fields'),name=el('input','stop-input'),note=el('input','stop-input');
@@ -228,15 +433,54 @@ function render():void {
  }
  const closed=isClosedLoop(a.path),loopLen=closed?cumulative(a.path).at(-1)??0:0,loopMode=a.loop?.mode??'distance';
  setText('loop-count',plan?lapLabel(plan.laps):'—');
- setText('loop-summary',!closed?'Close the loop — the route must return to its start — to plan laps or a target distance.':plan?`Loop ${distanceValue(plan.loopLength)} ${unit} · ${lapLabel(plan.laps)} · ${distanceValue(plan.distance)} ${unit} to the finish${plan.capped?' · laps reduced to stay within export limits':''}`:`Loop ${distanceValue(loopLen)} ${unit} long. Set laps or a target distance to place the finish.`);
+ setText('loop-summary',
+ !closed
+  ?'Close the loop — the route must return to its start — to plan laps or a target distance.'
+  :plan
+   ?`Loop ${distanceValue(plan.loopLength)} ${unit} · ${lapLabel(plan.laps)} · ${distanceValue(plan.distance)} ${unit} to the finish${plan.capped?' · laps reduced to stay within export limits':''}`
+   :`Loop ${distanceValue(loopLen)} ${unit} long. Set laps or a target distance to place the finish.`);
  mark('loop-mode-laps',loopMode==='laps');mark('loop-mode-distance',loopMode==='distance');
  const loopInput=$<HTMLInputElement>('loop-value');setText('loop-value-label',loopMode==='laps'?'Laps':`Target distance (${unit})`);loopInput.step=loopMode==='laps'?'0.25':'0.1';loopInput.min=loopMode==='laps'?'0.25':'0.01';
  setInput('loop-value',a.loop?(loopMode==='laps'?Number((plan?.laps??a.loop.value).toFixed(2)):distanceInputValue(plan?.distance??a.loop.value)):loopMode==='laps'?1:closed?distanceInputValue(loopLen):'');
  loopInput.disabled=!closed;$<HTMLButtonElement>('loop-mode-laps').disabled=!closed;$<HTMLButtonElement>('loop-mode-distance').disabled=!closed;$<HTMLButtonElement>('loop-clear').hidden=!a.loop;
  const startSelect=$<HTMLSelectElement>('loop-start');startSelect.replaceChildren();startSelect.disabled=!closed;
- if(closed){const seen:number[]=[];a.waypoints.forEach((p,i)=>{const f=editor.startFor(i);if(f===null||seen.some(v=>Math.abs(v-f)<1e-6))return;seen.push(f);const o=el('option');o.value=String(f);o.textContent=t('Waypoint {index} · {distance} {unit} in',{index:formatNumber(i+1),distance:distanceValue(f*loopLen),unit});startSelect.append(o);});
-  const current=a.loop?.start??0;if(!seen.some(v=>Math.abs(v-current)<1e-6)){const o=el('option');o.value=String(current);o.textContent=t('{label} · {distance} {unit} in',{label:t(Math.abs(current)<1e-9?"Route's first point":'Custom start'),distance:distanceValue(current*loopLen),unit});startSelect.append(o);}startSelect.value=String(current);}
- if(initialized){clearTimeout(saveTimer);const snapshot=structuredClone(a);saveTimer=setTimeout(()=>{void store.saveDraft(snapshot).then(()=>{setDraftSavedStatus();void refreshStorageIndicator();}).catch(error=>{const message=failureMessage(error,'Draft not saved — check browser storage and retry.');setText('storage-state','Save failed');$('storage-state').classList.add('warning');setText('draft-save-state',message);toast(message);});},350);}
+ if(closed){
+  const seen:number[]=[];
+  a.waypoints.forEach((p,i)=>{
+   const f=editor.startFor(i);
+   if(f===null||seen.some(v=>Math.abs(v-f)<1e-6))return;
+   seen.push(f);
+   const o=el('option');
+   o.value=String(f);
+   o.textContent=t('Waypoint {index} · {distance} {unit} in',{
+    index:formatNumber(i+1),distance:distanceValue(f*loopLen),unit
+   });
+   startSelect.append(o);
+  });
+  const current=a.loop?.start??0;
+  if(!seen.some(v=>Math.abs(v-current)<1e-6)){
+   const o=el('option');
+   o.value=String(current);
+   o.textContent=t('{label} · {distance} {unit} in',{
+    label:t(Math.abs(current)<1e-9?"Route's first point":'Custom start'),distance:distanceValue(current*loopLen),unit
+   });
+   startSelect.append(o);
+  }
+  startSelect.value=String(current);
+  }
+ if(initialized){
+  clearTimeout(saveTimer);
+  const snapshot=structuredClone(a);
+  saveTimer=setTimeout(()=>{
+   void store.saveDraft(snapshot).then(()=>{setDraftSavedStatus();void refreshStorageIndicator();}).catch(error=>{
+    const message=failureMessage(error,'Draft not saved — check browser storage and retry.');
+    setText('storage-state','Save failed');
+    $('storage-state').classList.add('warning');
+    setText('draft-save-state',message);
+    toast(message);
+   });
+  },350);
+ }
 }
 const waypointList=$('waypoints');
 waypointList.addEventListener('focusin',event=>{if((event.target as HTMLElement).classList.contains('stop-input'))editingStops=true;});
@@ -244,8 +488,26 @@ waypointList.addEventListener('focusin',event=>{if((event.target as HTMLElement)
 waypointList.addEventListener('focusout',()=>{queueMicrotask(()=>{editingStops=document.activeElement instanceof HTMLElement&&document.activeElement.classList.contains('stop-input');});});
 editor.onChange=()=>{if(roundtripController&&(editor.activity.id!==roundtripActivityId||editor.activity.updatedAt!==roundtripActivityUpdatedAt))roundtripController.abort();render();};editor.onMessage=toast;
 // Fixed UTC offsets are explicit, so serialized UTC never silently shifts with the machine's timezone.
-for(let offset=-720;offset<=840;offset+=15){const option=el('option');option.value=String(offset);option.textContent=t('UTC{sign}{hours}:{minutes}',{sign:offset<0?'−':'+',hours:formatNumber(Math.floor(Math.abs(offset)/60),{minimumIntegerDigits:2}),minutes:formatNumber(Math.abs(offset)%60,{minimumIntegerDigits:2})});$('offset').append(option);}
-const noWeather=el('option');noWeather.value='';noWeather.dataset.i18n='None (neutral)';noWeather.textContent=t('None (neutral)');$('weather').append(noWeather);for(const [value,preset] of Object.entries(WEATHER_PRESETS)){const option=el('option');option.value=value;option.dataset.i18n=preset.label;option.textContent=preset.label;$('weather').append(option);}
+for(let offset=-720;offset<=840;offset+=15){
+ const option=el('option');
+ option.value=String(offset);
+ option.textContent=t('UTC{sign}{hours}:{minutes}',{
+  sign:offset<0?'−':'+',hours:formatNumber(Math.floor(Math.abs(offset)/60),{minimumIntegerDigits:2}),minutes:formatNumber(Math.abs(offset)%60,{minimumIntegerDigits:2})
+ });
+ $('offset').append(option);
+}
+const noWeather=el('option');
+noWeather.value='';
+noWeather.dataset.i18n='None (neutral)';
+noWeather.textContent=t('None (neutral)');
+$('weather').append(noWeather);
+for(const [value,preset] of Object.entries(WEATHER_PRESETS)){
+ const option=el('option');
+ option.value=value;
+ option.dataset.i18n=preset.label;
+ option.textContent=preset.label;
+ $('weather').append(option);
+}
 on('run',()=>chooseSport('run'));on('ride',()=>chooseSport('ride'));
 function disableFreehand():void {freehandEnabled=false;map.setFreehand(false);}
 function openRangeDialog(action:'trim'|'split'):void {
@@ -293,11 +555,25 @@ function previewStages():void {
 }
 on('draw',()=>{disableFreehand();editor.drawing=true;render();});on('pan',()=>{disableFreehand();editor.drawing=false;render();});
 on('freehand',()=>{freehandEnabled=!freehandEnabled;map.setFreehand(freehandEnabled);editor.drawing=false;render();});on('trim',()=>openRangeDialog('trim'));on('split',()=>openRangeDialog('split'));on('range-apply',applyRangeAction);on('merge',openMergeDialog);on('merge-apply',applyMerge);
-for(const [id,fn] of Object.entries({undo:()=>editor.undo(),redo:()=>editor.redo(),reverse:()=>editor.reverse(),'out-back':()=>editor.outAndBack(),loop:()=>editor.closeLoop(),clear:()=>editor.clear(),fit:()=>map.fit(),retry:()=>editor.recalculate(),'zoom-in':()=>map.zoom(1),'zoom-out':()=>map.zoom(-1)}))on(id,fn);
+for(const [id,fn] of Object.entries({
+ undo:()=>editor.undo(),redo:()=>editor.redo(),reverse:()=>editor.reverse(),'out-back':()=>editor.outAndBack(),loop:()=>editor.closeLoop(),clear:()=>editor.clear(),fit:()=>map.fit(),retry:()=>editor.recalculate(),'zoom-in':()=>map.zoom(1),'zoom-out':()=>map.zoom(-1)
+}))on(id,fn);
 on('roundtrip-generate',async()=>{
- const latText=$<HTMLInputElement>('roundtrip-lat').value.trim(),lonText=$<HTMLInputElement>('roundtrip-lon').value.trim(),start={lat:Number(latText),lon:Number(lonText)},targetKm=Number($<HTMLInputElement>('roundtrip-distance').value),bearing=Number($<HTMLInputElement>('roundtrip-bearing').value),seed=Number($<HTMLInputElement>('roundtrip-seed').value);
+ const latText=$<HTMLInputElement>('roundtrip-lat').value.trim(),
+ lonText=$<HTMLInputElement>('roundtrip-lon').value.trim(),
+ start={lat:Number(latText),lon:Number(lonText)},
+ targetKm=Number($<HTMLInputElement>('roundtrip-distance').value),
+ bearing=Number($<HTMLInputElement>('roundtrip-bearing').value),
+ seed=Number($<HTMLInputElement>('roundtrip-seed').value);
  if(!latText||!lonText||!Number.isFinite(targetKm)||targetKm<=0||!Number.isInteger(seed))throw Error('Enter a start coordinate, positive target distance, and whole-number seed.');
- roundtripController?.abort();const controller=new AbortController();roundtripController=controller;roundtripActivityId=editor.activity.id;roundtripActivityUpdatedAt=editor.activity.updatedAt;$<HTMLButtonElement>('roundtrip-generate').disabled=true;$('roundtrip-cancel').hidden=false;setText('roundtrip-status','Requesting a road route…');
+ roundtripController?.abort();
+ const controller=new AbortController();
+ roundtripController=controller;
+ roundtripActivityId=editor.activity.id;
+ roundtripActivityUpdatedAt=editor.activity.updatedAt;
+ $<HTMLButtonElement>('roundtrip-generate').disabled=true;
+ $('roundtrip-cancel').hidden=false;
+ setText('roundtrip-status','Requesting a road route…');
  try{
   const profile=resolveProfile(editor.activity.settings.sport,editor.activity.settings.profile),result=await generateRoundTrip(routing,start,targetKm*1000,bearing,seed,profile,controller.signal);
   if(roundtripController!==controller||editor.activity.id!==roundtripActivityId||editor.activity.updatedAt!==roundtripActivityUpdatedAt)return;editor.installRoute(result.waypoints,result.path);map.fit();
@@ -313,7 +589,13 @@ on('poi-find',async()=>{
  if(!preferences.poiEnabled)throw Error('Enable optional water and toilet lookup in Settings first.');
  if(editor.activity.source==='draft'||editor.activity.path.length<2)throw Error('Resolve a road route before finding places along it.');
  poiController?.abort();const controller=new AbortController(),request=++poiRequestId,path=editor.activity.path,key=poiRouteHash(path);poiController=controller;poiStatus='Searching the selected Overpass endpoint…';render();
- try{const places=await fetchPois(path,preferences,controller.signal);if(request!==poiRequestId||key!==poiRouteHash(editor.activity.path))return;poiPlaces=places;poiStatus=places.length?`${places.length} nearby place${places.length===1?'':'s'} found. Markers are shown on the map.`:'No water or toilets were found in this route corridor.';map.setPois(places);}
+ try{
+  const places=await fetchPois(path,preferences,controller.signal);
+  if(request!==poiRequestId||key!==poiRouteHash(editor.activity.path))return;
+  poiPlaces=places;
+  poiStatus=places.length?`${places.length} nearby place${places.length===1?'':'s'} found. Markers are shown on the map.`:'No water or toilets were found in this route corridor.';
+  map.setPois(places);
+ }
  catch(error){if(request===poiRequestId){if(controller.signal.aborted)poiStatus='POI lookup cancelled.';else{poiStatus=failureMessage(error,'Places could not be loaded — check your connection and retry.');throw error;}}}
  finally{if(request===poiRequestId){poiController=null;render();}}
 });
@@ -344,8 +626,33 @@ change('activity-description',e=>{const description=e.value.slice(0,2000);if(des
 change('sport-type',e=>chooseSport(e.value as Sport));
 change('start',e=>updateSettings({start:e.value}));change('offset',e=>updateSettings({utcOffset:Number(e.value)}));
 change('target',e=>{const imperial=preferences.units==='imperial';updateSettings(usesPace(editor.activity.settings.sport)?{pace:parseClock(e.value)/(imperial?1.609344:1)}:{speed:Number(e.value)*(imperial?1.609344:1)});});
-change('duration',e=>{if(!sim)throw Error('Create a route before setting its duration.');const seconds=parseClock(e.value);if(seconds<=0)throw Error('Duration must be greater than zero.');updateSettings(usesPace(editor.activity.settings.sport)?{pace:seconds/(sim.distance/1000)}:{speed:sim.distance/1000/seconds*3600});});
-change('sample',e=>updateSettings({sample:Number(e.value) as 1|2|5}));change('pace-strategy',e=>{const paceStrategy=e.value as PaceStrategy,current=editor.activity.settings;if(paceStrategy==='segments'){const count=Math.max(2,current.paceSegments?.length??3),target=usesPace(current.sport)?current.pace:current.speed;updateSettings({paceStrategy,paceSegments:current.paceSegments??Array.from({length:count},()=>target)});}else updateSettings({paceStrategy,paceSegments:undefined});});change('pace-segments',e=>{const values=e.value.split(',').map(value=>value.trim());if(values.length<2||values.length>50||values.some(value=>!value))throw Error('Enter 2–50 comma-separated segment targets.');const imperial=preferences.units==='imperial',sport=editor.activity.settings.sport,targets=usesPace(sport)?values.map(value=>parseClock(value)/(imperial?1.609344:1)):values.map(value=>Number(value)*(imperial?1.609344:1));updateSettings({paceStrategy:'segments',paceSegments:targets});});change('profile',e=>updateSettings({profile:e.value as RouteProfile}));change('variation',e=>updateSettings({variation:Number(e.value)/100}));change('hr-enabled',e=>updateSettings({hrEnabled:e.checked}));change('hr-average',e=>updateSettings({hrAverage:Number(e.value)}));change('hr-variation',e=>updateSettings({hrVariation:Number(e.value)}));
+change('duration',e=>{
+ if(!sim)throw Error('Create a route before setting its duration.');
+ const seconds=parseClock(e.value);
+ if(seconds<=0)throw Error('Duration must be greater than zero.');
+ updateSettings(usesPace(editor.activity.settings.sport)?{pace:seconds/(sim.distance/1000)}:{speed:sim.distance/1000/seconds*3600});
+});
+change('sample',e=>updateSettings({sample:Number(e.value) as 1|2|5}));
+change('pace-strategy',e=>{
+ const paceStrategy=e.value as PaceStrategy,current=editor.activity.settings;
+ if(paceStrategy==='segments'){
+  const count=Math.max(2,current.paceSegments?.length??3),target=usesPace(current.sport)?current.pace:current.speed;
+  updateSettings({
+   paceStrategy,paceSegments:current.paceSegments??Array.from({length:count},()=>target)
+  });
+ }else updateSettings({paceStrategy,paceSegments:undefined});
+});
+change('pace-segments',e=>{
+ const values=e.value.split(',').map(value=>value.trim());
+ if(values.length<2||values.length>50||values.some(value=>!value))throw Error('Enter 2–50 comma-separated segment targets.');
+ const imperial=preferences.units==='imperial',sport=editor.activity.settings.sport,targets=usesPace(sport)?values.map(value=>parseClock(value)/(imperial?1.609344:1)):values.map(value=>Number(value)*(imperial?1.609344:1));
+ updateSettings({paceStrategy:'segments',paceSegments:targets});
+});
+change('profile',e=>updateSettings({profile:e.value as RouteProfile}));
+change('variation',e=>updateSettings({variation:Number(e.value)/100}));
+change('hr-enabled',e=>updateSettings({hrEnabled:e.checked}));
+change('hr-average',e=>updateSettings({hrAverage:Number(e.value)}));
+change('hr-variation',e=>updateSettings({hrVariation:Number(e.value)}));
 change('loop-value',e=>{const raw=Number(e.value);if(!Number.isFinite(raw)||raw<=0)throw Error('Enter a value above zero.');const mode=editor.activity.loop?.mode??'distance';editor.setLoop(mode==='laps'?{mode,value:raw}:{mode,value:raw*(preferences.units==='imperial'?1609.344:1000)});});
 change('loop-start',e=>editor.setLoop({start:Number(e.value)}));
 change('gps-noise',e=>updateSettings({gps:{noise:Number(e.value),dropout:editor.activity.settings.gps?.dropout??0}}));
@@ -358,23 +665,95 @@ change('power-enabled',e=>updateSettings({power:{enabled:e.checked,weightKg:edit
 change('power-weight',e=>updateSettings({power:{enabled:editor.activity.settings.power?.enabled??false,weightKg:Number(e.value)}}));
 change('cadence-enabled',e=>updateSettings({cadence:{enabled:e.checked}}));
 change('fatigue',e=>updateSettings({fatigue:{percent:Number(e.value)}}));
-change('pauses-rests',e=>{const raw=e.value.trim();if(!raw){editor.setPauses(null);return;}const factor=preferences.units==='imperial'?1609.344:1000;const rests=raw.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{const parts=v.split(':');const dm=Number(parts[0]),sec=Number(parts[1]);if(!Number.isFinite(dm)||dm<=0||!Number.isFinite(sec)||sec<=0)throw Error(`Invalid rest stop: ${v}. Use distance:seconds.`);return {distance:dm*factor,seconds:sec};});editor.setPauses({rests});});
+change('pauses-rests',e=>{
+ const raw=e.value.trim();
+ if(!raw){editor.setPauses(null);return;}const factor=preferences.units==='imperial'?1609.344:1000;
+ const rests=raw.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{
+  const parts=v.split(':');
+  const dm=Number(parts[0]),sec=Number(parts[1]);
+  if(!Number.isFinite(dm)||dm<=0||!Number.isFinite(sec)||sec<=0)throw Error(`Invalid rest stop: ${v}. Use distance:seconds.`);
+  return {distance:dm*factor,seconds:sec};
+ });
+ editor.setPauses({rests});
+});
 on('pauses-clear',()=>editor.setPauses(null));
-change('workout-steps',e=>{const raw=e.value.trim();if(!raw){editor.setWorkout(null);return;}const factor=preferences.units==='imperial'?1609.344:1000,run=usesPace(editor.activity.settings.sport);const steps=raw.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{const i=v.indexOf(':');const d=Number(v.slice(0,i)),rest=v.slice(i+1);if(!(d>0))throw Error(`Invalid workout step: ${v}. Use distance:target.`);const step:{kind:'work';distance:number;pace?:number;speed?:number}={kind:'work',distance:d*factor};if(run){const pace=parseClock(rest);if(!(pace>0))throw Error(`Invalid pace: ${rest}.`);step.pace=pace;}else{const speed=Number(rest);if(!(speed>0))throw Error(`Invalid speed: ${rest}.`);step.speed=speed;}return step;});editor.setWorkout({steps});});
+change('workout-steps',e=>{
+ const raw=e.value.trim();
+ if(!raw){editor.setWorkout(null);return;}const factor=preferences.units==='imperial'?1609.344:1000,run=usesPace(editor.activity.settings.sport);
+ const steps=raw.split(',').map(v=>v.trim()).filter(Boolean).map(v=>{
+  const i=v.indexOf(':');
+  const d=Number(v.slice(0,i)),rest=v.slice(i+1);
+  if(!(d>0))throw Error(`Invalid workout step: ${v}. Use distance:target.`);
+  const step:{kind:'work';distance:number;pace?:number;speed?:number}={kind:'work',distance:d*factor};
+  if(run){
+   const pace=parseClock(rest);
+   if(!(pace>0))throw Error(`Invalid pace: ${rest}.`);
+   step.pace=pace;
+  }else{
+   const speed=Number(rest);
+   if(!(speed>0))throw Error(`Invalid speed: ${rest}.`);
+   step.speed=speed;
+  }
+  return step;
+ });
+ editor.setWorkout({steps});
+});
 on('workout-clear',()=>editor.setWorkout(null));
 on('batch-save',async()=>{validRoute();const count=Number($<HTMLInputElement>('batch-count').value),variants=generateBatch(editor.activity,count);await Promise.all(variants.map(variant=>store.save(variant)));toast(`Saved ${variants.length} simulated variants to the local activity library.`);});
 change('tags',e=>editor.setTags(sanitizeTags(e.value.split(','))));
 change('collection',e=>{editor.activity.collection=sanitizeCollection(e.value);editor.activity.updatedAt=Date.now();render();});
-on('export-tcx',()=>{validRoute();if(!sim)throw Error('Create a route before exporting.');download(exportTCX(editor.activity,sim),`${editor.activity.settings.start.slice(0,10)}-${safeFilename(editor.activity.name)}.tcx`,'application/vnd.garmin.tcx+xml');toast('TCX downloaded. Exports are simulated, not recorded.');});
-on('export-fit',()=>{validRoute();if(!sim)throw Error('Create a route before exporting.');downloadBytes(exportFIT(editor.activity,sim),`${editor.activity.settings.start.slice(0,10)}-${safeFilename(editor.activity.name)}.fit`,'application/vnd.ant.fit');toast('FIT downloaded. Exports are simulated, not recorded.');});
+on('export-tcx',()=>{
+ validRoute();
+ if(!sim)throw Error('Create a route before exporting.');
+ download(exportTCX(editor.activity,sim),`${editor.activity.settings.start.slice(0,10)}-${safeFilename(editor.activity.name)}.tcx`,'application/vnd.garmin.tcx+xml');
+ toast('TCX downloaded. Exports are simulated, not recorded.');
+});
+on('export-fit',()=>{
+ validRoute();
+ if(!sim)throw Error('Create a route before exporting.');
+ downloadBytes(exportFIT(editor.activity,sim),`${editor.activity.settings.start.slice(0,10)}-${safeFilename(editor.activity.name)}.fit`,'application/vnd.ant.fit');
+ toast('FIT downloaded. Exports are simulated, not recorded.');
+});
 function downloadBytes(bytes:Uint8Array,filename:string,type:string):void{const url=URL.createObjectURL(new Blob([bytes as BlobPart],{type}));const a=el('a');a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
 on('send',()=>{validRoute();sendFiles=createActivityFiles(editor.activity,sim!);setText('send-status','');const dialog=$<HTMLDialogElement>('send-dialog');if(!dialog.open)dialog.showModal();$<HTMLButtonElement>('send-share-files').focus();});
 on('send-share-files',async()=>{const result=await shareFiles(sendFiles);if(result==='shared')setText('send-status','Files shared.');else if(result==='downloaded')setText('send-status','File sharing is unavailable here; downloads were started.');});
 on('send-save-folder',async()=>{const result=await saveFilesToFolder(sendFiles);if(result==='saved')setText('send-status','Files saved to the selected folder.');else if(result==='downloaded')setText('send-status','Folder access is unavailable; downloads were started.');});
 on('send-strava-disconnect',async()=>{await stravaDisconnect();setText('strava-status','Strava disconnected on this device.');});
-on('send-strava',async()=>{validRoute();const state=await stravaState();if(!state.configured){setText('strava-status','Strava upload is not available on this deployment. Use the file import guidance below.');return;}if(!state.connected){setText('strava-status','Finish connecting Strava in the window that opened, then press Upload to Strava again.');if(!window.open(stravaLoginUrl,'simrun-strava','width=520,height=680')){setText('strava-status','The Strava window was blocked. Opening the connection page in this tab; the route is kept as a draft.');location.assign(stravaLoginUrl);}return;}const file=selectPlatformFile(sendFiles,'strava');if(!file)throw Error('Create the activity files before uploading.');setText('strava-status','Uploading to Strava…');const result=await stravaUpload(file,editor.activity.name,editor.activity.description??'');setText('strava-status',result.activityId?t('Uploaded to Strava as activity {id}.',{id:String(result.activityId)}):'Strava is still processing the activity; check your Strava account shortly.');});
-on('send-zip',()=>{validRoute();const bytes=zipActivities([editor.activity],undefined,[],new Map([[editor.activity.id,sim!]]));downloadFiles([{name:`${editor.activity.settings.start.slice(0,10)}-${editor.activity.name.replace(/[^a-zA-Z0-9_-]+/g,'-')}-simulated-formats.zip`,type:'application/zip',data:bytes}]);setText('send-status','ZIP download started.');});
-document.querySelectorAll<HTMLButtonElement>('[data-platform-download]').forEach(button=>button.addEventListener('click',guarded(()=>{const platform=button.dataset.platformDownload as PlatformId,file=selectPlatformFile(sendFiles,platform);if(!file)throw Error('No recommended file is available for this platform.');downloadFiles([file]);setText('send-status',`${file.name} download started.`);})));
+on('send-strava',async()=>{
+ validRoute();
+ const state=await stravaState();
+ if(!state.configured){
+  setText('strava-status','Strava upload is not available on this deployment. Use the file import guidance below.');
+  return;
+ }
+ if(!state.connected){
+  setText('strava-status','Finish connecting Strava in the window that opened, then press Upload to Strava again.');
+  if(!window.open(stravaLoginUrl,'simrun-strava','width=520,height=680')){
+   setText('strava-status','The Strava window was blocked. Opening the connection page in this tab; the route is kept as a draft.');
+   location.assign(stravaLoginUrl);
+  }
+  return;
+ }
+ const file=selectPlatformFile(sendFiles,'strava');
+ if(!file)throw Error('Create the activity files before uploading.');
+ setText('strava-status','Uploading to Strava…');
+ const result=await stravaUpload(file,editor.activity.name,editor.activity.description??'');
+ setText('strava-status',result.activityId?t('Uploaded to Strava as activity {id}.',{id:String(result.activityId)}):'Strava is still processing the activity; check your Strava account shortly.');
+});
+on('send-zip',()=>{
+ validRoute();
+ const bytes=zipActivities([editor.activity],undefined,[],new Map([[editor.activity.id,sim!]]));
+ downloadFiles([{
+  name:`${editor.activity.settings.start.slice(0,10)}-${editor.activity.name.replace(/[^a-zA-Z0-9_-]+/g,'-')}-simulated-formats.zip`,type:'application/zip',data:bytes
+ }]);
+ setText('send-status','ZIP download started.');
+});
+document.querySelectorAll<HTMLButtonElement>('[data-platform-download]').forEach(button=>button.addEventListener('click',guarded(()=>{
+ const platform=button.dataset.platformDownload as PlatformId,file=selectPlatformFile(sendFiles,platform);
+ if(!file)throw Error('No recommended file is available for this platform.');
+ downloadFiles([file]);
+ setText('send-status',`${file.name} download started.`);
+})));
 on('share',()=>{
  if(editor.activity.path.length<2)throw Error('Draw or import a route before sharing.');
  const url=shareUrl(location.origin+location.pathname,editor.activity);
@@ -388,7 +767,18 @@ on('share',()=>{
  }else qr.append(el('p','fine-print','This link is too long for a QR code; export GPX instead.'));
  $<HTMLDialogElement>('share-dialog').showModal();
 });
-on('share-copy',guarded(async()=>{const value=$<HTMLInputElement>('share-url').value;if(!value)throw Error('Open Share again to build a link.');try{await navigator.clipboard.writeText(value);toast('Share link copied.');}catch{$<HTMLInputElement>('share-url').select();document.execCommand('copy');toast('Share link copied.');}}));
+on('share-copy',guarded(async()=>{
+ const value=$<HTMLInputElement>('share-url').value;
+ if(!value)throw Error('Open Share again to build a link.');
+ try{
+  await navigator.clipboard.writeText(value);
+  toast('Share link copied.');
+ }catch{
+  $<HTMLInputElement>('share-url').select();
+  document.execCommand('copy');
+  toast('Share link copied.');
+ }
+}));
 on('share-print',()=>{if(editor.activity.path.length<2)throw Error('Draw or import a route before printing.');buildPrintSheet();window.print();});
 function buildPrintSheet():void{
  const a=editor.activity,sheet=$('print-sheet');sheet.replaceChildren();
@@ -399,7 +789,13 @@ function buildPrintSheet():void{
   let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;for(const p of path){if(p.lat<minLat)minLat=p.lat;if(p.lat>maxLat)maxLat=p.lat;if(p.lon<minLon)minLon=p.lon;if(p.lon>maxLon)maxLon=p.lon;}
   const scale=Math.min(380/Math.max(1e-9,maxLon-minLon),180/Math.max(1e-9,maxLat-minLat));
   const ox=(400-(maxLon-minLon)*scale)/2,oy=(200-(maxLat-minLat)*scale)/2;
-  const poly=document.createElementNS(NS,'polyline');poly.setAttribute('points',path.map(p=>`${(ox+(p.lon-minLon)*scale).toFixed(1)},${(200-oy-(p.lat-minLat)*scale).toFixed(1)}`).join(' '));poly.setAttribute('fill','none');poly.setAttribute('stroke','#e2571e');poly.setAttribute('stroke-width','2');svg.append(poly);sheet.append(svg);
+  const poly=document.createElementNS(NS,'polyline');
+  poly.setAttribute('points',path.map(p=>`${(ox+(p.lon-minLon)*scale).toFixed(1)},${(200-oy-(p.lat-minLat)*scale).toFixed(1)}`).join(' '));
+  poly.setAttribute('fill','none');
+  poly.setAttribute('stroke','#e2571e');
+  poly.setAttribute('stroke-width','2');
+  svg.append(poly);
+  sheet.append(svg);
  }
  const url=$<HTMLInputElement>('share-url').value;sheet.append(el('p','',url?`Share link: ${url}`:'Route sketch only; the basemap is not printed.',false));
 }
@@ -409,21 +805,113 @@ on('save',async()=>{validRoute();await store.save(editor.activity);toast(store.a
 on('cues',()=>{validRoute();if(!sim)throw Error('Create a route before exporting a cue sheet.');downloadCues(editor.activity,sim,preferences.units);toast('Cue sheet downloaded. Turns come from the route geometry, not street names.');});
 on('send-geojson',()=>{validRoute();downloadRouteGeoJSON(editor.activity);setText('send-status','Route GeoJSON downloaded.');});
 on('send-route-csv',()=>{validRoute();downloadRouteCSV(editor.activity);setText('send-status','Route CSV downloaded.');});
-on('export',async()=>{validRoute();downloadActivity(editor.activity,sim!);try{await store.save(editor.activity);toast(store.available?'GPX downloaded. Activity saved locally.':'GPX downloaded. History is session-only in this browser.');}catch{toast('GPX downloaded. Local history was not saved — check browser storage before closing.');}});
+on('export',async()=>{
+ validRoute();
+ downloadActivity(editor.activity,sim!);
+ try{
+  await store.save(editor.activity);
+  toast(store.available?'GPX downloaded. Activity saved locally.':'GPX downloaded. History is session-only in this browser.');
+ }catch{
+  toast('GPX downloaded. Local history was not saved — check browser storage before closing.');
+ }
+});
 on('edit-import',()=>{if(!confirm('Replace the imported geometry with a freshly routed path through up to 8 waypoints? Undo restores the original geometry.'))return;editor.edit(resample(editor.activity.path,Math.min(8,editor.activity.path.length)));editor.drawing=true;render();});
-const upload=()=>{$<HTMLInputElement>('gpx-file').value='';$('gpx-file').click();};on('import',upload);on('empty-import',upload);on('empty-search',()=>$<HTMLInputElement>('search').focus());on('empty-close',()=>{emptyDismissed=true;render();});on('dismiss-first-run-tip',()=>{preferences={...preferences,tipsDismissed:true};try{writePreferences(preferences);}catch{toast('Tip preference could not be saved — allow browser storage and retry.');}render();});
+const upload=()=>{
+ $<HTMLInputElement>('gpx-file').value='';
+ $('gpx-file').click();
+};
+on('import',upload);
+on('empty-import',upload);
+on('empty-search',()=>$<HTMLInputElement>('search').focus());
+on('empty-close',()=>{emptyDismissed=true;render();});
+on('dismiss-first-run-tip',()=>{
+ preferences={...preferences,tipsDismissed:true};
+ try{writePreferences(preferences);}catch{
+  toast('Tip preference could not be saved — allow browser storage and retry.');
+ }
+ render();
+});
 document.addEventListener('dragover',e=>{e.preventDefault();});
-document.addEventListener('drop',e=>{e.preventDefault();if(document.querySelector('dialog[open]'))return;const file=(e as DragEvent).dataTransfer?.files?.[0];if(!file)return;void (async()=>{try{if(file.size>15000000)throw Error('Dropped file must be smaller than 15 MB.');if(/\.json$/i.test(file.name)){const b=parseBackup(await file.text());if(!confirm(`Restore ${b.activities.length} activities from this backup?`))return;await store.restore(b.activities,b.savedPlaces);savedPlaces=b.savedPlaces;renderSavedPlaces();preferences=b.preferences;applyLayout();placeSuggestions.cancel();placeSuggestions.cache.clear();try{writePreferences(preferences);}catch{}document.documentElement.dataset.theme=preferences.theme;map.setStyle(mapStyleFor(preferences));map.setBasemapLayers(preferences.mapBaseLayer,preferences.mapCyclingOverlay,preferences.mapHikingOverlay);render();await showHistory();toast('Backup restored.');return;}const result=importRouteFile(await file.text(),file.name);if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(result.activity);map.fit();toast(result.notice);}catch(error){toast(failureMessage(error,'The dropped file could not be imported — choose a valid route or backup and retry.'));}})();});
-$('gpx-file').addEventListener('change',guarded(async()=>{const file=$<HTMLInputElement>('gpx-file').files?.[0];if(!file)return;if(file.size>15000000)throw Error('Route file must be smaller than 15 MB.');const result=importRouteFile(await file.text(),file.name);if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(result.activity);map.fit();toast(result.notice);}));
+document.addEventListener('drop',e=>{
+ e.preventDefault();
+ if(document.querySelector('dialog[open]'))return;
+ const file=(e as DragEvent).dataTransfer?.files?.[0];
+ if(!file)return;
+ void (async()=>{
+  try{
+   if(file.size>15000000)throw Error('Dropped file must be smaller than 15 MB.');
+   if(/\.json$/i.test(file.name)){
+    const b=parseBackup(await file.text());
+    if(!confirm(`Restore ${b.activities.length} activities from this backup?`))return;
+    await store.restore(b.activities,b.savedPlaces);
+    savedPlaces=b.savedPlaces;
+    renderSavedPlaces();
+    preferences=b.preferences;
+    applyLayout();
+    placeSuggestions.cancel();
+    placeSuggestions.cache.clear();
+    try{writePreferences(preferences);}catch{}document.documentElement.dataset.theme=preferences.theme;
+    map.setStyle(mapStyleFor(preferences));
+    map.setBasemapLayers(preferences.mapBaseLayer,preferences.mapCyclingOverlay,preferences.mapHikingOverlay);
+    render();
+    await showHistory();
+    toast('Backup restored.');
+    return;
+   }
+   const result=importRouteFile(await file.text(),file.name);
+   if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);
+   editor.load(result.activity);
+   map.fit();
+   toast(result.notice);
+  }catch(error){
+   toast(failureMessage(error,'The dropped file could not be imported — choose a valid route or backup and retry.'));
+  }
+ })();
+});
+$('gpx-file').addEventListener('change',guarded(async()=>{
+ const file=$<HTMLInputElement>('gpx-file').files?.[0];
+ if(!file)return;
+ if(file.size>15000000)throw Error('Route file must be smaller than 15 MB.');
+ const result=importRouteFile(await file.text(),file.name);
+ if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);
+ editor.load(result.activity);
+ map.fit();
+ toast(result.notice);
+}));
 const chartTabModes:ChartMode[]=['elevation','pace','hr','power','cadence','splits'];
-for(const mode of chartTabModes)on(`chart-${mode}`,()=>{charts.mode=mode;for(const item of chartTabModes){const tab=$<HTMLButtonElement>(`chart-${item}`),selected=item===mode;tab.classList.toggle('active',selected);tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;}$('chart').setAttribute('aria-labelledby',`chart-${mode}`);charts.render(editor.activity,sim,preferences);});
-$('chart-tabs').addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey)return;const current=chartTabModes.findIndex(mode=>document.activeElement===$(`chart-${mode}`));if(current<0)return;const rtl=document.documentElement.dir==='rtl';const forward=rtl?'ArrowLeft':'ArrowRight',backward=rtl?'ArrowRight':'ArrowLeft';const next=event.key==='Home'?0:event.key==='End'?chartTabModes.length-1:event.key===forward?(current+1)%chartTabModes.length:event.key===backward?(current-1+chartTabModes.length)%chartTabModes.length:-1;if(next<0)return;event.preventDefault();const tab=$<HTMLButtonElement>(`chart-${chartTabModes[next]}`);tab.focus();tab.click();});
+for(const mode of chartTabModes)on(`chart-${mode}`,()=>{
+ charts.mode=mode;
+ for(const item of chartTabModes){
+  const tab=$<HTMLButtonElement>(`chart-${item}`),selected=item===mode;
+  tab.classList.toggle('active',selected);
+  tab.setAttribute('aria-selected',String(selected));
+  tab.tabIndex=selected?0:-1;
+ }
+ $('chart').setAttribute('aria-labelledby',`chart-${mode}`);
+ charts.render(editor.activity,sim,preferences);
+});
+$('chart-tabs').addEventListener('keydown',event=>{
+ if(event.altKey||event.ctrlKey||event.metaKey)return;
+ const current=chartTabModes.findIndex(mode=>document.activeElement===$(`chart-${mode}`));
+ if(current<0)return;
+ const rtl=document.documentElement.dir==='rtl';
+ const forward=rtl?'ArrowLeft':'ArrowRight',backward=rtl?'ArrowRight':'ArrowLeft';
+ const next=event.key==='Home'?0:event.key==='End'?chartTabModes.length-1:event.key===forward?(current+1)%chartTabModes.length:event.key===backward?(current-1+chartTabModes.length)%chartTabModes.length:-1;
+ if(next<0)return;
+ event.preventDefault();
+ const tab=$<HTMLButtonElement>(`chart-${chartTabModes[next]}`);
+ tab.focus();
+ tab.click();
+});
 function applyLayout():void {
  document.body.classList.toggle('left-collapsed',preferences.collapseTools);
  document.body.classList.toggle('right-collapsed',preferences.collapseInspector);
  document.body.classList.toggle('top-collapsed',preferences.collapseTopbar);
  $('chart-panel').classList.toggle('collapsed',preferences.collapseChart);
- for(const [collapsed,toggle,tab] of [[preferences.collapseTools,'collapse-tools','show-tools'],[preferences.collapseInspector,'collapse-inspector','show-inspector'],[preferences.collapseTopbar,'collapse-topbar','show-topbar']] as const){$(toggle).setAttribute('aria-expanded',String(!collapsed));$(tab).setAttribute('aria-expanded',String(!collapsed));}
+ for(const [collapsed,toggle,tab] of [[preferences.collapseTools,'collapse-tools','show-tools'],[preferences.collapseInspector,'collapse-inspector','show-inspector'],[preferences.collapseTopbar,'collapse-topbar','show-topbar']] as const){
+  $(toggle).setAttribute('aria-expanded',String(!collapsed));
+  $(tab).setAttribute('aria-expanded',String(!collapsed));
+ }
  $('toggle-chart').setAttribute('aria-expanded',String(!preferences.collapseChart));
  $('toggle-chart').setAttribute('aria-label',preferences.collapseChart?t('Expand chart'):t('Collapse chart'));
 }
@@ -439,7 +927,17 @@ on('collapse-topbar',()=>setLayout('collapseTopbar',true,'show-topbar'));
 on('show-topbar',()=>setLayout('collapseTopbar',false,'collapse-topbar'));
 document.querySelector<HTMLAnchorElement>('.skip-link')?.addEventListener('click',()=>setLayout('collapseInspector',false));
 on('open-inspector',()=>{$('inspector').classList.add('open');$('activity-name').focus();});on('close-inspector',()=>$('inspector').classList.remove('open'));
-document.addEventListener('keydown',event=>{if(event.key!=='Tab')return;const dialog=document.querySelector<HTMLDialogElement>('dialog[open]');if(!dialog)return;const focusable=[...dialog.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled):not([type=hidden]),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"]),summary,[contenteditable="true"]')].filter(element=>element.getClientRects().length);if(!focusable.length){event.preventDefault();dialog.focus();return;}const active=focusable.findIndex(element=>element===document.activeElement);if(event.shiftKey&&(active<=0||!dialog.contains(document.activeElement))){event.preventDefault();focusable[focusable.length-1].focus();}else if(!event.shiftKey&&(active===focusable.length-1||active<0)){event.preventDefault();focusable[0].focus();}},true);
+document.addEventListener('keydown',event=>{
+ if(event.key!=='Tab')return;
+ const dialog=document.querySelector<HTMLDialogElement>('dialog[open]');
+ if(!dialog)return;
+ const focusable=[...dialog.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled):not([type=hidden]),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"]),summary,[contenteditable="true"]')].filter(element=>element.getClientRects().length);
+ if(!focusable.length){event.preventDefault();dialog.focus();return;}const active=focusable.findIndex(element=>element===document.activeElement);
+ if(event.shiftKey&&(active<=0||!dialog.contains(document.activeElement))){
+  event.preventDefault();
+  focusable[focusable.length-1].focus();
+ }else if(!event.shiftKey&&(active===focusable.length-1||active<0)){event.preventDefault();focusable[0].focus();}
+},true);
 document.querySelectorAll<HTMLButtonElement>('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog')!.close());
 on('shortcut-help',openShortcutHelp);
 for(const id of ['history-dialog','settings-dialog','send-dialog','shortcuts-dialog'])$(id).addEventListener('click',e=>{if(e.target===$(id)){const r=$(id).getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)($<HTMLDialogElement>(id)).close();}});
@@ -461,12 +959,44 @@ async function showHistory():Promise<void>{
  const visibleIds=new Set(rows.map(activity=>activity.id));selectedHistory=new Set([...selectedHistory].filter(id=>visibleIds.has(id)));
  if(!rows.length)list.append(el('p','history-empty',query?'No saved routes match that search.':'No saved routes yet. Draw or import a route, then save it here.'));
  for(const a of rows){
-  const row=el('article','history-row'),selector=el('input');selector.type='checkbox';selector.checked=selectedHistory.has(a.id);selector.setAttribute('aria-label',`Select ${a.name}`);selector.addEventListener('change',()=>{if(selector.checked)selectedHistory.add(a.id);else selectedHistory.delete(a.id);updateHistorySelection();});
+  const row=el('article','history-row'),selector=el('input');
+  selector.type='checkbox';
+  selector.checked=selectedHistory.has(a.id);
+  selector.setAttribute('aria-label',`Select ${a.name}`);
+  selector.addEventListener('change',()=>{
+   if(selector.checked)selectedHistory.add(a.id);
+   else selectedHistory.delete(a.id);
+   updateHistorySelection();
+  });
   const selectLabel=el('label','history-select');selectLabel.append(selector);
-  const open=button('Open activity',guarded(async()=>{if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);editor.load(a);$('inspector').querySelector('.inspector-scroll')!.scrollTop=0;map.fit();$<HTMLDialogElement>('history-dialog').close();}),undefined,'history-main');
+  const open=button('Open activity',guarded(async()=>{
+   if(editor.activity.path.length||editor.activity.waypoints.length)await store.save(editor.activity);
+   editor.load(a);
+   $('inspector').querySelector('.inspector-scroll')!.scrollTop=0;
+   map.fit();
+   $<HTMLDialogElement>('history-dialog').close();
+  }),undefined,'history-main');
   const planned=plannedPath(a),c=cumulative(planned),m=c.at(-1)||0,durationValue=durations.get(a.id),duration=durationValue===undefined||!Number.isFinite(durationValue)?'—':formatClock(durationValue),h=elevationStats(planned);
-  open.replaceChildren(el('strong','',a.name,false),el('span','',`${a.collection?`${a.collection} · `:''}${a.source==='draft'?'Draft · ':''}${sportLabel(a.settings.sport)} · ${formatDate(a.settings.start,{dateStyle:'medium',timeStyle:'short'})} · ${distanceValue(m)} ${distanceUnit()} · ${duration} · ↑ ${heightValue(h.gain)} ${preferences.units==='imperial'?'ft':'m'}`));
-  const actions=el('div','history-actions');actions.append(button('Duplicate activity',guarded(async()=>{const copy=structuredClone(a);copy.id=newId();copy.name=`${a.name.slice(0,150)} copy`;copy.createdAt=copy.updatedAt=Date.now();await store.save(copy);await showHistory();}),'duplicate','icon-button'),button('Export saved GPX',guarded(async()=>downloadActivity(a,await simulateInWorker(a))),'download','icon-button'),button('Compare activities',()=>{void openCompare();},'duplicate','icon-button'),button('Delete activity',guarded(async()=>{if(confirm(`Delete “${a.name}” from this browser?`)){await store.remove(a.id);selectedHistory.delete(a.id);await showHistory();}}),'trash','icon-button'));
+  open.replaceChildren(el('strong','',a.name,false),
+  el('span',
+  '',
+  `${a.collection?`${a.collection} · `:''}${a.source==='draft'?'Draft · ':''}${sportLabel(a.settings.sport)} · ${formatDate(a.settings.start,{
+   dateStyle:'medium',timeStyle:'short'})} · ${distanceValue(m)} ${distanceUnit()} · ${duration} · ↑ ${heightValue(h.gain)} ${preferences.units==='imperial'?'ft':'m'}`));
+  const actions=el('div','history-actions');
+  actions.append(button('Duplicate activity',guarded(async()=>{
+   const copy=structuredClone(a);
+   copy.id=newId();
+   copy.name=`${a.name.slice(0,150)} copy`;
+   copy.createdAt=copy.updatedAt=Date.now();
+   await store.save(copy);
+   await showHistory();
+  }),'duplicate','icon-button'),button('Export saved GPX',guarded(async()=>downloadActivity(a,await simulateInWorker(a))),'download','icon-button'),button('Compare activities',()=>{void openCompare();},'duplicate','icon-button'),button('Delete activity',guarded(async()=>{
+   if(confirm(`Delete “${a.name}” from this browser?`)){
+    await store.remove(a.id);
+    selectedHistory.delete(a.id);
+    await showHistory();
+   }
+  }),'trash','icon-button'));
   row.append(selectLabel,open,actions);list.append(row);
  }
  updateHistorySelection();
@@ -478,9 +1008,46 @@ async function openCompare():Promise<void>{
  const left=$<HTMLSelectElement>('compare-left'),right=$<HTMLSelectElement>('compare-right');
  const fill=(select:HTMLSelectElement,selected:string)=>{select.replaceChildren();for(const a of rows){const o=el('option');o.value=a.id;o.textContent=a.name;select.append(o);}select.value=selected;};
  fill(left,rows[1].id);fill(right,rows[0].id);
- let drawRequest=0;const draw=async()=>{const request=++drawRequest,l=rows.find(a=>a.id===left.value),r=rows.find(a=>a.id===right.value),box=$('compare-table');box.replaceChildren();if(!l||!r)return;let cmp;try{const [leftSimulation,rightSimulation]=await Promise.all([simulateInWorker(l),simulateInWorker(r)]);if(request!==drawRequest)return;cmp=compareActivities({activity:l,sim:leftSimulation},{activity:r,sim:rightSimulation},{restingHr:preferences.trimpRestingHr??60,maxHr:preferences.trimpMaxHr??preferences.hrMax});}catch(e){if(request===drawRequest)box.append(el('p','fine-print',failureMessage(e,'One activity could not be simulated — review its settings.')));return;}
+ let drawRequest=0;
+ const draw=async()=>{
+  const request=++drawRequest,l=rows.find(a=>a.id===left.value),r=rows.find(a=>a.id===right.value),box=$('compare-table');
+  box.replaceChildren();
+  if(!l||!r)return;
+  let cmp;
+  try{
+   const [leftSimulation,rightSimulation]=await Promise.all([simulateInWorker(l),simulateInWorker(r)]);
+   if(request!==drawRequest)return;
+   cmp=compareActivities({activity:l,sim:leftSimulation},{activity:r,sim:rightSimulation},{
+    restingHr:preferences.trimpRestingHr??60,maxHr:preferences.trimpMaxHr??preferences.hrMax
+   });
+  }catch(e){
+   if(request===drawRequest)box.append(el('p','fine-print',failureMessage(e,'One activity could not be simulated — review its settings.')));
+   return;
+  }
   const u=distanceUnit(),hUnit=preferences.units==='imperial'?'ft':'m';
-  const data:[string,string,string,string][]=[['',cmp.left.name.slice(0,18),cmp.right.name.slice(0,18),'Δ'],[`Distance (${u})`,distanceValue(cmp.left.distance),distanceValue(cmp.right.distance),distanceValue(cmp.delta.distance)],['Duration',formatClock(cmp.left.duration),formatClock(cmp.right.duration),formatClock(cmp.delta.duration)],[`Avg ${usesPace(cmp.left.sport)?'pace':'speed'}`,cmp.left.avgPace!==null?formatClock(cmp.left.avgPace):formatNumber(cmp.left.avgSpeed,{maximumFractionDigits:1}),cmp.right.avgPace!==null?formatClock(cmp.right.avgPace):formatNumber(cmp.right.avgSpeed,{maximumFractionDigits:1}),'—'],[`Elevation (${hUnit})`,cmp.left.elevationGain===null?'—':heightValue(cmp.left.elevationGain),cmp.right.elevationGain===null?'—':heightValue(cmp.right.elevationGain),cmp.delta.elevationGain===null?'—':heightValue(cmp.delta.elevationGain)],['GAP',cmp.left.avgGapPace===null?'—':formatClock(cmp.left.avgGapPace),cmp.right.avgGapPace===null?'—':formatClock(cmp.right.avgGapPace),cmp.delta.avgGapPace===null?'—':`${cmp.delta.avgGapPace>0?'+':cmp.delta.avgGapPace<0?'−':''}${formatClock(Math.abs(cmp.delta.avgGapPace))}`],['TRIMP estimate',cmp.left.trimp===null?'—':formatNumber(cmp.left.trimp,{maximumFractionDigits:1}),cmp.right.trimp===null?'—':formatNumber(cmp.right.trimp,{maximumFractionDigits:1}),cmp.delta.trimp===null?'—':formatNumber(cmp.delta.trimp,{maximumFractionDigits:1})],['Energy (kcal)',cmp.left.calories===null?'—':String(cmp.left.calories),cmp.right.calories===null?'—':String(cmp.right.calories),cmp.delta.calories===null?'—':String(cmp.delta.calories)]];
+  const data:[string,string,string,string][]=[['',cmp.left.name.slice(0,18),cmp.right.name.slice(0,18),'Δ'],
+  [`Distance (${u})`,distanceValue(cmp.left.distance),distanceValue(cmp.right.distance),distanceValue(cmp.delta.distance)],
+  ['Duration',formatClock(cmp.left.duration),formatClock(cmp.right.duration),formatClock(cmp.delta.duration)],
+  [`Avg ${usesPace(cmp.left.sport)?'pace':'speed'}`,
+  cmp.left.avgPace!==null?formatClock(cmp.left.avgPace):formatNumber(cmp.left.avgSpeed,{maximumFractionDigits:1}),
+  cmp.right.avgPace!==null?formatClock(cmp.right.avgPace):formatNumber(cmp.right.avgSpeed,{maximumFractionDigits:1}),
+  '—'],
+  [`Elevation (${hUnit})`,
+  cmp.left.elevationGain===null?'—':heightValue(cmp.left.elevationGain),
+  cmp.right.elevationGain===null?'—':heightValue(cmp.right.elevationGain),
+  cmp.delta.elevationGain===null?'—':heightValue(cmp.delta.elevationGain)],
+  ['GAP',
+  cmp.left.avgGapPace===null?'—':formatClock(cmp.left.avgGapPace),
+  cmp.right.avgGapPace===null?'—':formatClock(cmp.right.avgGapPace),
+  cmp.delta.avgGapPace===null?'—':`${cmp.delta.avgGapPace>0?'+':cmp.delta.avgGapPace<0?'−':''}${formatClock(Math.abs(cmp.delta.avgGapPace))}`],
+  ['TRIMP estimate',
+  cmp.left.trimp===null?'—':formatNumber(cmp.left.trimp,{maximumFractionDigits:1}),
+  cmp.right.trimp===null?'—':formatNumber(cmp.right.trimp,{maximumFractionDigits:1}),
+  cmp.delta.trimp===null?'—':formatNumber(cmp.delta.trimp,{maximumFractionDigits:1})],
+  ['Energy (kcal)',
+  cmp.left.calories===null?'—':String(cmp.left.calories),
+  cmp.right.calories===null?'—':String(cmp.right.calories),
+  cmp.delta.calories===null?'—':String(cmp.delta.calories)]];
   for(const [a,b,c,d] of data){const row=el('div','compare-row');row.append(el('span','',a),el('span','',b),el('span','',c),el('span','',d));box.append(row);}};
  left.onchange=()=>{void draw();};right.onchange=()=>{void draw();};void draw();$<HTMLDialogElement>('compare-dialog').showModal();
 }
@@ -488,16 +1055,114 @@ $('history-search').addEventListener('input',guarded(()=>{void showHistory();}))
 $('history-sort').addEventListener('change',guarded(()=>{void showHistory();}));
 $('history-collection').addEventListener('change',guarded(()=>{void showHistory();}));
 $('history-select-all').addEventListener('change',guarded(()=>{for(const activity of visibleHistory){if($<HTMLInputElement>('history-select-all').checked)selectedHistory.add(activity.id);else selectedHistory.delete(activity.id);}void showHistory();}));
-on('history-export-selected',async()=>{const selected=visibleHistory.filter(activity=>selectedHistory.has(activity.id)),resolved=selected.filter(activity=>activity.source!=='draft');if(!resolved.length)throw Error('Select at least one resolved activity to export.');const simulations=new Map<string,Simulation>();for(const activity of resolved)simulations.set(activity.id,await simulateInWorker(activity));const bytes=zipActivities(resolved,undefined,[],simulations);downloadFiles([{name:`simrun-simulated-activities-${resolved.length}.zip`,type:'application/zip',data:bytes}]);if(resolved.length<selected.length)toast(`${selected.length-resolved.length} draft activities were not included in the ZIP.`);});
-on('history-delete-selected',async()=>{const ids=visibleHistory.filter(activity=>selectedHistory.has(activity.id)).map(activity=>activity.id);if(!ids.length||!confirm(`Delete ${ids.length} selected activities from this browser?`))return;const removed=await removeActivities(store,ids);selectedHistory.clear();await showHistory();toast(`Deleted ${removed} activities from this browser.`);});
-on('library-export-all',async()=>{const activities=await store.list(),draft=editor.activity;if(!activities.some(activity=>activity.id===draft.id)&&(draft.path.length||draft.waypoints.length))activities.push(draft);else{const index=activities.findIndex(activity=>activity.id===draft.id);if(index>=0)activities[index]=draft;}const simulations=new Map<string,Simulation>();for(const activity of activities)if(activity.source!=='draft')simulations.set(activity.id,await simulateInWorker(activity));const bytes=zipActivities(activities,preferences,await store.listSavedPlaces(),simulations);downloadFiles([{name:'simrun-full-library-simulated.zip',type:'application/zip',data:bytes}]);});
-on('backup',async()=>{const activities=await store.list(),draft=editor.activity;if(!activities.some(a=>a.id===draft.id)&&(draft.path.length||draft.waypoints.length))activities.push(draft);else{const index=activities.findIndex(a=>a.id===draft.id);if(index>=0)activities[index]=draft;}download(createBackup(activities,preferences,await store.listSavedPlaces()),'simrun-backup.json','application/json');});
+on('history-export-selected',async()=>{
+ const selected=visibleHistory.filter(activity=>selectedHistory.has(activity.id)),resolved=selected.filter(activity=>activity.source!=='draft');
+ if(!resolved.length)throw Error('Select at least one resolved activity to export.');
+ const simulations=new Map<string,Simulation>();
+ for(const activity of resolved)simulations.set(activity.id,await simulateInWorker(activity));
+ const bytes=zipActivities(resolved,undefined,[],simulations);
+ downloadFiles([{
+  name:`simrun-simulated-activities-${resolved.length}.zip`,type:'application/zip',data:bytes
+ }]);
+ if(resolved.length<selected.length)toast(`${selected.length-resolved.length} draft activities were not included in the ZIP.`);
+});
+on('history-delete-selected',async()=>{
+ const ids=visibleHistory.filter(activity=>selectedHistory.has(activity.id)).map(activity=>activity.id);
+ if(!ids.length||!confirm(`Delete ${ids.length} selected activities from this browser?`))return;
+ const removed=await removeActivities(store,ids);
+ selectedHistory.clear();
+ await showHistory();
+ toast(`Deleted ${removed} activities from this browser.`);
+});
+on('library-export-all',async()=>{
+ const activities=await store.list(),draft=editor.activity;
+ if(!activities.some(activity=>activity.id===draft.id)&&(draft.path.length||draft.waypoints.length))activities.push(draft);
+ else{
+  const index=activities.findIndex(activity=>activity.id===draft.id);
+  if(index>=0)activities[index]=draft;
+ }
+ const simulations=new Map<string,Simulation>();
+ for(const activity of activities)if(activity.source!=='draft')simulations.set(activity.id,await simulateInWorker(activity));
+ const bytes=zipActivities(activities,preferences,await store.listSavedPlaces(),simulations);
+ downloadFiles([{
+  name:'simrun-full-library-simulated.zip',type:'application/zip',data:bytes
+ }]);
+});
+on('backup',async()=>{
+ const activities=await store.list(),draft=editor.activity;
+ if(!activities.some(a=>a.id===draft.id)&&(draft.path.length||draft.waypoints.length))activities.push(draft);
+ else{
+  const index=activities.findIndex(a=>a.id===draft.id);
+  if(index>=0)activities[index]=draft;
+ }
+ download(createBackup(activities,preferences,await store.listSavedPlaces()),'simrun-backup.json','application/json');
+});
 on('restore',()=>{$<HTMLInputElement>('backup-file').value='';$('backup-file').click();});
-$('backup-file').addEventListener('change',guarded(async()=>{const file=$<HTMLInputElement>('backup-file').files?.[0];if(!file)return;if(file.size>50000000)throw Error('Backup must be smaller than 50 MB.');const b=parseBackup(await file.text());if(!confirm(`Restore ${b.activities.length} activities and preferences? Matching activity IDs will be replaced.`))return;await store.restore(b.activities,b.savedPlaces);savedPlaces=b.savedPlaces;renderSavedPlaces();preferences=b.preferences;try{writePreferences(preferences);}catch{toast('Preferences were not saved — allow browser storage to keep them.');}applyLayout();document.documentElement.dataset.theme=preferences.theme;map.setStyle(mapStyleFor(preferences));map.setBasemapLayers(preferences.mapBaseLayer,preferences.mapCyclingOverlay,preferences.mapHikingOverlay);render();await showHistory();toast('Backup restored. Open a route from the library.');}));
+$('backup-file').addEventListener('change',guarded(async()=>{
+ const file=$<HTMLInputElement>('backup-file').files?.[0];
+ if(!file)return;
+ if(file.size>50000000)throw Error('Backup must be smaller than 50 MB.');
+ const b=parseBackup(await file.text());
+ if(!confirm(`Restore ${b.activities.length} activities and preferences? Matching activity IDs will be replaced.`))return;
+ await store.restore(b.activities,b.savedPlaces);
+ savedPlaces=b.savedPlaces;
+ renderSavedPlaces();
+ preferences=b.preferences;
+ try{writePreferences(preferences);}catch{
+  toast('Preferences were not saved — allow browser storage to keep them.');
+ }
+ applyLayout();
+ document.documentElement.dataset.theme=preferences.theme;
+ map.setStyle(mapStyleFor(preferences));
+ map.setBasemapLayers(preferences.mapBaseLayer,preferences.mapCyclingOverlay,preferences.mapHikingOverlay);
+ render();
+ await showHistory();
+ toast('Backup restored. Open a route from the library.');
+}));
 on('show-tips-again',()=>{preferences={...preferences,tipsDismissed:false};try{writePreferences(preferences);}catch{toast('Tip preference could not be saved — allow browser storage and retry.');}render();toast('Tips will appear again when the route is empty.');});
 for(const id of ['geocoding-enabled','search-suggestions','poi-enabled','surface-data-enabled','offline-routing'])$<HTMLInputElement>(id).addEventListener('change',updateProvidersPrivacySummary);
-on('settings',async()=>{setInput('units',preferences.units);setInput('theme',preferences.theme);setInput('map-base-layer',preferences.mapBaseLayer);$<HTMLInputElement>('map-cycling-overlay').checked=preferences.mapCyclingOverlay;$<HTMLInputElement>('map-hiking-overlay').checked=preferences.mapHikingOverlay;$<HTMLInputElement>('search-suggestions').checked=preferences.searchSuggestions;$<HTMLInputElement>('geocoding-enabled').checked=preferences.geocodingEnabled;$<HTMLInputElement>('poi-enabled').checked=preferences.poiEnabled;$<HTMLInputElement>('surface-data-enabled').checked=preferences.surfaceDataEnabled;for(const [id,key] of Object.entries({'map-style':'mapStyle','map-style-dark':'mapStyleDark','routing-url':'routingUrl','elevation-url':'elevationUrl','geocoding-url':'geocodingUrl','photon-url':'photonUrl','overpass-url':'overpassUrl'}))setInput(id,String(preferences[key as keyof Preferences]));setInput('hr-max',preferences.hrMax);setInput('trimp-resting-hr',preferences.trimpRestingHr??'');setInput('trimp-max-hr',preferences.trimpMaxHr??'');setInput('corridor-zoom',preferences.corridorZoom);$<HTMLInputElement>('offline-routing').checked=preferences.offlineRouting;$<HTMLInputElement>('avoid-highways').checked=preferences.avoidHighways;$<HTMLInputElement>('avoid-hills').checked=preferences.avoidHills;$<HTMLInputElement>('alternates-enabled').checked=preferences.alternates;savedPlaces=await store.listSavedPlaces();renderSavedPlaces();void refreshOfflineStatus();void refreshStorageUsage();updateProvidersPrivacySummary();$<HTMLDialogElement>('settings-dialog').showModal();});
-async function refreshStorageUsage():Promise<void>{try{const count=(await store.list()).length,usage=await storageUsage();setText('storage-usage',usage?`${count} saved ${count===1?'activity':'activities'} · ${savedPlaces.length} places · about ${(usage.usage/1048576).toFixed(1)} MB of ${(usage.quota/1048576).toFixed(0)} MB used.`:`${count} saved ${count===1?'activity':'activities'} · ${savedPlaces.length} places. Storage usage is unavailable in this browser.`);void refreshStorageIndicator();}catch{setText('storage-usage','Storage usage is unavailable in this browser.');}}
+on('settings',async()=>{
+ setInput('units',preferences.units);
+ setInput('theme',preferences.theme);
+ setInput('map-base-layer',preferences.mapBaseLayer);
+ $<HTMLInputElement>('map-cycling-overlay').checked=preferences.mapCyclingOverlay;
+ $<HTMLInputElement>('map-hiking-overlay').checked=preferences.mapHikingOverlay;
+ $<HTMLInputElement>('search-suggestions').checked=preferences.searchSuggestions;
+ $<HTMLInputElement>('geocoding-enabled').checked=preferences.geocodingEnabled;
+ $<HTMLInputElement>('poi-enabled').checked=preferences.poiEnabled;
+ $<HTMLInputElement>('surface-data-enabled').checked=preferences.surfaceDataEnabled;
+ for(const [id,key] of Object.entries({
+  'map-style':'mapStyle','map-style-dark':'mapStyleDark','routing-url':'routingUrl','elevation-url':'elevationUrl','geocoding-url':'geocodingUrl','photon-url':'photonUrl','overpass-url':'overpassUrl'
+ }))setInput(id,String(preferences[key as keyof Preferences]));
+ setInput('hr-max',preferences.hrMax);
+ setInput('trimp-resting-hr',preferences.trimpRestingHr??'');
+ setInput('trimp-max-hr',preferences.trimpMaxHr??'');
+ setInput('corridor-zoom',preferences.corridorZoom);
+ $<HTMLInputElement>('offline-routing').checked=preferences.offlineRouting;
+ $<HTMLInputElement>('avoid-highways').checked=preferences.avoidHighways;
+ $<HTMLInputElement>('avoid-hills').checked=preferences.avoidHills;
+ $<HTMLInputElement>('alternates-enabled').checked=preferences.alternates;
+ savedPlaces=await store.listSavedPlaces();
+ renderSavedPlaces();
+ void refreshOfflineStatus();
+ void refreshStorageUsage();
+ updateProvidersPrivacySummary();
+ $<HTMLDialogElement>('settings-dialog').showModal();
+});
+async function refreshStorageUsage():Promise<void>{
+ try{
+  const count=(await store.list()).length,
+  usage=await storageUsage();
+ setText('storage-usage',
+  usage
+   ?`${count} saved ${count===1?'activity':'activities'} · ${savedPlaces.length} places · about ${(usage.usage/1048576).toFixed(1)} MB of ${(usage.quota/1048576).toFixed(0)} MB used.`
+   :`${count} saved ${count===1?'activity':'activities'} · ${savedPlaces.length} places. Storage usage is unavailable in this browser.`);
+  void refreshStorageIndicator();
+ }catch{
+  setText('storage-usage',
+  'Storage usage is unavailable in this browser.');
+ }
+}
 async function refreshOfflineStatus():Promise<void>{
  const usage=await storageUsage();
  setText('offline-quota',usage?`Browser storage: ${formatBytes(usage.usage)} of ${formatBytes(usage.quota)} used · ${formatBytes(Math.max(0,usage.quota-usage.usage))} available.`:'Browser storage quota is unavailable.');
@@ -525,7 +1190,13 @@ on('corridor-download',async()=>{
   if(available===0){setText('corridor-status','Browser storage quota is full. Clear cached map data or free space before downloading.');throw Error('Browser storage quota is full. Clear cached map data or free space before downloading.');}
   if(available!==null&&available<estimate&&!confirm(`This download may need about ${formatBytes(estimate)}. Browser storage has about ${formatBytes(available)} available. Continue?`)){setText('corridor-status','Download cancelled before starting.');return;}
   cancelButton.hidden=false;progress.hidden=false;progress.max=urls.length;progress.value=0;setText('corridor-status',`Downloading ${urls.length} map tiles · 0/${urls.length}…`);
-  const result=await downloadCorridor(urls,{id,name:editor.activity.name||'Untitled route',bounds:corridorBounds(path,2000),createdAt:Date.now()},value=>{progress.max=value.total||urls.length;progress.value=value.done;setText('corridor-status',`Downloading map tiles · ${value.done}/${value.total} · ${value.stored} stored.`);});
+  const result=await downloadCorridor(urls,{
+   id,name:editor.activity.name||'Untitled route',bounds:corridorBounds(path,2000),createdAt:Date.now()
+  },value=>{
+   progress.max=value.total||urls.length;
+   progress.value=value.done;
+   setText('corridor-status',`Downloading map tiles · ${value.done}/${value.total} · ${value.stored} stored.`);
+  });
   if(!result){setText('corridor-status','Offline caching is not active in this page yet; reload once and try again.');return;}
   const currentUsage=await storageUsage();
   if(result.quota){setText('corridor-status',`Browser storage quota stopped this download after ${result.stored} tiles. ${currentUsage?`${formatBytes(currentUsage.usage)} of ${formatBytes(currentUsage.quota)} used. `:''}Clear cached map data or reduce corridor zoom and retry.`);}
@@ -539,19 +1210,183 @@ on('corridor-cancel',async()=>{if(activeCorridorDownloadId)await cancelCorridor(
 async function tileTemplates(zoom:number):Promise<string[]>{
  try{return await resolveTileTemplates(await fetch(mapStyleFor(preferences)).then(r=>r.json()),url=>fetch(url).then(r=>r.json()),zoom);}catch{return [];}
 }
-$('preferences-form').addEventListener('submit',e=>{e.preventDefault();guarded(()=>{roundtripController?.abort();const before=mapStyleFor(preferences),surfaceDataWasEnabled=preferences.surfaceDataEnabled;placeSuggestions.cancel();placeSuggestions.cache.clear();const next=validatePreferences({units:$<HTMLSelectElement>('units').value,theme:$<HTMLSelectElement>('theme').value,mapBaseLayer:$<HTMLSelectElement>('map-base-layer').value==='topo'?'topo':'vector',mapCyclingOverlay:$<HTMLInputElement>('map-cycling-overlay').checked,mapHikingOverlay:$<HTMLInputElement>('map-hiking-overlay').checked,geocodingEnabled:$<HTMLInputElement>('geocoding-enabled').checked,searchSuggestions:$<HTMLInputElement>('search-suggestions').checked,photonUrl:$<HTMLInputElement>('photon-url').value,mapStyle:$<HTMLInputElement>('map-style').value,mapStyleDark:$<HTMLInputElement>('map-style-dark').value,routingUrl:$<HTMLInputElement>('routing-url').value,elevationUrl:$<HTMLInputElement>('elevation-url').value,geocodingUrl:$<HTMLInputElement>('geocoding-url').value,overpassUrl:$<HTMLInputElement>('overpass-url').value,poiEnabled:$<HTMLInputElement>('poi-enabled').checked,surfaceDataEnabled:$<HTMLInputElement>('surface-data-enabled').checked,hrMax:Number($<HTMLInputElement>('hr-max').value),trimpRestingHr:$<HTMLInputElement>('trimp-resting-hr').value===''?undefined:Number($<HTMLInputElement>('trimp-resting-hr').value),trimpMaxHr:$<HTMLInputElement>('trimp-max-hr').value===''?undefined:Number($<HTMLInputElement>('trimp-max-hr').value),offlineRouting:$<HTMLInputElement>('offline-routing').checked,corridorZoom:Number($<HTMLInputElement>('corridor-zoom').value),avoidHighways:$<HTMLInputElement>('avoid-highways').checked,avoidHills:$<HTMLInputElement>('avoid-hills').checked,alternates:$<HTMLInputElement>('alternates-enabled').checked,tipsDismissed:preferences.tipsDismissed,collapseTools:preferences.collapseTools,collapseInspector:preferences.collapseInspector,collapseTopbar:preferences.collapseTopbar,collapseChart:preferences.collapseChart});preferences=next;editor.alternatesEnabled=next.alternates;try{writePreferences(next);}catch{toast('Preferences apply for this session only — allow browser storage to save them.');}document.documentElement.dataset.theme=next.theme;if(mapStyleFor(next)!==before)map.setStyle(mapStyleFor(next));map.setBasemapLayers(next.mapBaseLayer,next.mapCyclingOverlay,next.mapHikingOverlay);$<HTMLDialogElement>('settings-dialog').close();render();if(!surfaceDataWasEnabled&&next.surfaceDataEnabled)void editor.refreshRouteData().catch(error=>toast(failureMessage(error,'Route details are unavailable — retry the route.')));})();});
+$('preferences-form').addEventListener('submit',
+e=>{
+ e.preventDefault();
+ guarded(()=>{
+  roundtripController?.abort();
+  const before=mapStyleFor(preferences),
+  surfaceDataWasEnabled=preferences.surfaceDataEnabled;
+  placeSuggestions.cancel();
+  placeSuggestions.cache.clear();
+  const next=validatePreferences({
+   units:$<HTMLSelectElement>('units').value,
+   theme:$<HTMLSelectElement>('theme').value,
+   mapBaseLayer:$<HTMLSelectElement>('map-base-layer').value==='topo'?'topo':'vector',
+   mapCyclingOverlay:$<HTMLInputElement>('map-cycling-overlay').checked,
+   mapHikingOverlay:$<HTMLInputElement>('map-hiking-overlay').checked,
+   geocodingEnabled:$<HTMLInputElement>('geocoding-enabled').checked,
+   searchSuggestions:$<HTMLInputElement>('search-suggestions').checked,
+   photonUrl:$<HTMLInputElement>('photon-url').value,
+   mapStyle:$<HTMLInputElement>('map-style').value,
+   mapStyleDark:$<HTMLInputElement>('map-style-dark').value,
+   routingUrl:$<HTMLInputElement>('routing-url').value,
+   elevationUrl:$<HTMLInputElement>('elevation-url').value,
+   geocodingUrl:$<HTMLInputElement>('geocoding-url').value,
+   overpassUrl:$<HTMLInputElement>('overpass-url').value,
+   poiEnabled:$<HTMLInputElement>('poi-enabled').checked,
+   surfaceDataEnabled:$<HTMLInputElement>('surface-data-enabled').checked,
+   hrMax:Number($<HTMLInputElement>('hr-max').value),
+   trimpRestingHr:$<HTMLInputElement>('trimp-resting-hr').value===''?undefined:Number($<HTMLInputElement>('trimp-resting-hr').value),
+   trimpMaxHr:$<HTMLInputElement>('trimp-max-hr').value===''?undefined:Number($<HTMLInputElement>('trimp-max-hr').value),
+   offlineRouting:$<HTMLInputElement>('offline-routing').checked,
+   corridorZoom:Number($<HTMLInputElement>('corridor-zoom').value),
+   avoidHighways:$<HTMLInputElement>('avoid-highways').checked,
+   avoidHills:$<HTMLInputElement>('avoid-hills').checked,
+   alternates:$<HTMLInputElement>('alternates-enabled').checked,
+   tipsDismissed:preferences.tipsDismissed,
+   collapseTools:preferences.collapseTools,
+   collapseInspector:preferences.collapseInspector,
+   collapseTopbar:preferences.collapseTopbar,
+   collapseChart:preferences.collapseChart
+  });
+  preferences=next;
+  editor.alternatesEnabled=next.alternates;
+  try{writePreferences(next);}catch{
+   toast('Preferences apply for this session only — allow browser storage to save them.');
+  }
+  document.documentElement.dataset.theme=next.theme;
+  if(mapStyleFor(next)!==before)map.setStyle(mapStyleFor(next));
+  map.setBasemapLayers(next.mapBaseLayer,
+  next.mapCyclingOverlay,
+  next.mapHikingOverlay);
+  $<HTMLDialogElement>('settings-dialog').close();
+  render();
+  if(!surfaceDataWasEnabled&&next.surfaceDataEnabled)void editor.refreshRouteData().catch(error=>toast(failureMessage(error,'Route details are unavailable — retry the route.')));
+ })();
+});
 on('save-selected-place',()=>{if(!selectedSearchPlace)throw Error('Choose a search result or locate a place first.');return saveNamedPlace(selectedSearchPlace);});
 on('save-map-centre',()=>saveNamedPlace({...map.centerPoint(),name:'Map centre'}));
 on('locate-me',()=>{
  if(!navigator.geolocation){toast('Location is not supported — search for a place or enter coordinates instead.');return;}
- navigator.geolocation.getCurrentPosition(position=>{locatedPoint={lat:position.coords.latitude,lon:position.coords.longitude};map.focus(locatedPoint);setSelectedSearchPlace({name:'Current location',...locatedPoint});$<HTMLButtonElement>('use-location-start').hidden=false;toast('Your current location is centred on the map. Choose Save selected place or Use located point as start if wanted.');},error=>{if(error.code===error.PERMISSION_DENIED)toast('Location permission was denied. Allow location access in browser settings and try again.');else if(error.code===error.POSITION_UNAVAILABLE)toast('Current location is unavailable — check browser location settings and retry.');else toast('Location request timed out. Try again.');},{enableHighAccuracy:false,maximumAge:0,timeout:10000});
+ navigator.geolocation.getCurrentPosition(position=>{
+  locatedPoint={lat:position.coords.latitude,lon:position.coords.longitude};
+  map.focus(locatedPoint);
+  setSelectedSearchPlace({name:'Current location',...locatedPoint});
+  $<HTMLButtonElement>('use-location-start').hidden=false;
+  toast('Your current location is centred on the map. Choose Save selected place or Use located point as start if wanted.');
+ },error=>{
+  if(error.code===error.PERMISSION_DENIED)toast('Location permission was denied. Allow location access in browser settings and try again.');
+  else if(error.code===error.POSITION_UNAVAILABLE)toast('Current location is unavailable — check browser location settings and retry.');
+  else toast('Location request timed out. Try again.');
+ },{enableHighAccuracy:false,maximumAge:0,timeout:10000});
 });
-on('use-location-start',()=>{if(!locatedPoint)throw Error('Locate your position before choosing a start waypoint.');if(editor.activity.source==='imported')throw Error('Convert imported geometry to waypoints before changing its start.');if(editor.activity.waypoints.length)editor.move(0,locatedPoint);else editor.add(locatedPoint);toast('Located point set as the start waypoint.');});
-$('search').addEventListener('input',()=>{const query=$<HTMLInputElement>('search').value.trim(),local=searchSavedPlaces(savedPlaces,query);setSelectedSearchPlace(null);if(preferences.searchSuggestions){showSearchResults(local,'typing');placeSuggestions.search(query);}else{placeSuggestions.cancel();showSearchResults(local,'offline');}});
-$('search').addEventListener('keydown',e=>{if(e.key==='ArrowDown'&&searchResults.length){e.preventDefault();moveSearchSelection(1);}else if(e.key==='ArrowUp'&&searchResults.length){e.preventDefault();moveSearchSelection(-1);}else if(e.key==='Enter'&&activeSearchResult>=0){e.preventDefault();placeSuggestions.cancel();selectSearchResult(activeSearchResult);}else if(e.key==='Escape'){e.preventDefault();placeSuggestions.cancel();activeSearchResult=-1;$('search-results').hidden=true;$<HTMLInputElement>('search').setAttribute('aria-expanded','false');$<HTMLInputElement>('search').removeAttribute('aria-activedescendant');}});
-$('search-form').addEventListener('submit',e=>{e.preventDefault();guarded(async()=>{const query=$<HTMLInputElement>('search').value.trim();if(!query)return;placeSuggestions.cancel();const local=searchSavedPlaces(savedPlaces,query);if(local.length){showSearchResults(local,'offline');return;}searchController?.abort();const controller=new AbortController();searchController=controller;const id=++searchId;const submit=$<HTMLButtonElement>('search-submit');submit.disabled=true;try{const places=await searchPlaces(query,preferences,controller.signal);if(id!==searchId)return;if(!places.length){showSearchResults([],'nominatim');toast('No places found. Try coordinates or another search.');return;}showSearchResults(places,'nominatim');}catch(error){if(!controller.signal.aborted)throw error;}finally{if(id===searchId)submit.disabled=false;}})();});
-document.addEventListener('pointerdown',e=>{if(!(e.target as Element).closest('.search-wrap')){const list=$('search-results');list.hidden=true;activeSearchResult=-1;$<HTMLInputElement>('search').setAttribute('aria-expanded','false');$<HTMLInputElement>('search').removeAttribute('aria-activedescendant');placeSuggestions.cancel();}});
-document.addEventListener('keydown',e=>{const target=e.target;if(target instanceof Element&&target.closest('input,textarea,select,[contenteditable=true],[role=textbox],#chart')||document.querySelector('dialog[open]'))return;if(target instanceof Element&&target.closest('.map-tools')&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)&&editor.selected>=0){const point=editor.activity.waypoints[editor.selected];if(point){e.preventDefault();const step=e.shiftKey?10:2,lat=point.lat+(e.key==='ArrowUp'?step/111320:e.key==='ArrowDown'?-step/111320:0),scale=Math.max(1,111320*Math.cos(point.lat*Math.PI/180)),lon=point.lon+(e.key==='ArrowRight'?step/scale:e.key==='ArrowLeft'?-step/scale:0);editor.move(editor.selected,{lat,lon});}return;}const shortcut=matchShortcut(e);if(!shortcut)return;switch(shortcut.id){case 'undo':e.preventDefault();editor.undo();break;case 'redo':e.preventDefault();editor.redo();break;case 'delete-waypoint':if(editor.selected<0)return;e.preventDefault();editor.remove(editor.selected);break;case 'fit':e.preventDefault();map.fit();break;case 'escape':disableFreehand();editor.drawing=false;$('inspector').classList.remove('open');$('search-results').hidden=true;render();break;case 'help':e.preventDefault();openShortcutHelp();break;}});
+on('use-location-start',()=>{
+ if(!locatedPoint)throw Error('Locate your position before choosing a start waypoint.');
+ if(editor.activity.source==='imported')throw Error('Convert imported geometry to waypoints before changing its start.');
+ if(editor.activity.waypoints.length)editor.move(0,locatedPoint);
+ else editor.add(locatedPoint);
+ toast('Located point set as the start waypoint.');
+});
+$('search').addEventListener('input',()=>{
+ const query=$<HTMLInputElement>('search').value.trim(),local=searchSavedPlaces(savedPlaces,query);
+ setSelectedSearchPlace(null);
+ if(preferences.searchSuggestions){
+  showSearchResults(local,'typing');
+  placeSuggestions.search(query);
+ }else{
+  placeSuggestions.cancel();
+  showSearchResults(local,'offline');
+ }
+});
+$('search').addEventListener('keydown',e=>{
+ if(e.key==='ArrowDown'&&searchResults.length){e.preventDefault();moveSearchSelection(1);}else if(e.key==='ArrowUp'&&searchResults.length){e.preventDefault();moveSearchSelection(-1);}else if(e.key==='Enter'&&activeSearchResult>=0){
+  e.preventDefault();
+  placeSuggestions.cancel();
+  selectSearchResult(activeSearchResult);
+ }else if(e.key==='Escape'){
+  e.preventDefault();
+  placeSuggestions.cancel();
+  activeSearchResult=-1;
+  $('search-results').hidden=true;
+  $<HTMLInputElement>('search').setAttribute('aria-expanded','false');
+  $<HTMLInputElement>('search').removeAttribute('aria-activedescendant');
+ }
+});
+$('search-form').addEventListener('submit',e=>{
+ e.preventDefault();
+ guarded(async()=>{
+  const query=$<HTMLInputElement>('search').value.trim();
+  if(!query)return;
+  placeSuggestions.cancel();
+  const local=searchSavedPlaces(savedPlaces,query);
+  if(local.length){showSearchResults(local,'offline');return;}searchController?.abort();
+  const controller=new AbortController();
+  searchController=controller;
+  const id=++searchId;
+  const submit=$<HTMLButtonElement>('search-submit');
+  submit.disabled=true;
+  try{
+   const places=await searchPlaces(query,preferences,controller.signal);
+   if(id!==searchId)return;
+   if(!places.length){
+    showSearchResults([],'nominatim');
+    toast('No places found. Try coordinates or another search.');
+    return;
+   }
+   showSearchResults(places,'nominatim');
+  }catch(error){if(!controller.signal.aborted)throw error;}finally{if(id===searchId)submit.disabled=false;}
+ })();
+});
+document.addEventListener('pointerdown',e=>{
+ if(!(e.target as Element).closest('.search-wrap')){
+  const list=$('search-results');
+  list.hidden=true;
+  activeSearchResult=-1;
+  $<HTMLInputElement>('search').setAttribute('aria-expanded','false');
+  $<HTMLInputElement>('search').removeAttribute('aria-activedescendant');
+  placeSuggestions.cancel();
+ }
+});
+document.addEventListener('keydown',e=>{
+ const target=e.target;
+ if(target instanceof Element&&target.closest('input,textarea,select,[contenteditable=true],[role=textbox],#chart')||document.querySelector('dialog[open]'))return;
+ if(target instanceof Element&&target.closest('.map-tools')&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)&&editor.selected>=0){
+  const point=editor.activity.waypoints[editor.selected];
+  if(point){
+   e.preventDefault();
+   const step=e.shiftKey?10:2,lat=point.lat+(e.key==='ArrowUp'?step/111320:e.key==='ArrowDown'?-step/111320:0),scale=Math.max(1,111320*Math.cos(point.lat*Math.PI/180)),lon=point.lon+(e.key==='ArrowRight'?step/scale:e.key==='ArrowLeft'?-step/scale:0);
+   editor.move(editor.selected,{lat,lon});
+  }
+  return;
+ }
+ const shortcut=matchShortcut(e);
+ if(!shortcut)return;
+ switch(shortcut.id){
+  case 'undo':e.preventDefault();
+  editor.undo();
+  break;
+  case 'redo':e.preventDefault();
+  editor.redo();
+  break;
+  case 'delete-waypoint':if(editor.selected<0)return;
+  e.preventDefault();
+  editor.remove(editor.selected);
+  break;
+  case 'fit':e.preventDefault();
+  map.fit();
+  break;
+  case 'escape':disableFreehand();
+  editor.drawing=false;
+  $('inspector').classList.remove('open');
+  $('search-results').hidden=true;
+  render();
+  break;
+  case 'help':e.preventDefault();
+  openShortcutHelp();
+  break;
+ }
+});
 let resizeFrame=0;window.addEventListener('resize',()=>{cancelAnimationFrame(resizeFrame);resizeFrame=requestAnimationFrame(()=>{render();map.fit();});});
 window.addEventListener('pagehide',()=>{if(initialized)void store.saveDraft(editor.activity).catch(()=>{});});
 render();void map.init(mapStyleFor(preferences));map.setBasemapLayers(preferences.mapBaseLayer,preferences.mapCyclingOverlay,preferences.mapHikingOverlay);registerOfflineCache();
@@ -565,5 +1400,36 @@ async function initialize():Promise<void>{
   }else if(returned==='denied')toast('The Strava connection was cancelled.');
   else toast('The Strava connection failed — try again from the Send dialog.');
  }
- await initializeLocale();const localeSelect=$<HTMLSelectElement>('locale');for(const [code,name] of Object.entries(localeNames))if(!localeSelect.querySelector(`option[value="${code}"]`))localeSelect.append(new Option(name,code));localeSelect.value=localePreference();render();localeSelect.addEventListener('change',()=>{void setLocale(localeSelect.value).then(()=>location.reload());});try{await store.open();setText('storage-state','Saved on this device');const shared=decodeShare(location.hash);if(shared){const {activity,notices}=importedActivity(shared.points,'Shared route',sportLabel(shared.sport),'Shared link');editor.load(activity);map.fit();toast(`${notices} Timing was re-simulated locally.`);}else{const a=await store.readDraft();if(a){editor.load(a);map.fit();}}}catch{setText('storage-state','Session only');$('storage-state').classList.add('warning');toast('Browser storage is unavailable here. History is session-only; export GPX or a backup before closing.');}finally{initialized=true;savedPlaces=await store.listSavedPlaces().catch(()=>[]);renderSavedPlaces();render();}}
+ await initializeLocale();
+ const localeSelect=$<HTMLSelectElement>('locale');
+ for(const [code,name] of Object.entries(localeNames))if(!localeSelect.querySelector(`option[value="${code}"]`))localeSelect.append(new Option(name,code));
+ localeSelect.value=localePreference();
+ render();
+ localeSelect.addEventListener('change',()=>{
+  void setLocale(localeSelect.value).then(()=>location.reload());
+ });
+ try{
+  await store.open();
+  setText('storage-state','Saved on this device');
+  const shared=decodeShare(location.hash);
+  if(shared){
+   const {activity,notices}=importedActivity(shared.points,'Shared route',sportLabel(shared.sport),'Shared link');
+   editor.load(activity);
+   map.fit();
+   toast(`${notices} Timing was re-simulated locally.`);
+  }else{
+   const a=await store.readDraft();
+   if(a){editor.load(a);map.fit();}
+  }
+ }catch{
+  setText('storage-state','Session only');
+  $('storage-state').classList.add('warning');
+  toast('Browser storage is unavailable here. History is session-only; export GPX or a backup before closing.');
+ }finally{
+  initialized=true;
+  savedPlaces=await store.listSavedPlaces().catch(()=>[]);
+  renderSavedPlaces();
+  render();
+ }
+ }
 void initialize();

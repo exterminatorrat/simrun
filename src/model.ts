@@ -6,7 +6,28 @@ import {usesPace,sportFromText} from './sports.js';
 import {averageGapPace,gradeAdjustedPace} from './gap.js';
 export const PRODUCT='SimRun';
 export const MAX_LOOP_LAPS=20000,MAX_LOOP_DISTANCE=5000000,MAX_LOOP_POINTS=100000;
-export const WEATHER_PRESETS:Record<WeatherPreset,{label:string;tempC:number;humidity:number;headwindKph:number}>={ideal:{label:'Ideal',tempC:15,humidity:50,headwindKph:0},cool:{label:'Cool',tempC:6,humidity:60,headwindKph:3},mild:{label:'Mild',tempC:18,humidity:55,headwindKph:5},warm:{label:'Warm',tempC:26,humidity:50,headwindKph:5},hot:{label:'Hot',tempC:34,humidity:30,headwindKph:4},humid:{label:'Humid',tempC:28,humidity:85,headwindKph:3},windy:{label:'Windy',tempC:16,humidity:55,headwindKph:22}};
+export const WEATHER_PRESETS:Record<WeatherPreset,{
+ label:string;
+ tempC:number;
+ humidity:number;
+ headwindKph:number
+}>={
+ ideal:{
+  label:'Ideal',tempC:15,humidity:50,headwindKph:0
+ },cool:{
+  label:'Cool',tempC:6,humidity:60,headwindKph:3
+ },mild:{
+  label:'Mild',tempC:18,humidity:55,headwindKph:5
+ },warm:{
+  label:'Warm',tempC:26,humidity:50,headwindKph:5
+ },hot:{
+  label:'Hot',tempC:34,humidity:30,headwindKph:4
+ },humid:{
+  label:'Humid',tempC:28,humidity:85,headwindKph:3
+ },windy:{
+  label:'Windy',tempC:16,humidity:55,headwindKph:22
+ }
+};
 /** Deterministic weather penalty applied to total duration; neutral conditions return exactly 1. */
 export function weatherFactor(w:WeatherSim|undefined):number {
  if(!w)return 1;
@@ -19,12 +40,47 @@ export function weatherHeat(w:WeatherSim|undefined):number {
  return clamp(1+Math.max(0,w.tempC-20)*.03+Math.max(0,w.humidity-60)*.004,1,2);
 }
 export interface LoopResult {path:Point[];loopLength:number;distance:number;laps:number;capped:boolean}
-export const defaultPreferences:Preferences={units:'metric',theme:'light',mapStyle:'https://tiles.openfreemap.org/styles/liberty',mapStyleDark:'https://tiles.openfreemap.org/styles/dark',mapBaseLayer:'vector',mapCyclingOverlay:false,mapHikingOverlay:false,routingUrl:'https://valhalla1.openstreetmap.de/route',elevationUrl:'https://valhalla1.openstreetmap.de/height',geocodingUrl:'https://nominatim.openstreetmap.org/search',geocodingEnabled:false,photonUrl:'https://photon.komoot.io/api/',searchSuggestions:false,overpassUrl:'https://overpass-api.de/api/interpreter',poiEnabled:false,surfaceDataEnabled:false,hrMax:190,offlineRouting:false,corridorZoom:12,avoidHighways:false,avoidHills:false,alternates:false,tipsDismissed:false,collapseTools:false,collapseInspector:false,collapseTopbar:false,collapseChart:false};
+export const defaultPreferences:Preferences={
+ units:'metric',
+ theme:'light',
+ mapStyle:'https://tiles.openfreemap.org/styles/liberty',
+ mapStyleDark:'https://tiles.openfreemap.org/styles/dark',
+ mapBaseLayer:'vector',
+ mapCyclingOverlay:false,
+ mapHikingOverlay:false,
+ routingUrl:'https://valhalla1.openstreetmap.de/route',
+ elevationUrl:'https://valhalla1.openstreetmap.de/height',
+ geocodingUrl:'https://nominatim.openstreetmap.org/search',
+ geocodingEnabled:false,
+ photonUrl:'https://photon.komoot.io/api/',
+ searchSuggestions:false,
+ overpassUrl:'https://overpass-api.de/api/interpreter',
+ poiEnabled:false,
+ surfaceDataEnabled:false,
+ hrMax:190,
+ offlineRouting:false,
+ corridorZoom:12,
+ avoidHighways:false,
+ avoidHills:false,
+ alternates:false,
+ tipsDismissed:false,
+ collapseTools:false,
+ collapseInspector:false,
+ collapseTopbar:false,
+ collapseChart:false
+};
 export function localInput(date=new Date()):string{return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 /** The map style that matches the chosen appearance; each theme has its own endpoint. */
 export const mapStyleFor=(p:Preferences):string=>p.theme==='dark'?p.mapStyleDark:p.mapStyle;
 export function defaults():Activity {
- const now=Date.now();return {id:newId(),version:1,name:`${new Date().getHours()<12?'Morning':new Date().getHours()<18?'Afternoon':'Evening'} run`,createdAt:now,updatedAt:now,waypoints:[],path:[],source:'draft',settings:{sport:'run',start:localInput(),utcOffset:-new Date().getTimezoneOffset(),pace:300,speed:24,mode:'constant',variation:.06,sample:2,paceStrategy:'even',hrEnabled:false,hrAverage:150,hrVariation:5,seed:Math.floor(Math.random()*1000000),gps:{noise:0,dropout:0}}};
+ const now=Date.now();
+ return {
+  id:newId(),version:1,name:`${new Date().getHours()<12?'Morning':new Date().getHours()<18?'Afternoon':'Evening'} run`,createdAt:now,updatedAt:now,waypoints:[],path:[],source:'draft',settings:{
+   sport:'run',start:localInput(),utcOffset:-new Date().getTimezoneOffset(),pace:300,speed:24,mode:'constant',variation:.06,sample:2,paceStrategy:'even',hrEnabled:false,hrAverage:150,hrVariation:5,seed:Math.floor(Math.random()*1000000),gps:{
+    noise:0,dropout:0
+   }
+  }
+ };
 }
 /** Builds an imported activity from retained geometry. Missing or non-increasing timestamps never fabricate timing. */
 export function importedActivity(points:Point[],name:string,typeText:string,label='Imported'):{activity:Activity;notices:string[]} {
@@ -69,7 +125,10 @@ export function startTime(s:Settings):number {
 export function validateSettings(s:Settings):void {
  if(!s||!['run','ride','walk','hike','trail-run','mtb'].includes(s.sport)||!['constant','natural'].includes(s.mode)||![1,2,5].includes(s.sample))throw Error('Activity settings are invalid.');
  if(s.paceStrategy!==undefined&&!['even','negative-split','positive-split','segments'].includes(s.paceStrategy))throw Error('Invalid pace strategy.');
- if(s.paceSegments!==undefined){const min=usesPace(s.sport)?60:1,max=usesPace(s.sport)?3600:150;if(!Array.isArray(s.paceSegments)||s.paceSegments.length<2||s.paceSegments.length>50||s.paceSegments.some(v=>!Number.isFinite(v)||v<min||v>max)||s.paceStrategy!=='segments')throw Error('Invalid segment pace targets.');}
+ if(s.paceSegments!==undefined){
+  const min=usesPace(s.sport)?60:1,max=usesPace(s.sport)?3600:150;
+  if(!Array.isArray(s.paceSegments)||s.paceSegments.length<2||s.paceSegments.length>50||s.paceSegments.some(v=>!Number.isFinite(v)||v<min||v>max)||s.paceStrategy!=='segments')throw Error('Invalid segment pace targets.');
+ }
  if(s.paceStrategy==='segments'&&!s.paceSegments)throw Error('Segment pace targets are required.');
  if(s.profile!==undefined&&!['walk','hike','road','mtb'].includes(s.profile))throw Error('Invalid routing profile.');
  for(const [value,min,max] of [[s.pace,60,3600],[s.speed,1,150],[s.variation,0,.25],[s.utcOffset,-720,840],[s.hrAverage,30,240],[s.hrVariation,0,30],[s.seed,0,2147483647]])if(!Number.isFinite(value)||value<min||value>max)throw Error('Activity settings are outside supported limits.');
@@ -95,7 +154,19 @@ export function validateActivity(value:unknown):Activity {
  if(a.description!==undefined&&typeof a.description!=='string')throw Error('Invalid activity description.');
  if(!['draft','routed','imported'].includes(a.source)||!Number.isFinite(a.createdAt)||!Number.isFinite(a.updatedAt))throw Error('Activity metadata is invalid.');
  if(!Array.isArray(a.path)||a.path.length>100000||!Array.isArray(a.waypoints)||a.waypoints.length>200)throw Error('Route exceeds supported size.');
- const clean=(p:Point):Point=>{if(!validPoint(p))throw Error('Invalid route coordinate.');const q:Point={lat:p.lat,lon:p.lon};if(p.ele!==undefined){if(!Number.isFinite(p.ele)||Math.abs(p.ele)>12000)throw Error('Invalid elevation.');q.ele=p.ele;}if(Number.isFinite(p.time))q.time=p.time;if(Number.isFinite(p.hr)&&p.hr!>=0&&p.hr!<=255)q.hr=p.hr;return q;};
+ const clean=(p:Point):Point=>{
+  if(!validPoint(p))throw Error('Invalid route coordinate.');
+  const q:Point={
+   lat:p.lat,lon:p.lon
+  };
+  if(p.ele!==undefined){
+   if(!Number.isFinite(p.ele)||Math.abs(p.ele)>12000)throw Error('Invalid elevation.');
+   q.ele=p.ele;
+  }
+  if(Number.isFinite(p.time))q.time=p.time;
+  if(Number.isFinite(p.hr)&&p.hr!>=0&&p.hr!<=255)q.hr=p.hr;
+  return q;
+ };
  // eslint-disable-next-line no-control-regex -- strip control characters from stop text
  const stopText=(v:unknown,max:number):string|undefined=>typeof v==='string'?v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').trim().slice(0,max)||undefined:undefined;
  const cleanStop=(p:Waypoint):Waypoint=>{const q=clean(p),name=stopText(p.name,80),note=stopText(p.note,500);return {...q,...(name?{name}:{}),...(note?{note}:{})};};
@@ -135,18 +206,38 @@ export function validateActivity(value:unknown):Activity {
   let streetNames:StreetNameSpan[]|undefined,surfaceEdges:RouteSurfaceEdge[]|undefined;
   if(v.streetNames!==undefined){
    if(!Array.isArray(v.streetNames)||v.streetNames.length>20000)throw Error('Invalid route street names.');
-   streetNames=v.streetNames.map(span=>{if(!span||!Number.isFinite(span.start)||!Number.isFinite(span.end)||span.start<0||span.end<span.start||span.end>total+1||typeof span.name!=='string'||!span.name.trim()||span.name.length>160)throw Error('Invalid route street name.');return {start:span.start,end:span.end,name:span.name.trim()};});
+   streetNames=v.streetNames.map(span=>{
+    if(!span||!Number.isFinite(span.start)||!Number.isFinite(span.end)||span.start<0||span.end<span.start||span.end>total+1||typeof span.name!=='string'||!span.name.trim()||span.name.length>160)throw Error('Invalid route street name.');return {
+     start:span.start,end:span.end,name:span.name.trim()
+    };
+   });
   }
   if(v.surfaceEdges!==undefined){
    if(!Array.isArray(v.surfaceEdges)||v.surfaceEdges.length>20000)throw Error('Invalid route surface data.');
-   surfaceEdges=v.surfaceEdges.map(edge=>{if(!edge||!Number.isFinite(edge.distance)||edge.distance<=0||edge.distance>5000000)throw Error('Invalid route surface distance.');const clean:RouteSurfaceEdge={distance:edge.distance};if(edge.surface!==undefined)clean.surface=cleanLabel(edge.surface);if(edge.roadClass!==undefined)clean.roadClass=cleanLabel(edge.roadClass);if(!clean.surface&&!clean.roadClass)throw Error('Route surface edge has no classification.');return clean;});
+   surfaceEdges=v.surfaceEdges.map(edge=>{
+    if(!edge||!Number.isFinite(edge.distance)||edge.distance<=0||edge.distance>5000000)throw Error('Invalid route surface distance.');const clean:RouteSurfaceEdge={
+     distance:edge.distance
+    };if(edge.surface!==undefined)clean.surface=cleanLabel(edge.surface);if(edge.roadClass!==undefined)clean.roadClass=cleanLabel(edge.roadClass);if(!clean.surface&&!clean.roadClass)throw Error('Route surface edge has no classification.');return clean;
+   });
   }
   return streetNames?.length||surfaceEdges?.length?{...(streetNames?.length?{streetNames}:{}),...(surfaceEdges?.length?{surfaceEdges}:{})}:undefined;
  };
  const cleanWorkout=(v:Workout|undefined):Workout|undefined=>{
   if(v===undefined||v===null)return undefined;
   if(typeof v!=='object'||!Array.isArray(v.steps)||!v.steps.length||v.steps.length>200)throw Error('Invalid workout.');
- return {steps:v.steps.map(st=>{if(typeof st!=='object'||(st.kind!=='work'&&st.kind!=='rest')||!Number.isFinite(st.distance)||st.distance<=0||st.distance>MAX_LOOP_DISTANCE)throw Error('Invalid workout step.');const step:WorkoutStep={kind:st.kind,distance:st.distance};if(st.pace!==undefined){if(!Number.isFinite(st.pace)||st.pace<60||st.pace>3600)throw Error('Workout pace must be between 1:00 and 60:00 per km.');step.pace=st.pace;}if(st.speed!==undefined){if(!Number.isFinite(st.speed)||st.speed<1||st.speed>150)throw Error('Workout speed must be between 1 and 150 km/h.');step.speed=st.speed;}if(st.hr!==undefined&&Number.isFinite(st.hr))step.hr=st.hr;return step;})};
+ return {
+  steps:v.steps.map(st=>{
+   if(typeof st!=='object'||(st.kind!=='work'&&st.kind!=='rest')||!Number.isFinite(st.distance)||st.distance<=0||st.distance>MAX_LOOP_DISTANCE)throw Error('Invalid workout step.');const step:WorkoutStep={
+    kind:st.kind,distance:st.distance
+   };if(st.pace!==undefined){
+    if(!Number.isFinite(st.pace)||st.pace<60||st.pace>3600)throw Error('Workout pace must be between 1:00 and 60:00 per km.');step.pace=st.pace;
+   }
+   if(st.speed!==undefined){
+    if(!Number.isFinite(st.speed)||st.speed<1||st.speed>150)throw Error('Workout speed must be between 1 and 150 km/h.');step.speed=st.speed;
+   }
+   if(st.hr!==undefined&&Number.isFinite(st.hr))step.hr=st.hr;return step;
+  })
+ };
  };
  const cleanPauses=(v:Pauses|undefined):Pauses|undefined=>{
   if(v===undefined||v===null)return undefined;
@@ -159,10 +250,56 @@ export function validateActivity(value:unknown):Activity {
   if(!Number.isInteger(v.index)||!Number.isInteger(v.total)||v.total<2||v.total>31||v.index<1||v.index>v.total)throw Error('Invalid stage reference.');
   return {tourId:v.tourId,index:v.index,total:v.total};
  };
- const power=cleanPower(s.power)||undefined,cadence=cleanCadence(s.cadence)||undefined,fatigue=cleanFatigue(s.fatigue)||undefined,weather=cleanWeather(s.weather)||undefined,workout=cleanWorkout(a.workout),pauses=cleanPauses(a.pauses),tags=cleanTags(a.tags),stage=cleanStage(a.stage),collection=sanitizeCollection(a.collection);
+ const power=cleanPower(s.power)||undefined,
+ cadence=cleanCadence(s.cadence)||undefined,
+ fatigue=cleanFatigue(s.fatigue)||undefined,
+ weather=cleanWeather(s.weather)||undefined,
+ workout=cleanWorkout(a.workout),
+ pauses=cleanPauses(a.pauses),
+ tags=cleanTags(a.tags),
+ stage=cleanStage(a.stage),
+ collection=sanitizeCollection(a.collection);
  const path=a.path.map(clean),routeData=cleanRouteData(a.routeData,cumulative(path).at(-1)??0);
  // Explicitly select fields; never merge untrusted objects into app state.
- return {id:a.id,version:1,name:a.name,...(a.description!==undefined?{description:a.description.slice(0,2000)}:{}),createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path,waypoints:a.waypoints.map(cleanStop),settings:{sport:s.sport,...(s.profile?{profile:s.profile}:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,paceStrategy:s.paceStrategy??'even',...(s.paceSegments?{paceSegments:[...s.paceSegments]}:{}),hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{gps:{noise:s.gps.noise,dropout:s.gps.dropout}}:{}),...(power?{power}:{}),...(cadence?{cadence}:{}),...(fatigue?{fatigue}:{}),...(weather?{weather}:{})},...(loop?{loop}:{}),...(splits?{splits}:{}),...(routeData?{routeData}:{}),...(workout?{workout}:{}),...(pauses?{pauses}:{}),...(tags?{tags}:{}),...(stage?{stage}:{}),...(collection?{collection}:{})};
+ return {
+  id:a.id,version:1,name:a.name,...(a.description!==undefined?{
+   description:a.description.slice(0,2000)
+  }:{}),createdAt:a.createdAt,updatedAt:a.updatedAt,source:a.source,path,waypoints:a.waypoints.map(cleanStop),settings:{
+   sport:s.sport,...(s.profile?{
+    profile:s.profile
+   }:{}),start:s.start,utcOffset:s.utcOffset,pace:s.pace,speed:s.speed,mode:s.mode,variation:s.variation,sample:s.sample,paceStrategy:s.paceStrategy??'even',...(s.paceSegments?{
+    paceSegments:[...s.paceSegments]
+   }:{}),hrEnabled:s.hrEnabled,hrAverage:s.hrAverage,hrVariation:s.hrVariation,seed:s.seed,...(s.gps?{
+    gps:{
+     noise:s.gps.noise,dropout:s.gps.dropout
+    }
+   }:{}),...(power?{
+    power
+   }:{}),...(cadence?{
+    cadence
+   }:{}),...(fatigue?{
+    fatigue
+   }:{}),...(weather?{
+    weather
+   }:{})
+  },...(loop?{
+   loop
+  }:{}),...(splits?{
+   splits
+  }:{}),...(routeData?{
+   routeData
+  }:{}),...(workout?{
+   workout
+  }:{}),...(pauses?{
+   pauses
+  }:{}),...(tags?{
+   tags
+  }:{}),...(stage?{
+   stage
+  }:{}),...(collection?{
+   collection
+  }:{})
+ };
 }
 /** Resolves a lap plan against the current closed route, or null when it cannot apply. */
 export function loopPlan(a:Activity):LoopResult|null {
@@ -203,7 +340,9 @@ export function simulate(a:Activity):Simulation {
   const paceFactor=usesPace(s.sport)?(step&&step.step.pace&&s.pace>0?step.step.pace/s.pace:1):(step&&step.step.speed&&step.step.speed>0?s.speed/step.step.speed:1);
   const w=s.mode==='natural'?clamp((1+s.variation*waveAt(d)+terrain)*fatigue*paceFactor*(1+turnAt(d)*.08),.65,1.4):paceFactor;
   const strategy=s.paceStrategy??'even',progress=d/total;
-  const strategyFactor=strategy==='negative-split'?1+.4*(.5-progress):strategy==='positive-split'?1-.4*(.5-progress):strategy==='segments'?(()=>{const targets=s.paceSegments!,target=targets[Math.min(targets.length-1,Math.floor(progress*targets.length))],mean=targets.reduce((sum,value)=>sum+value,0)/targets.length;return usesPace(s.sport)?target/mean:mean/target;})():1;
+  const strategyFactor=strategy==='negative-split'?1+.4*(.5-progress):strategy==='positive-split'?1-.4*(.5-progress):strategy==='segments'?(()=>{
+   const targets=s.paceSegments!,target=targets[Math.min(targets.length-1,Math.floor(progress*targets.length))],mean=targets.reduce((sum,value)=>sum+value,0)/targets.length;return usesPace(s.sport)?target/mean:mean/target;
+  })():1;
   const adjustedWeight=strategy==='even'?w:w*strategyFactor;
   weights.push(adjustedWeight);times.push(times[i]+adjustedWeight*ds);
  }

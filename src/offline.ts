@@ -49,7 +49,9 @@ export function validateCorridorRecords(value:unknown):CorridorRecord[] {
  for(const item of value){
   if(!item||typeof item!=='object'||Array.isArray(item))continue;
   const source=item as Record<string,unknown>,bounds=validBounds(source.bounds);
-  if(typeof source.id!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(source.id)||typeof source.name!=='string'||!source.name.trim()||source.name.trim().length>80||!bounds||!Number.isInteger(source.tileCount)||Number(source.tileCount)<1||Number(source.tileCount)>MAX_CORRIDOR_URLS||typeof source.estimatedBytes!=='number'||!Number.isFinite(source.estimatedBytes)||source.estimatedBytes<0||typeof source.createdAt!=='number'||!Number.isFinite(source.createdAt)||!Array.isArray(source.urls)||ids.has(source.id))continue;
+  if(typeof source.id!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(source.id)||typeof source.name!=='string'||!source.name.trim()||source.name.trim().length>80||!bounds||!Number.isInteger(source.tileCount)||Number(source.tileCount)<1
+  ||Number(source.tileCount)>MAX_CORRIDOR_URLS||typeof source.estimatedBytes!=='number'||!Number.isFinite(source.estimatedBytes)||source.estimatedBytes<0||typeof source.createdAt!=='number'||!Number.isFinite(source.createdAt)
+  ||!Array.isArray(source.urls)||ids.has(source.id))continue;
   const urls=source.urls.filter((url):url is string=>typeof url==='string'&&url.startsWith('https://')).slice(0,MAX_CORRIDOR_URLS);
   if(!urls.length)continue;
   ids.add(source.id);records.push({id:source.id,name:source.name.trim(),bounds,tileCount:Math.min(Number(source.tileCount),urls.length),estimatedBytes:source.estimatedBytes,createdAt:source.createdAt,urls});
