@@ -67,7 +67,7 @@ test('trim geometry and route-dependent plans round-trip through undo and redo',
 
 test('split geometry and its local sibling round-trip through undo and redo',()=>{
  const e=new Editor(provider),x=defaults();x.path=[a,b,c];x.waypoints=[a,b,c];x.source='routed';e.load(x);
- let active=[];e.onSplitOutputsChange=(next,previous,committed)=>{active=next.map(item=>item.id);};
+ let active=[];e.onSplitOutputsChange=(next)=>{active=next.map(item=>item.id);};
  const sibling=e.split({lat:0,lon:.015},'split-1');
  assert.equal(e.activity.path.at(-1).lon,sibling.path[0].lon);assert.equal(sibling.path.at(-1).lon,c.lon);assert.deepEqual(active,['split-1']);
  const first=[...e.activity.path];e.undo();assert.deepEqual(e.activity.path,[a,b,c]);assert.deepEqual(active,[]);

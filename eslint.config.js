@@ -11,7 +11,7 @@ export default tseslint.config(
   {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
     languageOptions: { globals: globals.node },
-    rules: { 'no-unused-vars': 'warn', 'no-empty': 'warn', 'preserve-caught-error': 'warn' }
+    rules: { 'no-unused-vars': 'warn', 'no-empty': ['warn', { allowEmptyCatch: true }], 'preserve-caught-error': 'warn' }
   },
   {
     files: ['public/sw.js'],
@@ -25,7 +25,7 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': 'warn',
       '@typescript-eslint/no-unused-expressions': 'warn',
       'no-control-regex': 'warn',
-      'no-empty': 'warn',
+      'no-empty': ['warn', { allowEmptyCatch: true }],
       'no-useless-assignment': 'warn'
     }
   }

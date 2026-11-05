@@ -507,8 +507,9 @@ async function refreshOfflineStatus():Promise<void>{
  setText('offline-cache-size',status?`Total basemap cache size: about ${formatBytes(status.bytes)}.`:'Total basemap cache size is unavailable.');renderCorridors(status?.corridors??[]);
 }
 on('offline-clear',async()=>{if(await clearCachedMap()){toast('Cached map tiles and corridor downloads cleared. Tiles will be cached again as you view the map.');await refreshOfflineStatus();}else toast('The offline cache is not active in this page yet. Reload once and try again.');});
-let installPrompt:any=null;
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-app').hidden=false;});
+interface InstallPromptEvent extends Event {prompt:()=>Promise<void>;userChoice:Promise<{outcome:'accepted'|'dismissed'}>}
+let installPrompt:InstallPromptEvent|null=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e as InstallPromptEvent;$('install-app').hidden=false;});
 on('install-app',guarded(async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('install-app').hidden=true;toast('Install prompt dismissed.');}else toast('Use your browser menu: “Install app” or “Add to Home screen”.');}));
 on('corridor-download',async()=>{
  if(activeCorridorDownloadId)throw Error('A corridor download is already in progress.');

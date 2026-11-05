@@ -32,21 +32,26 @@ export function parseKmlCoordinates(text:string):Point[] {
  }
  return out;
 }
+interface GeoJSONNode {type?:string;name?:string;properties?:Record<string,unknown>;coordinates?:unknown;features?:GeoJSONNode[];geometries?:GeoJSONNode[];geometry?:GeoJSONNode}
+function coordinateLine(coordinates:unknown):Point[] {
+ return (Array.isArray(coordinates)?coordinates:[]).map((c:unknown)=>{const tuple=Array.isArray(c)?c:[];return position(tuple[0],tuple[1],tuple[2]);});
+}
 export function importGeoJSON(text:string):ImportResult {
  checkSize(text,'GeoJSON');
  let data:unknown;try{data=JSON.parse(text);}catch{throw Error('This file is not valid GeoJSON.');}
  const candidates:Point[][]=[],stops:Waypoint[]=[];let name='';
  const isLine=(type:unknown)=>type==='LineString'||type==='MultiLineString'||type==='GeometryCollection';
- const readStop=(node:any):void=>{
+ const readStop=(node:GeoJSONNode):void=>{
   const p=node.properties??{},coords=node.coordinates;
   if(!Array.isArray(coords))return;
   const point=position(coords[0],coords[1],coords[2]);
   const label=p.name??p.title,note=p.note??p.description;
   stops.push({...point,...(label?{name:String(label)}:{}),...(note?{note:String(note)}:{})});
  };
- const walk=(node:any):void=>{
-  if(!node||typeof node!=='object')return;
-  if(Array.isArray(node)){node.forEach(walk);return;}
+ const walk=(value:unknown):void=>{
+  if(!value||typeof value!=='object')return;
+  if(Array.isArray(value)){value.forEach(walk);return;}
+  const node=value as GeoJSONNode;
   if(node.type==='FeatureCollection'){if(!name&&typeof node.name==='string')name=node.name;(node.features??[]).forEach(walk);return;}
   if(node.type==='Feature'){
    const p=node.properties??{};
@@ -56,8 +61,8 @@ export function importGeoJSON(text:string):ImportResult {
   }
   if(node.type==='GeometryCollection'){(node.geometries??[]).forEach(walk);return;}
   if(node.type==='Point'){readStop(node);return;}
-  if(node.type==='LineString'){candidates.push((node.coordinates??[]).map((c:any)=>position(c?.[0],c?.[1],c?.[2])));return;}
-  if(node.type==='MultiLineString'){(node.coordinates??[]).forEach((line:any)=>candidates.push((line??[]).map((c:any)=>position(c?.[0],c?.[1],c?.[2]))));return;}
+  if(node.type==='LineString'){candidates.push(coordinateLine(node.coordinates));return;}
+  if(node.type==='MultiLineString'){(Array.isArray(node.coordinates)?node.coordinates:[]).forEach((line:unknown)=>candidates.push(coordinateLine(line)));return;}
  };
  walk(data);
  const {points,notice}=largest(candidates,'GeoJSON');

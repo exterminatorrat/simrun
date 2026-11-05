@@ -68,7 +68,7 @@ export function paceHistogram(points:Sample[],sport:Sport,units:'metric'|'imperi
     if(!Number.isFinite(p.speed)||p.speed<=0)return NaN;
     return byPace?(metric?1000:1609.344)/p.speed:p.speed*(metric?3.6:2.2369362920544);
   };
-  let total=0,min=Infinity,max=-Infinity;
+  let min=Infinity,max=-Infinity;
   const buckets:{v:number;dt:number}[]=[];
   for(let i=0;i<points.length-1;i++){
     const v=valueAt(points[i]);
@@ -76,7 +76,6 @@ export function paceHistogram(points:Sample[],sport:Sport,units:'metric'|'imperi
     const dt=(points[i+1].time-points[i].time)/1000;
     if(!(dt>0))continue;
     buckets.push({v,dt});
-    total+=dt;
     if(v<min)min=v;
     if(v>max)max=v;
   }
