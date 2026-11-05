@@ -2,6 +2,7 @@ import type {Activity,Point,Simulation,Sample} from './types.js';
 import {PRODUCT,importedActivity,simulate} from './model.js';
 import {validPoint} from './geometry.js';
 import {gpxSportType} from './sports.js';
+// eslint-disable-next-line no-control-regex -- strip control characters from exported text
 export const escapeXML=(s:string)=>s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]!));
 export function safeFilename(name:string):string{return name.normalize('NFKD').replace(/[^a-zA-Z0-9 _-]/g,'').trim().replace(/\s+/g,'-').slice(0,70)||'simulated-activity';}
 export function exportGPX(a:Activity,s:Simulation):string {

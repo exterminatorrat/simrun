@@ -24,7 +24,7 @@ test('even strategy preserves the captured pre-feature default-seed output',()=>
  const a=defaults();a.settings={...a.settings,start:'2024-01-02T03:04',utcOffset:0,seed:1202};
  a.path=[{lat:37,lon:-122,ele:8},{lat:37.005,lon:-121.995,ele:24},{lat:37.01,lon:-121.985,ele:11},{lat:37.02,lon:-121.98,ele:32}];a.waypoints=a.path;
  const sim=simulate(a),splits=computeSplits(a,sim);
- const legacy={sim:{...sim,points:sim.points.map(({gapPace,...point})=>point)},splits:splits.map(({gapPace,...split})=>split)};
+ const legacy={sim:{...sim,points:sim.points.map(point=>{const copy={...point};delete copy.gapPace;return copy})},splits:splits.map(split=>{const copy={...split};delete copy.gapPace;return copy})};
  const digest=Array.from(createHash('sha256').update(JSON.stringify(legacy)).digest());
  assert.deepEqual(digest,[139,171,13,100,6,100,66,127,158,143,148,250,43,150,91,53,3,83,148,4,86,170,58,70,90,7,90,164,164,68,255,216]);
  assert.equal(sim.points.length,445);

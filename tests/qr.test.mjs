@@ -57,7 +57,6 @@ test('matrix structure: finders, separators, timing and dark module',()=>{
 test('format info decodes back to the requested ECC level and a valid mask via BCH',()=>{
  const fmtBits=(ecc)=>{
   const m=qrMatrix('structure check payload',ecc);
-  const size=m.length;
   let bits=0;
   for(let i=0;i<8;i++){
    const p=i<6?i:i+1;

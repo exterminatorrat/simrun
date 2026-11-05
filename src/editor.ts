@@ -130,6 +130,7 @@ export class Editor {
  setTags(tags:string[]|undefined):void {if(tags&&tags.length)this.activity.tags=tags;else delete this.activity.tags;this.notify();}
  setStop(index:number,patch:{name?:string;note?:string}):void {
   if(!this.activity.waypoints[index])return;
+  // eslint-disable-next-line no-control-regex -- strip control characters from stop text
   const text=(v:string|undefined,max:number):string|undefined=>typeof v==='string'?v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').trim().slice(0,max)||undefined:undefined;
   const name=text(patch.name,80),note=text(patch.note,500);
   this.checkpoint();

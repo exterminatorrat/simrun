@@ -45,13 +45,13 @@ export function importedActivity(points:Point[],name:string,typeText:string,labe
 }
 /** Timestamped stalls of at least `minSeconds` below `maxSpeed` become rest stops. */
 export function detectStops(points:Point[],minSeconds=30,maxSpeed=0.7):RestStop[] {
- const out:RestStop[]=[];let run=0,runStart=0,startDistance=0,total=0;
+ const out:RestStop[]=[];let run=0,startDistance=0,total=0;
  const c=cumulative(points);
  const flush=()=>{if(run>0&&total>=minSeconds)out.push({distance:startDistance,seconds:Math.round(total)});run=0;total=0;};
  for(let i=1;i<points.length&&out.length<200;i++){
   const dt=(points[i].time!-points[i-1].time!)/1000,dd=c[i]-c[i-1];
   const slow=dt>0&&dd/dt<maxSpeed;
-  if(slow){if(run===0){run=1;runStart=i-1;startDistance=c[i-1];total=0;}total+=dt;}
+  if(slow){if(run===0){run=1;startDistance=c[i-1];total=0;}total+=dt;}
   else flush();
  }
  flush();
@@ -85,6 +85,7 @@ export function sanitizeCollection(value:unknown):string|undefined {
  if(value===undefined||value===null)return undefined;
  if(typeof value!=='string')throw Error('Invalid collection name.');
  const collection=value.trim();
+ // eslint-disable-next-line no-control-regex -- reject control characters in stored text
  if(collection.length>40||/[\u0000-\u001f\u007f]/.test(collection))throw Error('Collection names must be 40 characters or fewer and contain no control characters.');
  return collection||undefined;
 }
@@ -95,6 +96,7 @@ export function validateActivity(value:unknown):Activity {
  if(!['draft','routed','imported'].includes(a.source)||!Number.isFinite(a.createdAt)||!Number.isFinite(a.updatedAt))throw Error('Activity metadata is invalid.');
  if(!Array.isArray(a.path)||a.path.length>100000||!Array.isArray(a.waypoints)||a.waypoints.length>200)throw Error('Route exceeds supported size.');
  const clean=(p:Point):Point=>{if(!validPoint(p))throw Error('Invalid route coordinate.');const q:Point={lat:p.lat,lon:p.lon};if(p.ele!==undefined){if(!Number.isFinite(p.ele)||Math.abs(p.ele)>12000)throw Error('Invalid elevation.');q.ele=p.ele;}if(Number.isFinite(p.time))q.time=p.time;if(Number.isFinite(p.hr)&&p.hr!>=0&&p.hr!<=255)q.hr=p.hr;return q;};
+ // eslint-disable-next-line no-control-regex -- strip control characters from stop text
  const stopText=(v:unknown,max:number):string|undefined=>typeof v==='string'?v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').trim().slice(0,max)||undefined:undefined;
  const cleanStop=(p:Waypoint):Waypoint=>{const q=clean(p),name=stopText(p.name,80),note=stopText(p.note,500);return {...q,...(name?{name}:{}),...(note?{note}:{})};};
  const cleanLoop=(v:LoopPlan|undefined):LoopPlan|undefined=>{

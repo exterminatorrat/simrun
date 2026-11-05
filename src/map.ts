@@ -5,11 +5,29 @@ import {atDistance,cumulative,interpolate,nearestOnPath,wrapLon} from './geometr
 import {el} from './ui.js';
 // The only untyped boundary is MapLibre's optional browser UMD bundle.
 // Application geometry and all provider contracts remain strictly typed.
-declare global {interface Window {maplibregl?:any}}
+declare global {interface Window {maplibregl?:MapLibreGlobal}}
 type Actions={add:(p:Point)=>void;move:(i:number,p:Point)=>void;insert:(i:number,p:Point)=>void;select:(i:number)=>void;message:(s:string)=>void;loopStart:(fraction:number)=>void;freehand:(points:Point[])=>void};
 type PlanMarks={start:Point;end:Point};
 type MapClickEvent={originalEvent:{target:EventTarget|null};lngLat:{lat:number;lng:number}};
-type MapMarker={remove:()=>void};
+type MapLngLat={lat:number;lng:number};
+type MapErrorEvent={error?:{message?:string}};
+interface MapMarker {remove:()=>void;setLngLat:(coordinates:[number,number])=>MapMarker;addTo:(map:MapLibreMap)=>MapMarker;on:(type:'dragend',listener:()=>void)=>MapMarker;getLngLat:()=>MapLngLat}
+interface MapSource {setData:(data:object)=>void}
+interface MapBounds {extend:(coordinates:[number,number])=>void}
+interface MapLibreMap {
+ addControl:(control:object)=>void;removeControl:(control:object)=>void;addLayer:(layer:object)=>void;addSource:(id:string,source:object)=>void;
+ fitBounds:(bounds:MapBounds,options:object)=>void;flyTo:(options:object)=>void;jumpTo:(options:object)=>void;
+ getCanvas:()=>HTMLCanvasElement;getCenter:()=>MapLngLat;getZoom:()=>number;getLayer:(id:string)=>unknown;getSource:(id:string)=>MapSource|undefined;
+ on:{(type:'click',listener:(event:MapClickEvent)=>void):void;(type:'error',listener:(event:MapErrorEvent)=>void):void;(type:'load'|'style.load'|'webglcontextlost',listener:()=>void):void};
+ project:(coordinates:[number,number])=>{x:number;y:number};unproject:(point:[number,number])=>MapLngLat;
+ remove:()=>void;resize:()=>void;setLayoutProperty:(id:string,property:string,value:string)=>void;setStyle:(style:string,options:object)=>void;zoomIn:()=>void;zoomOut:()=>void
+}
+interface MapLibreGlobal {
+ Map:new(options:object)=>MapLibreMap;Marker:new(options:{element:HTMLElement;draggable?:boolean})=>MapMarker;
+ AttributionControl:new(options:{customAttribution:string})=>object;LngLatBounds:new()=>MapBounds;setWorkerUrl:(url:string)=>void
+}
+type GradeCollection={type:'FeatureCollection';features:{type:'Feature';properties:{g:number};geometry:{type:'LineString';coordinates:number[][]}}[]};
+const maplibre=():MapLibreGlobal=>window.maplibregl!;
 const NS='http://www.w3.org/2000/svg';
 const world=(p:Point):[number,number]=>{const lat=Math.max(-85.0511,Math.min(85.0511,p.lat))*Math.PI/180;return [(p.lon+180)/360,(1-Math.log(Math.tan(Math.PI/4+lat/2))/Math.PI)/2];};
 const unworld=(x:number,y:number):Point=>({lon:wrapLon(x*360-180),lat:Math.atan(Math.sinh(Math.PI*(1-2*Math.max(0,Math.min(1,y)))))*180/Math.PI});
@@ -17,9 +35,9 @@ const unworld=(x:number,y:number):Point=>({lon:wrapLon(x*360-180),lat:Math.atan(
 const gradeColor=(g:number):string=>g<-.02?'#2f7fd0':g>.02?'#d94f2b':'#708f2d';
 const GRADE_STOPS:unknown[]=[-.15,'#2f7fd0',0,'#708f2d',.15,'#d94f2b'];
 export class RouteMap {
- private map:any=null;private markers:any[]=[];private hoverMarker:any=null;private a:Activity|null=null;private plan:PlanMarks|null=null;private selected=-1;private drawing=true;private svg:SVGSVGElement;private view={x:0,y:0,zoom:13};private ready=false;private everReady=false;private missingSince=Date.now();private healthTimer:ReturnType<typeof setInterval>|null=null;private lastMapError='';private disposed=false;private resized:ResizeObserver;private moveCleanup:(()=>void)|null=null;private hoverPoint:Point|null=null;
+ private map:MapLibreMap|null=null;private markers:MapMarker[]=[];private hoverMarker:MapMarker|null=null;private a:Activity|null=null;private plan:PlanMarks|null=null;private selected=-1;private drawing=true;private svg:SVGSVGElement;private view={x:0,y:0,zoom:13};private ready=false;private everReady=false;private missingSince=Date.now();private healthTimer:ReturnType<typeof setInterval>|null=null;private lastMapError='';private disposed=false;private resized:ResizeObserver;private moveCleanup:(()=>void)|null=null;private hoverPoint:Point|null=null;
  private freehand=false;private freehandCleanup:(()=>void)|null=null;private suppressClick=false;
- private scrubberMarker:any=null;private poiMarkers:MapMarker[]=[];private pois:PointOfInterest[]=[];private attributionControl:any=null;private baseLayer:'vector'|'topo'='vector';private cyclingOverlay=false;private hikingOverlay=false;
+ private scrubberMarker:MapMarker|null=null;private poiMarkers:MapMarker[]=[];private pois:PointOfInterest[]=[];private attributionControl:object|null=null;private baseLayer:'vector'|'topo'='vector';private cyclingOverlay=false;private hikingOverlay=false;
  constructor(private host:HTMLElement,private actions:Actions){
   const [x,y]=world({lat:31.2304,lon:121.4737});this.view={x,y,zoom:13};
   this.svg=document.createElementNS(NS,'svg');this.svg.classList.add('coordinate-map');this.svg.setAttribute('aria-label','Coordinate canvas: basemap unavailable');this.host.append(this.svg);
@@ -33,7 +51,7 @@ export class RouteMap {
    await new Promise<void>((resolve,reject)=>{const css=el('link');css.rel='stylesheet';css.href=base+'maplibre-gl.css';const t=setTimeout(()=>reject(Error('Map styles did not load.')),10000);css.onload=()=>{clearTimeout(t);resolve();};css.onerror=()=>{clearTimeout(t);reject(Error('Map styles unavailable.'));};document.head.append(css);});
    if(!window.maplibregl)await new Promise<void>((resolve,reject)=>{const script=el('script');script.src=base+'maplibre-gl-csp.js';const t=setTimeout(()=>reject(Error('Map library did not load.')),10000);script.onload=()=>{clearTimeout(t);resolve();};script.onerror=()=>{clearTimeout(t);reject(Error('Map library unavailable.'));};document.head.append(script);});
    if(this.disposed)return;
-   const gl=window.maplibregl;
+   const gl=maplibre();
    gl.setWorkerUrl(new URL('./vendor/maplibre-gl-csp-worker.js',document.baseURI).href);
    this.map=new gl.Map({container:this.host,style,center:[121.4737,31.2304],zoom:13,attributionControl:false});
    // Keep the honest coordinate canvas above MapLibre until real vector features render.
@@ -45,7 +63,7 @@ export class RouteMap {
    this.map.on('click',(e:MapClickEvent)=>{if(!this.suppressClick&&!this.freehand&&this.drawing&&e.originalEvent.target instanceof HTMLCanvasElement)this.actions.add({lat:e.lngLat.lat,lon:wrapLon(e.lngLat.lng)});});
    // A single missing tile or glyph does not take the map down. The health check
    // falls back only when the whole basemap has no rendered vector features.
-   this.map.on('error',(event:any)=>{this.lastMapError=String(event?.error?.message||'Map resources unavailable.');if(this.ready){const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=t('Some map data is unavailable. Route editing still works.');}});
+   this.map.on('error',(event:MapErrorEvent)=>{this.lastMapError=String(event?.error?.message||'Map resources unavailable.');if(this.ready){const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=t('Some map data is unavailable. Route editing still works.');}});
    this.map.on('webglcontextlost',()=>this.useCoordinateCanvas('Map graphics unavailable. Coordinate view remains usable.'));
   }catch(error){const message=error instanceof Error?error.message:'';this.useCoordinateCanvas(/webgl|graphics/i.test(message)?'Map graphics unavailable. Coordinate view remains usable.':/style|library|local map/i.test(message)?'Map renderer unavailable. Coordinate view remains usable.':'Basemap unavailable. Coordinate view remains usable.');}
  }
@@ -96,6 +114,7 @@ export class RouteMap {
   this.map.addLayer({id:'route-gradient',type:'line',source:'grade',layout:{'line-cap':'round','line-join':'round','visibility':'none'},paint:{'line-color':['interpolate',['linear'],['get','g'],...GRADE_STOPS],'line-width':4}});
  }
  private installRasterLayers():void {
+  if(!this.map)return;
   const sources=[
    {id:'w5-topo-source',url:'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',scheme:'xyz',maxzoom:17},
    {id:'w5-cycling-source',url:'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png',scheme:'tms',maxzoom:17},
@@ -118,7 +137,7 @@ export class RouteMap {
   const credits=['<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>'];
   if(this.baseLayer==='topo')credits.push('<a href="https://opentopomap.org/" target="_blank" rel="noopener">Map style: © OpenTopoMap (CC BY-SA)</a> · DEM: SRTM, Sonny');
   if(this.cyclingOverlay||this.hikingOverlay)credits.push('<a href="https://waymarkedtrails.org/" target="_blank" rel="noopener">© waymarkedtrails.org</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>');
-  this.attributionControl=new window.maplibregl.AttributionControl({customAttribution:credits.join(' · ')});this.map.addControl(this.attributionControl);
+  this.attributionControl=new (maplibre()).AttributionControl({customAttribution:credits.join(' · ')});this.map.addControl(this.attributionControl);
  }
  private render():void {
   if(!this.a)return;
@@ -131,17 +150,17 @@ export class RouteMap {
   this.map.setLayoutProperty('route-line','visibility',shaded?'none':'visible');
   this.map.setLayoutProperty('route-gradient','visibility',shaded?'visible':'none');
   this.map.getCanvas().style.cursor=this.freehand||this.drawing?'crosshair':'grab';this.markers.forEach(m=>m.remove());this.markers=[];
-  const gl=window.maplibregl,pts=this.a.waypoints;
-  const add=(p:Point,i:number,mid=false)=>{const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));b.type='button';b.title=mid?t('Drag to insert waypoint'):t('Waypoint {index}: drag to move',{index:formatNumber(i+1)});b.setAttribute('aria-label',b.title);b.onclick=e=>{e.stopPropagation();if(mid)this.actions.insert(i,p);else this.actions.select(i);};const m=new gl.Marker({element:b,draggable:true}).setLngLat([p.lon,p.lat]).addTo(this.map);m.on('dragend',()=>{const ll=m.getLngLat(),q={lat:ll.lat,lon:wrapLon(ll.lng)};if(mid)this.actions.insert(i,q);else this.actions.move(i,q);});this.markers.push(m);};
+  const gl=maplibre(),map=this.map,pts=this.a.waypoints;
+  const add=(p:Point,i:number,mid=false)=>{const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));b.type='button';b.title=mid?t('Drag to insert waypoint'):t('Waypoint {index}: drag to move',{index:formatNumber(i+1)});b.setAttribute('aria-label',b.title);b.onclick=e=>{e.stopPropagation();if(mid)this.actions.insert(i,p);else this.actions.select(i);};const m=new gl.Marker({element:b,draggable:true}).setLngLat([p.lon,p.lat]).addTo(map);m.on('dragend',()=>{const ll=m.getLngLat(),q={lat:ll.lat,lon:wrapLon(ll.lng)};if(mid)this.actions.insert(i,q);else this.actions.move(i,q);});this.markers.push(m);};
   pts.forEach((p,i)=>{add(p,i);if(i<pts.length-1)add(this.middle(i),i,true);});
-  if(!pts.length&&this.a.path.length){[this.a.path[0],this.a.path.at(-1)!].forEach((p,i)=>{const b=el('span',`waypoint ${i?'finish':'start'}`,i?'B':'A');this.markers.push(new gl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map));});}
-  if(this.plan)this.planMarks().forEach(m=>{const b=el('span',`waypoint ${m.cls}`,m.text);b.title=t(m.title);b.setAttribute('aria-label',t(m.title));const mk=new gl.Marker({element:b,draggable:m.draggable}).setLngLat([m.p.lon,m.p.lat]).addTo(this.map);if(m.draggable)mk.on('dragend',()=>{const ll=mk.getLngLat();this.actions.loopStart(this.fractionAt({lat:ll.lat,lon:wrapLon(ll.lng)}));});this.markers.push(mk);});
+  if(!pts.length&&this.a.path.length){[this.a.path[0],this.a.path.at(-1)!].forEach((p,i)=>{const b=el('span',`waypoint ${i?'finish':'start'}`,i?'B':'A');this.markers.push(new gl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(map));});}
+  if(this.plan)this.planMarks().forEach(m=>{const b=el('span',`waypoint ${m.cls}`,m.text);b.title=t(m.title);b.setAttribute('aria-label',t(m.title));const mk=new gl.Marker({element:b,draggable:m.draggable}).setLngLat([m.p.lon,m.p.lat]).addTo(map);if(m.draggable)mk.on('dragend',()=>{const ll=mk.getLngLat();this.actions.loopStart(this.fractionAt({lat:ll.lat,lon:wrapLon(ll.lng)}));});this.markers.push(mk);});
   this.renderPois();
  }
  private renderPois():void {
   this.poiMarkers.forEach(marker=>marker.remove());this.poiMarkers=[];
   if(!this.map||!this.ready)return;
-  for(const place of this.pois){const label=place.kind==='water'?t('Water'):t('Toilets'),element=el('span',`poi-map-marker ${place.kind}`,place.kind==='water'?'W':'T');element.title=place.name?t('{label}: {name}',{label:t(label),name:place.name}):t(label);element.setAttribute('aria-label',element.title);const marker:MapMarker=new window.maplibregl.Marker({element}).setLngLat([place.lon,place.lat]).addTo(this.map);this.poiMarkers.push(marker);}
+  for(const place of this.pois){const label=place.kind==='water'?t('Water'):t('Toilets'),element=el('span',`poi-map-marker ${place.kind}`,place.kind==='water'?'W':'T');element.title=place.name?t('{label}: {name}',{label:t(label),name:place.name}):t(label);element.setAttribute('aria-label',element.title);const marker:MapMarker=new (maplibre()).Marker({element}).setLngLat([place.lon,place.lat]).addTo(this.map);this.poiMarkers.push(marker);}
  }
  private planMarks():{p:Point;cls:string;text:string;title:string;draggable:boolean}[] {
   const plan=this.plan;if(!plan)return [];
@@ -158,13 +177,13 @@ export class RouteMap {
  focus(p:Point):void {if(this.map)this.map.flyTo({center:[p.lon,p.lat],zoom:14});const [x,y]=world(p);this.view={x,y,zoom:14};this.drawFallback();}
  fit():void {
   const p=this.a?.path.length?this.a.path:this.a?.waypoints;if(!p?.length)return;
-  if(this.map&&this.ready){const bounds=new window.maplibregl.LngLatBounds();p.forEach(p=>bounds.extend([p.lon,p.lat]));this.map.fitBounds(bounds,{padding:innerWidth>760?{top:100,bottom:230,left:100,right:390}:{top:100,bottom:210,left:50,right:50},maxZoom:16,duration:450});return;}
+  if(this.map&&this.ready){const bounds=new (maplibre()).LngLatBounds();p.forEach(p=>bounds.extend([p.lon,p.lat]));this.map.fitBounds(bounds,{padding:innerWidth>760?{top:100,bottom:230,left:100,right:390}:{top:100,bottom:210,left:50,right:50},maxZoom:16,duration:450});return;}
   // Reduce rather than spread: a 100,000-point route would exceed the argument limit of Math.min.
   const ps=p.map(world);let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(const q of ps){if(q[0]<minX)minX=q[0];if(q[0]>maxX)maxX=q[0];if(q[1]<minY)minY=q[1];if(q[1]>maxY)maxY=q[1];}const r=this.host.getBoundingClientRect();
   this.view.x=(minX+maxX)/2;this.view.y=(minY+maxY)/2;this.view.zoom=Math.min(17,Math.max(1,Math.log2(Math.min(Math.max(100,r.width-(innerWidth>760?460:100))/Math.max(1e-7,maxX-minX),Math.max(100,r.height-350)/Math.max(1e-7,maxY-minY))/256)));this.drawFallback();
  }
  zoom(by:number):void {if(this.map){if(by>0)this.map.zoomIn();else this.map.zoomOut();if(this.ready)return;}this.view.zoom=Math.max(1,Math.min(19,this.view.zoom+by));this.drawFallback();}
- hover(p:Point|null):void {this.hoverPoint=p;if(this.map&&this.ready){this.hoverMarker?.remove();if(p){const b=el('span','hover-marker');this.hoverMarker=new window.maplibregl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map);}}else this.drawFallback();}
+ hover(p:Point|null):void {this.hoverPoint=p;if(this.map&&this.ready){this.hoverMarker?.remove();if(p){const b=el('span','hover-marker');this.hoverMarker=new (maplibre()).Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map);}}else this.drawFallback();}
  private dimensions(){const r=this.host.getBoundingClientRect();return {w:r.width,h:r.height,cx:r.width/2-(innerWidth>760?145:0),cy:r.height/2-60,scale:256*2**this.view.zoom};}
  private xy(p:Point):[number,number]{const {cx,cy,scale}=this.dimensions(),[x,y]=world(p);let dx=x-this.view.x;if(dx>.5)dx--;if(dx<-.5)dx++;return [cx+dx*scale,cy+(y-this.view.y)*scale];}
  private point(e:PointerEvent):Point {const {cx,cy,scale}=this.dimensions(),r=this.host.getBoundingClientRect();return unworld(this.view.x+(e.clientX-r.left-cx)/scale,this.view.y+(e.clientY-r.top-cy)/scale);}
@@ -213,12 +232,12 @@ export class RouteMap {
   });
  }
  /** Gradient segments capped at 400, or an empty collection when elevation is missing. */
- private gradeSegments(path:Point[]):{type:'FeatureCollection';features:any[]} {
-  const empty:{type:'FeatureCollection';features:any[]}={type:'FeatureCollection',features:[]};
+ private gradeSegments(path:Point[]):GradeCollection {
+  const empty:GradeCollection={type:'FeatureCollection',features:[]};
   if(path.length<2)return empty;
   if(path.filter(p=>Number.isFinite(p.ele)).length<2)return empty;
   const c=cumulative(path),total=c.at(-1)||0;if(!(total>0))return empty;
-  const count=Math.min(400,Math.max(1,path.length-1)),step=total/count,features:any[]=[];
+  const count=Math.min(400,Math.max(1,path.length-1)),step=total/count,features:GradeCollection['features']=[];
   for(let i=0;i<count;i++){
    const d0=i*step,d1=Math.min(total,(i+1)*step),p=atDistance(path,c,d0),q=atDistance(path,c,d1);
    if(!Number.isFinite(p.ele)||!Number.isFinite(q.ele))continue;
@@ -230,7 +249,7 @@ export class RouteMap {
  /** Persistent marker for the chart scrubber; cleared with null. */
  scrub(p:Point|null):void {
   this.hoverPoint=p;
-  if(this.map&&this.ready){this.scrubberMarker?.remove();this.scrubberMarker=null;if(p){const b=el('span','scrub-marker');this.scrubberMarker=new window.maplibregl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map);}return;}
+  if(this.map&&this.ready){this.scrubberMarker?.remove();this.scrubberMarker=null;if(p){const b=el('span','scrub-marker');this.scrubberMarker=new (maplibre()).Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map);}return;}
   this.drawFallback();
  }
  dispose():void {this.disposed=true;if(this.healthTimer)clearInterval(this.healthTimer);this.resized.disconnect();this.moveCleanup?.();this.freehandCleanup?.();this.markers.forEach(m=>m.remove());this.poiMarkers.forEach(marker=>marker.remove());this.hoverMarker?.remove();this.scrubberMarker?.remove();this.map?.remove();}

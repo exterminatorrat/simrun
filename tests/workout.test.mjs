@@ -52,7 +52,7 @@ test('expandWorkout lays contiguous steps from zero to the route distance',()=>{
  assert.equal(expanded.length,3);
  assert.equal(expanded[0].start,0);
  assert.equal(expanded[2].end,route);
- expanded.forEach((s,i)=>assert.equal(s.end,s.start+s.step.distance));
+ expanded.forEach(s=>assert.equal(s.end,s.start+s.step.distance));
  expanded.forEach((s,i)=>{if(i>0)assert.equal(s.start,expanded[i-1].end);});
 });
 
