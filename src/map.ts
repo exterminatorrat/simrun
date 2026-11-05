@@ -35,7 +35,26 @@ const unworld=(x:number,y:number):Point=>({lon:wrapLon(x*360-180),lat:Math.atan(
 const gradeColor=(g:number):string=>g<-.02?'#2f7fd0':g>.02?'#d94f2b':'#708f2d';
 const GRADE_STOPS:unknown[]=[-.15,'#2f7fd0',0,'#708f2d',.15,'#d94f2b'];
 export class RouteMap {
- private map:MapLibreMap|null=null;private markers:MapMarker[]=[];private hoverMarker:MapMarker|null=null;private a:Activity|null=null;private plan:PlanMarks|null=null;private selected=-1;private drawing=true;private svg:SVGSVGElement;private view={x:0,y:0,zoom:13};private ready=false;private everReady=false;private missingSince=Date.now();private healthTimer:ReturnType<typeof setInterval>|null=null;private lastMapError='';private disposed=false;private resized:ResizeObserver;private moveCleanup:(()=>void)|null=null;private hoverPoint:Point|null=null;
+ private map:MapLibreMap|null=null;
+ private markers:MapMarker[]=[];
+ private hoverMarker:MapMarker|null=null;
+ private a:Activity|null=null;
+ private plan:PlanMarks|null=null;
+ private selected=-1;
+ private drawing=true;
+ private svg:SVGSVGElement;
+ private view={
+  x:0,y:0,zoom:13
+ };
+ private ready=false;
+ private everReady=false;
+ private missingSince=Date.now();
+ private healthTimer:ReturnType<typeof setInterval>|null=null;
+ private lastMapError='';
+ private disposed=false;
+ private resized:ResizeObserver;
+ private moveCleanup:(()=>void)|null=null;
+ private hoverPoint:Point|null=null;
  private freehand=false;private freehandCleanup:(()=>void)|null=null;private suppressClick=false;
  private scrubberMarker:MapMarker|null=null;private poiMarkers:MapMarker[]=[];private pois:PointOfInterest[]=[];private attributionControl:object|null=null;private baseLayer:'vector'|'topo'='vector';private cyclingOverlay=false;private hikingOverlay=false;
  constructor(private host:HTMLElement,private actions:Actions){
@@ -48,8 +67,20 @@ export class RouteMap {
    const status=await fetch('./vendor-status.json').then(r=>r.json());
    if(status.bundled!==true)throw Error('Local map files are missing.');
    const base='./vendor/';
-   await new Promise<void>((resolve,reject)=>{const css=el('link');css.rel='stylesheet';css.href=base+'maplibre-gl.css';const t=setTimeout(()=>reject(Error('Map styles did not load.')),10000);css.onload=()=>{clearTimeout(t);resolve();};css.onerror=()=>{clearTimeout(t);reject(Error('Map styles unavailable.'));};document.head.append(css);});
-   if(!window.maplibregl)await new Promise<void>((resolve,reject)=>{const script=el('script');script.src=base+'maplibre-gl-csp.js';const t=setTimeout(()=>reject(Error('Map library did not load.')),10000);script.onload=()=>{clearTimeout(t);resolve();};script.onerror=()=>{clearTimeout(t);reject(Error('Map library unavailable.'));};document.head.append(script);});
+   await new Promise<void>((resolve,reject)=>{
+    const css=el('link');css.rel='stylesheet';css.href=base+'maplibre-gl.css';const t=setTimeout(()=>reject(Error('Map styles did not load.')),10000);css.onload=()=>{
+     clearTimeout(t);resolve();
+    };css.onerror=()=>{
+     clearTimeout(t);reject(Error('Map styles unavailable.'));
+    };document.head.append(css);
+   });
+   if(!window.maplibregl)await new Promise<void>((resolve,reject)=>{
+    const script=el('script');script.src=base+'maplibre-gl-csp.js';const t=setTimeout(()=>reject(Error('Map library did not load.')),10000);script.onload=()=>{
+     clearTimeout(t);resolve();
+    };script.onerror=()=>{
+     clearTimeout(t);reject(Error('Map library unavailable.'));
+    };document.head.append(script);
+   });
    if(this.disposed)return;
    const gl=maplibre();
    gl.setWorkerUrl(new URL('./vendor/maplibre-gl-csp-worker.js',document.baseURI).href);
@@ -63,9 +94,16 @@ export class RouteMap {
    this.map.on('click',(e:MapClickEvent)=>{if(!this.suppressClick&&!this.freehand&&this.drawing&&e.originalEvent.target instanceof HTMLCanvasElement)this.actions.add({lat:e.lngLat.lat,lon:wrapLon(e.lngLat.lng)});});
    // A single missing tile or glyph does not take the map down. The health check
    // falls back only when the whole basemap has no rendered vector features.
-   this.map.on('error',(event:MapErrorEvent)=>{this.lastMapError=String(event?.error?.message||'Map resources unavailable.');if(this.ready){const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=t('Some map data is unavailable. Route editing still works.');}});
+   this.map.on('error',(event:MapErrorEvent)=>{
+    this.lastMapError=String(event?.error?.message||'Map resources unavailable.');if(this.ready){
+     const warning=document.getElementById('map-warning')!;warning.hidden=false;warning.textContent=t('Some map data is unavailable. Route editing still works.');
+    }
+   });
    this.map.on('webglcontextlost',()=>this.useCoordinateCanvas('Map graphics unavailable. Coordinate view remains usable.'));
-  }catch(error){const message=error instanceof Error?error.message:'';this.useCoordinateCanvas(/webgl|graphics/i.test(message)?'Map graphics unavailable. Coordinate view remains usable.':/style|library|local map/i.test(message)?'Map renderer unavailable. Coordinate view remains usable.':'Basemap unavailable. Coordinate view remains usable.');}
+  }catch(error){
+  const message=error instanceof Error?error.message:'';
+  this.useCoordinateCanvas(/webgl|graphics/i.test(message)?'Map graphics unavailable. Coordinate view remains usable.':/style|library|local map/i.test(message)?'Map renderer unavailable. Coordinate view remains usable.':'Basemap unavailable. Coordinate view remains usable.');
+  }
  }
  private showCoordinateCanvas():void {
   if(this.map){const center=this.map.getCenter(),[x,y]=world({lat:center.lat,lon:center.lng});this.view={x,y,zoom:this.map.getZoom()};}
@@ -136,7 +174,8 @@ export class RouteMap {
   if(this.attributionControl)this.map.removeControl(this.attributionControl);
   const credits=['<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>'];
   if(this.baseLayer==='topo')credits.push('<a href="https://opentopomap.org/" target="_blank" rel="noopener">Map style: © OpenTopoMap (CC BY-SA)</a> · DEM: SRTM, Sonny');
-  if(this.cyclingOverlay||this.hikingOverlay)credits.push('<a href="https://waymarkedtrails.org/" target="_blank" rel="noopener">© waymarkedtrails.org</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>');
+  if(this.cyclingOverlay||this.hikingOverlay)credits.push('<a href="https://waymarkedtrails.org/" target="_blank" rel="noopener">© waymarkedtrails.org</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'+
+   ' · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>');
   this.attributionControl=new (maplibre()).AttributionControl({customAttribution:credits.join(' · ')});this.map.addControl(this.attributionControl);
  }
  private render():void {
@@ -151,16 +190,55 @@ export class RouteMap {
   this.map.setLayoutProperty('route-gradient','visibility',shaded?'visible':'none');
   this.map.getCanvas().style.cursor=this.freehand||this.drawing?'crosshair':'grab';this.markers.forEach(m=>m.remove());this.markers=[];
   const gl=maplibre(),map=this.map,pts=this.a.waypoints;
-  const add=(p:Point,i:number,mid=false)=>{const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));b.type='button';b.title=mid?t('Drag to insert waypoint'):t('Waypoint {index}: drag to move',{index:formatNumber(i+1)});b.setAttribute('aria-label',b.title);b.onclick=e=>{e.stopPropagation();if(mid)this.actions.insert(i,p);else this.actions.select(i);};const m=new gl.Marker({element:b,draggable:true}).setLngLat([p.lon,p.lat]).addTo(map);m.on('dragend',()=>{const ll=m.getLngLat(),q={lat:ll.lat,lon:wrapLon(ll.lng)};if(mid)this.actions.insert(i,q);else this.actions.move(i,q);});this.markers.push(m);};
+  const add=(p:Point,i:number,mid=false)=>{
+   const b=el('button',`waypoint ${mid?'midpoint':i===0?'start':i===pts.length-1?'finish':''} ${this.selected===i&&!mid?'selected':''}`,mid?'':String(i+1));
+   b.type='button';
+   b.title=mid?t('Drag to insert waypoint'):t('Waypoint {index}: drag to move',{
+    index:formatNumber(i+1)
+   });
+   b.setAttribute('aria-label',b.title);
+   b.onclick=e=>{
+    e.stopPropagation();
+    if(mid)this.actions.insert(i,p);
+    else this.actions.select(i);
+   };
+   const m=new gl.Marker({
+    element:b,draggable:true
+   }).setLngLat([p.lon,p.lat]).addTo(map);
+   m.on('dragend',()=>{
+    const ll=m.getLngLat(),q={
+     lat:ll.lat,lon:wrapLon(ll.lng)
+    };if(mid)this.actions.insert(i,q);else this.actions.move(i,q);
+   });
+   this.markers.push(m);
+  };
   pts.forEach((p,i)=>{add(p,i);if(i<pts.length-1)add(this.middle(i),i,true);});
   if(!pts.length&&this.a.path.length){[this.a.path[0],this.a.path.at(-1)!].forEach((p,i)=>{const b=el('span',`waypoint ${i?'finish':'start'}`,i?'B':'A');this.markers.push(new gl.Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(map));});}
-  if(this.plan)this.planMarks().forEach(m=>{const b=el('span',`waypoint ${m.cls}`,m.text);b.title=t(m.title);b.setAttribute('aria-label',t(m.title));const mk=new gl.Marker({element:b,draggable:m.draggable}).setLngLat([m.p.lon,m.p.lat]).addTo(map);if(m.draggable)mk.on('dragend',()=>{const ll=mk.getLngLat();this.actions.loopStart(this.fractionAt({lat:ll.lat,lon:wrapLon(ll.lng)}));});this.markers.push(mk);});
+  if(this.plan)this.planMarks().forEach(m=>{
+   const b=el('span',`waypoint ${m.cls}`,m.text);b.title=t(m.title);b.setAttribute('aria-label',t(m.title));const mk=new gl.Marker({
+    element:b,draggable:m.draggable
+   }).setLngLat([m.p.lon,m.p.lat]).addTo(map);if(m.draggable)mk.on('dragend',()=>{
+    const ll=mk.getLngLat();this.actions.loopStart(this.fractionAt({
+     lat:ll.lat,lon:wrapLon(ll.lng)
+    }));
+   });this.markers.push(mk);
+  });
   this.renderPois();
  }
  private renderPois():void {
   this.poiMarkers.forEach(marker=>marker.remove());this.poiMarkers=[];
   if(!this.map||!this.ready)return;
-  for(const place of this.pois){const label=place.kind==='water'?t('Water'):t('Toilets'),element=el('span',`poi-map-marker ${place.kind}`,place.kind==='water'?'W':'T');element.title=place.name?t('{label}: {name}',{label:t(label),name:place.name}):t(label);element.setAttribute('aria-label',element.title);const marker:MapMarker=new (maplibre()).Marker({element}).setLngLat([place.lon,place.lat]).addTo(this.map);this.poiMarkers.push(marker);}
+  for(const place of this.pois){
+   const label=place.kind==='water'?t('Water'):t('Toilets'),element=el('span',`poi-map-marker ${place.kind}`,place.kind==='water'?'W':'T');
+   element.title=place.name?t('{label}: {name}',{
+    label:t(label),name:place.name
+   }):t(label);
+   element.setAttribute('aria-label',element.title);
+   const marker:MapMarker=new (maplibre()).Marker({
+    element
+   }).setLngLat([place.lon,place.lat]).addTo(this.map);
+   this.poiMarkers.push(marker);
+  }
  }
  private planMarks():{p:Point;cls:string;text:string;title:string;draggable:boolean}[] {
   const plan=this.plan;if(!plan)return [];
@@ -192,10 +270,52 @@ export class RouteMap {
   const make=(tag:string,attrs:Record<string,string>)=>{const n=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));this.svg.append(n);return n;};
   const path=(p:Point[],cls:string)=>{if(p.length<2)return;const step=Math.max(1,Math.ceil(p.length/5000));const v=p.filter((_,i)=>i%step===0||i===p.length-1);make('path',{d:v.map((p,i)=>`${i?'L':'M'}${this.xy(p).map(n=>n.toFixed(1)).join(',')}`).join(' '),class:cls});};
   if(this.a){const grade=this.gradeSegments(this.a.path);
-   if(grade.features.length){for(const f of grade.features){const [x1,y1]=this.xy({lat:f.geometry.coordinates[0][1],lon:f.geometry.coordinates[0][0]}),[x2,y2]=this.xy({lat:f.geometry.coordinates[1][1],lon:f.geometry.coordinates[1][0]});make('line',{x1:x1.toFixed(1),y1:y1.toFixed(1),x2:x2.toFixed(1),y2:y2.toFixed(1),class:'fallback-route','stroke-width':'4',stroke:gradeColor(f.properties.g)});}}
-   else path(this.a.path,'fallback-route');if(this.a.source==='draft')path(this.a.waypoints,'fallback-draft');this.a.waypoints.forEach((p,i)=>{const [x,y]=this.xy(p);make('circle',{cx:String(x),cy:String(y),r:'22',class:'fallback-hit','data-index':String(i)});make('circle',{cx:String(x),cy:String(y),r:'12',class:`fallback-point ${i===this.selected?'selected':''}`,'data-index':String(i)});const t=make('text',{x:String(x),y:String(y+4),class:'fallback-number','data-index':String(i)});t.textContent=String(i+1);if(i<this.a!.waypoints.length-1){const [mx,my]=this.xy(this.middle(i));make('circle',{cx:String(mx),cy:String(my),r:'22',class:'fallback-hit','data-mid':String(i)});make('circle',{cx:String(mx),cy:String(my),r:'6',class:'fallback-mid','data-mid':String(i)});}});}
-  if(this.plan)this.planMarks().forEach(m=>{const [x,y]=this.xy(m.p),flag:Record<string,string>=m.draggable?{'data-loop-start':'1'}:{};if(m.draggable)make('circle',{cx:String(x),cy:String(y),r:'22',class:'fallback-hit','data-loop':'1',...flag});make('circle',{cx:String(x),cy:String(y),r:'10',class:`fallback-${m.cls}`,'data-loop':'1',...flag});const t=make('text',{x:String(x),y:String(y+3.5),class:'fallback-plan-label','data-loop':'1',...flag});t.textContent=m.text;});
-  this.pois.forEach(place=>{const [x,y]=this.xy(place),label=place.name?`${place.kind==='water'?t('Water'):t('Toilets')}: ${place.name}`:place.kind==='water'?t('Water'):t('Toilets'),marker=make('circle',{cx:String(x),cy:String(y),r:'8',class:`fallback-poi ${place.kind}`,'aria-label':label,role:'img'});const title=make('title',{});title.textContent=t(label);marker.setAttribute('aria-label',label);marker.append(title);});
+   if(grade.features.length){
+    for(const f of grade.features){
+     const [x1,y1]=this.xy({
+      lat:f.geometry.coordinates[0][1],lon:f.geometry.coordinates[0][0]
+     }),[x2,y2]=this.xy({
+      lat:f.geometry.coordinates[1][1],lon:f.geometry.coordinates[1][0]
+     });
+     make('line',{
+      x1:x1.toFixed(1),y1:y1.toFixed(1),x2:x2.toFixed(1),y2:y2.toFixed(1),class:'fallback-route','stroke-width':'4',stroke:gradeColor(f.properties.g)
+     });
+    }
+   }
+   else path(this.a.path,'fallback-route');
+   if(this.a.source==='draft')path(this.a.waypoints,'fallback-draft');
+   this.a.waypoints.forEach((p,i)=>{
+    const [x,y]=this.xy(p);make('circle',{
+     cx:String(x),cy:String(y),r:'22',class:'fallback-hit','data-index':String(i)
+    });make('circle',{
+     cx:String(x),cy:String(y),r:'12',class:`fallback-point ${i===this.selected?'selected':''}`,'data-index':String(i)
+    });const t=make('text',{
+     x:String(x),y:String(y+4),class:'fallback-number','data-index':String(i)
+    });t.textContent=String(i+1);if(i<this.a!.waypoints.length-1){
+     const [mx,my]=this.xy(this.middle(i));make('circle',{
+      cx:String(mx),cy:String(my),r:'22',class:'fallback-hit','data-mid':String(i)
+     });make('circle',{
+      cx:String(mx),cy:String(my),r:'6',class:'fallback-mid','data-mid':String(i)
+     });
+    }
+   });
+   }
+  if(this.plan)this.planMarks().forEach(m=>{
+   const [x,y]=this.xy(m.p),flag:Record<string,string>=m.draggable?{
+    'data-loop-start':'1'
+   }:{};if(m.draggable)make('circle',{
+    cx:String(x),cy:String(y),r:'22',class:'fallback-hit','data-loop':'1',...flag
+   });make('circle',{
+    cx:String(x),cy:String(y),r:'10',class:`fallback-${m.cls}`,'data-loop':'1',...flag
+   });const t=make('text',{
+    x:String(x),y:String(y+3.5),class:'fallback-plan-label','data-loop':'1',...flag
+   });t.textContent=m.text;
+  });
+  this.pois.forEach(place=>{
+   const [x,y]=this.xy(place),label=place.name?`${place.kind==='water'?t('Water'):t('Toilets')}: ${place.name}`:place.kind==='water'?t('Water'):t('Toilets'),marker=make('circle',{
+    cx:String(x),cy:String(y),r:'8',class:`fallback-poi ${place.kind}`,'aria-label':label,role:'img'
+   });const title=make('title',{});title.textContent=t(label);marker.setAttribute('aria-label',label);marker.append(title);
+  });
   if(this.hoverPoint){const [x,y]=this.xy(this.hoverPoint);make('circle',{cx:String(x),cy:String(y),r:'6',class:'chart-map-marker'});}
   this.svg.style.cursor=this.freehand||this.drawing?'crosshair':'grab';
  }
@@ -217,7 +337,16 @@ export class RouteMap {
   let lastX=event.clientX,lastY=event.clientY;
   const update=()=>{line.setAttribute('points',points.map(p=>{const q=this.map&&this.ready?this.map.project([p.lon,p.lat]):{x:this.xy(p)[0],y:this.xy(p)[1]};return `${q.x},${q.y}`;}).join(' '));};
   const cleanup=()=>{window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',cancel,true);preview.remove();this.freehandCleanup=null;setTimeout(()=>{this.suppressClick=false;},0);};
-  const move=(e:PointerEvent)=>{if(e.pointerId!==event.pointerId)return;if(Math.hypot(e.clientX-lastX,e.clientY-lastY)<3)return;const r=this.host.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)return;lastX=e.clientX;lastY=e.clientY;if(points.length<5000)points.push(this.mapPoint(e));update();};
+  const move=(e:PointerEvent)=>{
+   if(e.pointerId!==event.pointerId)return;
+   if(Math.hypot(e.clientX-lastX,e.clientY-lastY)<3)return;
+   const r=this.host.getBoundingClientRect();
+   if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)return;
+   lastX=e.clientX;
+   lastY=e.clientY;
+   if(points.length<5000)points.push(this.mapPoint(e));
+   update();
+  };
   const up=(e:PointerEvent)=>{if(e.pointerId!==event.pointerId)return;cleanup();if(points.length>1)this.actions.freehand(points);};
   const cancel=(e:PointerEvent)=>{if(e.pointerId===event.pointerId)cleanup();};
   this.freehandCleanup=()=>cleanup();window.addEventListener('pointermove',move,true);window.addEventListener('pointerup',up,true);window.addEventListener('pointercancel',cancel,true);
@@ -225,10 +354,38 @@ export class RouteMap {
  }
  private bindFallback():void {
   this.svg.addEventListener('wheel',e=>{e.preventDefault();this.zoom(e.deltaY<0?.5:-.5);},{passive:false});
-  this.svg.addEventListener('pointerdown',e=>{if(e.button!==0)return;const target=e.target as Element,loopStart=target.getAttribute('data-loop-start')==='1';if(target.getAttribute('data-loop')&&!loopStart)return;const idx=target.getAttribute('data-index'),mid=target.getAttribute('data-mid'),x=e.clientX,y=e.clientY,start={...this.view};let moved=false;this.svg.setPointerCapture(e.pointerId);
+  this.svg.addEventListener('pointerdown',e=>{
+   if(e.button!==0)return;const target=e.target as Element,loopStart=target.getAttribute('data-loop-start')==='1';if(target.getAttribute('data-loop')&&!loopStart)return;const idx=target.getAttribute('data-index'),mid=target.getAttribute('data-mid'),x=e.clientX,y=e.clientY,start={
+    ...this.view
+   };let moved=false;this.svg.setPointerCapture(e.pointerId);
    const move=(v:PointerEvent)=>{moved ||=Math.hypot(v.clientX-x,v.clientY-y)>4;if(!loopStart&&idx===null&&mid===null&&moved){const scale=this.dimensions().scale;this.view.x=start.x-(v.clientX-x)/scale;this.view.y=start.y-(v.clientY-y)/scale;this.drawFallback();}};
-   const up=(v:PointerEvent)=>{this.svg.removeEventListener('pointermove',move);this.svg.removeEventListener('pointerup',up);this.svg.removeEventListener('pointercancel',cancel);this.moveCleanup=null;if(loopStart)this.actions.loopStart(this.fractionAt(this.point(v)));else if(idx!==null){if(moved)this.actions.move(+idx,this.point(v));else this.actions.select(+idx);}else if(mid!==null)this.actions.insert(+mid,this.point(v));else if(!moved&&this.drawing)this.actions.add(this.point(v));else if(moved&&this.map){const p=unworld(this.view.x,this.view.y);this.map.jumpTo({center:[p.lon,p.lat],zoom:this.view.zoom});}};
-   const cancel=()=>{this.svg.removeEventListener('pointermove',move);this.svg.removeEventListener('pointerup',up);this.svg.removeEventListener('pointercancel',cancel);};this.moveCleanup=cancel;this.svg.addEventListener('pointermove',move);this.svg.addEventListener('pointerup',up);this.svg.addEventListener('pointercancel',cancel);
+   const up=(v:PointerEvent)=>{
+    this.svg.removeEventListener('pointermove',move);
+    this.svg.removeEventListener('pointerup',up);
+    this.svg.removeEventListener('pointercancel',cancel);
+    this.moveCleanup=null;
+    if(loopStart)this.actions.loopStart(this.fractionAt(this.point(v)));
+    else if(idx!==null){
+     if(moved)this.actions.move(+idx,this.point(v));
+     else this.actions.select(+idx);
+    }else if(mid!==null)this.actions.insert(+mid,this.point(v));
+    else if(!moved&&this.drawing)this.actions.add(this.point(v));
+    else if(moved&&this.map){
+     const p=unworld(this.view.x,this.view.y);
+     this.map.jumpTo({
+      center:[p.lon,p.lat],zoom:this.view.zoom
+     });
+    }
+   };
+   const cancel=()=>{
+    this.svg.removeEventListener('pointermove',move);
+    this.svg.removeEventListener('pointerup',up);
+    this.svg.removeEventListener('pointercancel',cancel);
+   };
+   this.moveCleanup=cancel;
+   this.svg.addEventListener('pointermove',move);
+   this.svg.addEventListener('pointerup',up);
+   this.svg.addEventListener('pointercancel',cancel);
   });
  }
  /** Gradient segments capped at 400, or an empty collection when elevation is missing. */
@@ -252,5 +409,16 @@ export class RouteMap {
   if(this.map&&this.ready){this.scrubberMarker?.remove();this.scrubberMarker=null;if(p){const b=el('span','scrub-marker');this.scrubberMarker=new (maplibre()).Marker({element:b}).setLngLat([p.lon,p.lat]).addTo(this.map);}return;}
   this.drawFallback();
  }
- dispose():void {this.disposed=true;if(this.healthTimer)clearInterval(this.healthTimer);this.resized.disconnect();this.moveCleanup?.();this.freehandCleanup?.();this.markers.forEach(m=>m.remove());this.poiMarkers.forEach(marker=>marker.remove());this.hoverMarker?.remove();this.scrubberMarker?.remove();this.map?.remove();}
+ dispose():void {
+  this.disposed=true;
+  if(this.healthTimer)clearInterval(this.healthTimer);
+  this.resized.disconnect();
+  this.moveCleanup?.();
+  this.freehandCleanup?.();
+  this.markers.forEach(m=>m.remove());
+  this.poiMarkers.forEach(marker=>marker.remove());
+  this.hoverMarker?.remove();
+  this.scrubberMarker?.remove();
+  this.map?.remove();
+ }
 }

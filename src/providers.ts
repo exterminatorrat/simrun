@@ -5,10 +5,35 @@ import {cumulative,decodePolyline,resample,validPoint} from './geometry.js';
 import {parseCoordinateQuery,parsePhotonResponse} from './places.js';
 import {defaultPreferences} from './model.js';
 export type {Place} from './types.js';
-export interface RoutingProvider {route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>;elevation(path:Point[],signal:AbortSignal):Promise<Point[]>;alternates?(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[][]>;routeDetails?(path:Point[],profile:RouteProfile,signal:AbortSignal):Promise<RouteData>;lastCached?:boolean}
+export interface RoutingProvider {
+ route(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[]>;
+ elevation(path:Point[],signal:AbortSignal):Promise<Point[]>;
+ alternates?(points:Point[],profile:RouteProfile,signal:AbortSignal):Promise<Point[][]>;
+ routeDetails?(path:Point[],profile:RouteProfile,signal:AbortSignal):Promise<RouteData>;
+ lastCached?:boolean
+}
 export class ProviderError extends Error {constructor(message:string,public status=0,public code=0){super(message);}}
 /** Valhalla costing per profile; bicycle_type aliases are case-insensitive. */
-export const PROFILE_OPTIONS:Record<RouteProfile,{costing:'pedestrian'|'bicycle';options:Record<string,unknown>}>={walk:{costing:'pedestrian',options:{}},hike:{costing:'pedestrian',options:{max_hiking_difficulty:6}},road:{costing:'bicycle',options:{bicycle_type:'Hybrid'}},mtb:{costing:'bicycle',options:{bicycle_type:'Mountain',use_roads:.1}}};
+export const PROFILE_OPTIONS:Record<RouteProfile,{
+ costing:'pedestrian'|'bicycle';
+ options:Record<string,unknown>
+}>={
+ walk:{
+  costing:'pedestrian',options:{}
+ },hike:{
+  costing:'pedestrian',options:{
+   max_hiking_difficulty:6
+  }
+ },road:{
+  costing:'bicycle',options:{
+   bicycle_type:'Hybrid'
+  }
+ },mtb:{
+  costing:'bicycle',options:{
+   bicycle_type:'Mountain',use_roads:.1
+  }
+ }
+};
 /** Per-activity profile, defaulting a run to walk and a ride to road. */
 export const resolveProfile=(sport:Sport,profile?:RouteProfile):RouteProfile=>profile??profileForSport(sport);
 /** Public Valhalla distance caps: about 100 km on foot and 150 km by bicycle. */
@@ -51,17 +76,45 @@ function mergeRecords(records:RouteRecord[]):RouteRecord {
 }
 function routeLabel(value:unknown):string|undefined {return typeof value==='string'&&/^[a-zA-Z0-9 _-]{1,64}$/.test(value.trim())?value.trim():undefined;}
 const footProfile=(p:RouteProfile):boolean=>p==='walk'||p==='hike';
-export const capMessage=(profile:RouteProfile):string=>t('This route is longer than the public routing service allows for {sport} (about {distance} km). Shorten the route, or self-host routing — see {documentation}.',{sport:t(footProfile(profile)?'walking and hiking':'cycling'),distance:Math.round(PUBLIC_CAP_METERS[profile]/1000),documentation:'docs/SELF-HOST-VALHALLA.md'});
+export const capMessage=(profile:RouteProfile):string=>t('This route is longer than the public routing service allows for {sport} (about {distance} km). Shorten the route, or self-host routing — see {documentation}.',{
+ sport:t(footProfile(profile)?'walking and hiking':'cycling'),distance:Math.round(PUBLIC_CAP_METERS[profile]/1000),documentation:'docs/SELF-HOST-VALHALLA.md'
+});
 /** Advisory warning above 80% of the public cap; routing is never blocked. */
-export const routeCapWarning=(profile:RouteProfile,meters:number):string|null=>{const cap=PUBLIC_CAP_METERS[profile];return meters>cap*.8?t('Long route: the public service caps {sport} near {distance} km, so routing may fail. Self-hosting is documented in {documentation}.',{sport:t(footProfile(profile)?'walking and hiking':'cycling'),distance:Math.round(cap/1000),documentation:'docs/SELF-HOST-VALHALLA.md'}):null;};
+export const routeCapWarning=(profile:RouteProfile,meters:number):string|null=>{
+ const cap=PUBLIC_CAP_METERS[profile];
+ return meters>cap*.8?t('Long route: the public service caps {sport} near {distance} km, so routing may fail. Self-hosting is documented in {documentation}.',{
+  sport:t(footProfile(profile)?'walking and hiking':'cycling'),distance:Math.round(cap/1000),documentation:'docs/SELF-HOST-VALHALLA.md'
+ }):null;
+};
 const queues=new Map<string,Promise<unknown>>(),lastRequests=new Map<string,number>();
 // Opt-in, bounded offline cache for routing and elevation replies. Network-first: the
 // provider is always contacted online; a cached reply is only a fallback.
 const OFFLINE_KEY='simrun-offline-v1',OFFLINE_MAX=50,OFFLINE_TTL=30*86400000;
 function readOffline():Record<string,{t:number;data:unknown}>{try{return JSON.parse(localStorage.getItem(OFFLINE_KEY)||'{}');}catch{return {};}}
-function writeOffline(key:string,data:unknown):void{try{const all=readOffline();all[key]={t:Date.now(),data};const keys=Object.keys(all);if(keys.length>OFFLINE_MAX){keys.sort((a,b)=>all[a].t-all[b].t);for(const k of keys.slice(0,keys.length-OFFLINE_MAX))delete all[k];}localStorage.setItem(OFFLINE_KEY,JSON.stringify(all));}catch{}}
+function writeOffline(key:string,data:unknown):void{
+ try{
+  const all=readOffline();
+  all[key]={
+   t:Date.now(),data
+  };
+  const keys=Object.keys(all);
+  if(keys.length>OFFLINE_MAX){
+   keys.sort((a,b)=>all[a].t-all[b].t);
+   for(const k of keys.slice(0,keys.length-OFFLINE_MAX))delete all[k];
+  }
+  localStorage.setItem(OFFLINE_KEY,JSON.stringify(all));
+ }catch{}
+}
 export function clearOfflineCache():void{try{localStorage.removeItem(OFFLINE_KEY);}catch{}}
-const pause=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>{signal.throwIfAborted();const done=()=>{signal.removeEventListener('abort',cancel);resolve();};const timer=setTimeout(done,ms);const cancel=()=>{clearTimeout(timer);reject(signal.reason);};signal.addEventListener('abort',cancel,{once:true});});
+const pause=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>{
+ signal.throwIfAborted();const done=()=>{
+  signal.removeEventListener('abort',cancel);resolve();
+ };const timer=setTimeout(done,ms);const cancel=()=>{
+  clearTimeout(timer);reject(signal.reason);
+ };signal.addEventListener('abort',cancel,{
+  once:true
+ });
+});
 export function endpoint(value:string):string {const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||u.hash||u.search)throw Error('Provider URL must be HTTPS, without credentials, a query or a fragment.');return u.toString();}
 async function rateSlot(host:string,signal:AbortSignal):Promise<void>{
  const acquire=async()=>{let last=lastRequests.get(host)||0;try{last=Math.max(last,Number(localStorage.getItem('simrun-rate:'+host)||0));}catch{}
@@ -76,8 +129,29 @@ async function getJSON<T>(url:URL,signal:AbortSignal,retry=true):Promise<T>{
    const controller=new AbortController(),cancel=()=>controller.abort(signal.reason);signal.addEventListener('abort',cancel,{once:true});const timer=setTimeout(()=>controller.abort(),18000);
    try{
     const response=await fetch(url,{signal:controller.signal,referrerPolicy:'strict-origin-when-cross-origin',headers:{Accept:'application/json'}});
-    if(response.status===429){if(attempt===0&&retry){const after=response.headers.get('Retry-After');const wait=after?(Number.isFinite(Number(after))?Number(after)*1000:Date.parse(after)-Date.now()):2500;if(wait>30000)throw new ProviderError('Service is rate-limited. Please retry later.',429);await pause(Math.max(2500,wait||2500),signal);continue;}throw new ProviderError('Service is rate-limited. Please retry later.',429);}
-    if(!response.ok){if(response.status>=500&&attempt===0&&retry){await pause(2000,signal);continue;}if(response.status===400){const body=await response.json().catch(()=>null) as {error_code?:number}|null;throw new ProviderError('No suitable route. Move the waypoints to nearby accessible paths.',400,typeof body?.error_code==='number'?body.error_code:0);}throw new ProviderError(`Service unavailable (${response.status}). Please retry.`,response.status);}
+    if(response.status===429){
+     if(attempt===0&&retry){
+      const after=response.headers.get('Retry-After');
+      const wait=after?(Number.isFinite(Number(after))?Number(after)*1000:Date.parse(after)-Date.now()):2500;
+      if(wait>30000)throw new ProviderError('Service is rate-limited. Please retry later.',429);
+      await pause(Math.max(2500,wait||2500),signal);
+      continue;
+     }
+     throw new ProviderError('Service is rate-limited. Please retry later.',429);
+    }
+    if(!response.ok){
+     if(response.status>=500&&attempt===0&&retry){
+      await pause(2000,signal);
+      continue;
+     }
+     if(response.status===400){
+      const body=await response.json().catch(()=>null) as {
+       error_code?:number
+      }|null;
+      throw new ProviderError('No suitable route. Move the waypoints to nearby accessible paths.',400,typeof body?.error_code==='number'?body.error_code:0);
+     }
+     throw new ProviderError(`Service unavailable (${response.status}). Please retry.`,response.status);
+    }
     return await response.json() as T;
    }catch(error){if(signal.aborted)throw signal.reason;if(error instanceof ProviderError)throw error;throw new ProviderError('Service could not be reached. Check your connection or provider settings.');}
    finally{clearTimeout(timer);signal.removeEventListener('abort',cancel);}
