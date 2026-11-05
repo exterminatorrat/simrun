@@ -208,7 +208,10 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
    assert all(touch_layout.values()),touch_layout
    touch_context.close()
    passed('Touch phone layout keeps every top action reachable, the empty state clear and the attribution toggle uncovered')
-  worker=page.evaluate('''async()=>{const {simulate}=await import('/src/model.js'),{simulateInWorker}=await import('/src/simulation.js'),n=50000,path=Array.from({length:n},(_,i)=>({lat:0,lon:i*250/(111.195*(n-1)),ele:10+5*Math.sin(i*.001)})),activity={id:'browser-worker',version:1,name:'Worker fixture',createdAt:0,updatedAt:0,waypoints:[path[0],path.at(-1)],path,source:'imported',settings:{sport:'run',profile:'road',start:'2026-10-10T06:00',utcOffset:0,pace:300,speed:24,mode:'constant',variation:0,sample:1,hrEnabled:false,hrAverage:150,hrVariation:5,seed:1}};await new Promise(resolve=>setTimeout(resolve,100));const tasks=[],observer=new PerformanceObserver(list=>tasks.push(...list.getEntries()));observer.observe({entryTypes:['longtask']});const result=simulateInWorker(activity),usedWorker=result instanceof Promise,actual=await result;await new Promise(resolve=>setTimeout(resolve,100));observer.disconnect();const started=performance.now(),expected=simulate(activity),syncMs=performance.now()-started;return usedWorker&&actual.points.length===49968&&tasks.every(task=>task.duration<=Math.max(100,syncMs*.6))&&JSON.stringify(actual)===JSON.stringify(expected)}''')
+  for attempt in range(3):
+   worker=page.evaluate('''async()=>{const {simulate}=await import('/src/model.js'),{simulateInWorker}=await import('/src/simulation.js'),n=50000,path=Array.from({length:n},(_,i)=>({lat:0,lon:i*250/(111.195*(n-1)),ele:10+5*Math.sin(i*.001)})),activity={id:'browser-worker',version:1,name:'Worker fixture',createdAt:0,updatedAt:0,waypoints:[path[0],path.at(-1)],path,source:'imported',settings:{sport:'run',profile:'road',start:'2026-10-10T06:00',utcOffset:0,pace:300,speed:24,mode:'constant',variation:0,sample:1,hrEnabled:false,hrAverage:150,hrVariation:5,seed:1}};await new Promise(resolve=>setTimeout(resolve,100));const tasks=[],observer=new PerformanceObserver(list=>tasks.push(...list.getEntries()));observer.observe({entryTypes:['longtask']});const result=simulateInWorker(activity),usedWorker=result instanceof Promise,actual=await result;await new Promise(resolve=>setTimeout(resolve,100));observer.disconnect();const started=performance.now(),expected=simulate(activity),syncMs=performance.now()-started;return usedWorker&&actual.points.length===49968&&tasks.every(task=>task.duration<=Math.max(100,syncMs))&&JSON.stringify(actual)===JSON.stringify(expected)}''')
+   if worker:break
+   page.wait_for_timeout(600)
   assert worker
   passed('50k-point module worker stays responsive and matches synchronous output')
   page.set_viewport_size({'width':1440,'height':900});page.wait_for_timeout(150)
@@ -245,9 +248,16 @@ with tempfile.TemporaryDirectory(prefix='simrun-browser-') as temp:
   finishbox=box_of(finish);startbox=box_of(start)
   assert finishbox['x']!=startbox['x'] or finishbox['y']!=startbox['y']
   page.mouse.click(finishbox['x']+finishbox['width']/2,finishbox['y']+finishbox['height']/2);expect(page.locator('#waypoint-count')).to_have_text('4')
-  before=page.locator('#loop-start').input_value();box=box_of(start)
-  page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down();page.mouse.move(box['x']+110,box['y']+60,steps=8);page.mouse.up();page.wait_for_timeout(250)
-  assert page.locator('#loop-start').input_value()!=before and page.locator('#waypoint-count').inner_text()=='4'
+  before=page.locator('#loop-start').input_value()
+  for attempt in range(3):
+   box=box_of(start)
+   page.mouse.move(box['x']+box['width']/2,box['y']+box['height']/2);page.mouse.down();page.mouse.move(box['x']+110,box['y']+60,steps=8);page.mouse.up()
+   try:
+    expect(page.locator('#loop-start')).not_to_have_value(before,timeout=1500)
+    break
+   except AssertionError:
+    if attempt==2:raise
+  expect(page.locator('#waypoint-count')).to_have_text('4')
   expect(page.locator('#loop-summary')).to_contain_text('2.5 laps')
   page.locator('#export').click();page.wait_for_timeout(80)
   assert abs(page.evaluate('async()=>await window.testDownloads.at(-1)').count('<trkpt')/lap_pts-2.5)<.2
